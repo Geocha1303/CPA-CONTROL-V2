@@ -37,7 +37,7 @@ const initialState: AppState = {
   generalExpenses: [],
   monthlyGoals: {},
   dreamGoals: [], // Inicialização vazia
-  config: { valorBonus: 20.00, taxaImposto: 0.06 },
+  config: { valorBonus: 20.00, taxaImposto: 0.06, userName: 'OPERADOR' },
   generator: {
     plan: [],
     totalAgentes: 2,
@@ -121,7 +121,7 @@ function App() {
   const handleManualDownload = () => {
       const dataStr = JSON.stringify(state, null, 2);
       const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      const fileName = `GATEWAY_BKP_${new Date().toISOString().slice(0,10)}.json`;
+      const fileName = `CPA_PRO_BKP_${new Date().toISOString().slice(0,10)}.json`;
       
       const linkElement = document.createElement('a');
       linkElement.setAttribute('href', dataUri);
@@ -279,14 +279,14 @@ function App() {
         />
       )}
 
-      {/* GATEWAY SIDEBAR */}
+      {/* CPA PRO SIDEBAR */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-30 w-72 bg-surface/80 backdrop-blur-2xl border-r border-white/5 transform transition-transform duration-300 ease-out flex flex-col justify-between
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="p-6">
             {/* Logo Area */}
-            <div className="flex items-center gap-4 mb-12 px-2">
+            <div className="flex items-center gap-4 mb-8 px-2">
                 <div className="relative group">
                     <div className="absolute inset-0 bg-primary blur opacity-50 group-hover:opacity-100 transition-opacity duration-500 rounded-full"></div>
                     <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-primary font-bold relative z-10 border border-primary/30">
@@ -294,13 +294,10 @@ function App() {
                     </div>
                 </div>
                 <div>
-                    <h1 className="font-black text-xl leading-none tracking-tight text-white mb-1">GATEWAY<span className="text-primary">.FY</span></h1>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${fileHandle ? 'bg-accent-cyan shadow-[0_0_8px_#00F0FF]' : 'bg-amber-500'} animate-pulse`}></div>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest font-mono">
-                            {fileHandle ? 'SYNC_ACTIVE' : 'LOCAL_MEM'}
-                        </span>
-                    </div>
+                    <h1 className="font-black text-xl leading-none tracking-tight text-white mb-1">CPA <span className="text-primary">PRO</span></h1>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate max-w-[120px]">
+                        {state.config.userName || 'OPERADOR'}
+                    </p>
                 </div>
             </div>
 
@@ -353,21 +350,26 @@ function App() {
                 </button>
             )}
 
-            <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-white/5 bg-black/60 relative z-10">
-                <div className={`
-                    w-6 h-6 rounded flex items-center justify-center
-                    ${saveStatus === 'saving' ? 'text-primary' : (saveStatus === 'error' ? 'text-rose-500' : 'text-emerald-500')}
-                `}>
-                    {saveStatus === 'saving' ? <RefreshCw size={14} className="animate-spin" /> : 
-                     saveStatus === 'error' ? <AlertCircle size={14} /> :
-                     <Save size={14} />}
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-white/5 bg-black/60 relative z-10">
+                <div className="flex items-center gap-3">
+                    <div className={`
+                        w-6 h-6 rounded flex items-center justify-center
+                        ${saveStatus === 'saving' ? 'text-primary' : (saveStatus === 'error' ? 'text-rose-500' : 'text-emerald-500')}
+                    `}>
+                        {saveStatus === 'saving' ? <RefreshCw size={14} className="animate-spin" /> : 
+                        saveStatus === 'error' ? <AlertCircle size={14} /> :
+                        <Save size={14} />}
+                    </div>
+                    <div className="overflow-hidden">
+                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest font-mono">STATUS</p>
+                        <p className={`text-[10px] font-bold truncate ${saveStatus === 'saving' ? 'text-primary' : (saveStatus === 'error' ? 'text-rose-500' : 'text-emerald-500')}`}>
+                            {saveStatus === 'saving' ? 'WRITING...' : (saveStatus === 'error' ? 'FAILED' : 'SECURE')}
+                        </p>
+                    </div>
                 </div>
-                <div className="overflow-hidden">
-                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest font-mono">STATUS</p>
-                    <p className={`text-[10px] font-bold truncate ${saveStatus === 'saving' ? 'text-primary' : (saveStatus === 'error' ? 'text-rose-500' : 'text-emerald-500')}`}>
-                        {saveStatus === 'saving' ? 'WRITING...' : (saveStatus === 'error' ? 'FAILED' : 'SECURE')}
-                    </p>
-                </div>
+                {fileHandle && (
+                     <div className="w-2 h-2 rounded-full bg-accent-cyan shadow-[0_0_8px_#00F0FF] animate-pulse"></div>
+                )}
             </div>
         </div>
       </aside>
@@ -378,7 +380,7 @@ function App() {
         
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/10 bg-surface/90 backdrop-blur-xl z-10">
-            <span className="font-bold text-lg text-white font-mono">GATEWAY<span className="text-primary">.FY</span></span>
+            <span className="font-bold text-lg text-white font-mono">CPA <span className="text-primary">PRO</span></span>
             <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-white">
                 <Menu size={24} />
             </button>

@@ -39,6 +39,7 @@ export interface DreamGoal {
 export interface Config {
   valorBonus: number;
   taxaImposto: number;
+  userName?: string;
 }
 
 export interface GeneratorParams {

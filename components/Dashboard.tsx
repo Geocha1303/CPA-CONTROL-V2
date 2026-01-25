@@ -116,7 +116,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
         <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-black text-white tracking-tighter">DASHBOARD</h1>
+              <h1 className="text-4xl font-black text-white tracking-tighter">CPA PRO</h1>
               <span className="px-2 py-1 rounded-md bg-[#7000FF]/20 border border-[#7000FF]/50 text-[#7000FF] font-bold text-xs">V2.0</span>
             </div>
             <p className="text-gray-500 text-xs font-bold tracking-widest mt-1">MONITORAMENTO DE PERFORMANCE EM TEMPO REAL</p>

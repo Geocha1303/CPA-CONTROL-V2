@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { AppState } from '../types';
-import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2 } from 'lucide-react';
+import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -16,12 +16,18 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
     });
   };
 
+  const handleNameChange = (val: string) => {
+    updateState({
+        config: { ...state.config, userName: val }
+    });
+  };
+
   // Função para exportar dados (Backup)
   const handleExportData = () => {
     const dataStr = JSON.stringify(state, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     
-    const exportFileDefaultName = `CPA_Backup_${new Date().toISOString().slice(0,10)}.json`;
+    const exportFileDefaultName = `CPA_PRO_Backup_${new Date().toISOString().slice(0,10)}.json`;
     
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
@@ -92,10 +98,28 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
                 <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
                     <div className="p-6 border-b border-white/5 bg-white/5">
                         <h3 className="font-bold text-white flex items-center gap-2">
-                            <SettingsIcon size={18} className="text-cyan-400" /> Parâmetros Financeiros
+                            <SettingsIcon size={18} className="text-cyan-400" /> Parâmetros do Dashboard
                         </h3>
                     </div>
                     <div className="p-6 space-y-6">
+                        
+                        <div>
+                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Nome do Operador</label>
+                            <div className="relative group">
+                                <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors">
+                                    <User size={16} />
+                                </span>
+                                <input 
+                                    type="text" 
+                                    value={state.config.userName || ''}
+                                    placeholder="Ex: Seu Nome"
+                                    onChange={(e) => handleNameChange(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner"
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">Este nome aparecerá na barra lateral.</p>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Valor do Bônus CPA (R$)</label>
                             <div className="relative group">
