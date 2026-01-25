@@ -468,7 +468,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                             </span>
                                         </td>
                                         <td className="px-5 py-4 text-gray-300 font-mono font-bold text-base">A{p.agent}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-white text-base">R$ {p.total}</td>
+                                        <td className="px-5 py-4 text-right font-bold text-white text-base">R$ {p.total.toFixed(2)}</td>
                                         <td className="px-5 py-4 flex gap-2 items-center flex-wrap">
                                             {p.deps.map((d, depIdx) => (
                                                 <input 
@@ -478,9 +478,20 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                                     }`}
                                                     value={d.val}
                                                     onChange={(e) => {
-                                                        const newPlan = [...state.generator.plan];
-                                                        newPlan[absoluteIndex].deps[depIdx].val = parseInt(e.target.value)||0;
-                                                        newPlan[absoluteIndex].total = newPlan[absoluteIndex].deps.reduce((a,b)=>a+b.val,0);
+                                                        const val = parseFloat(e.target.value) || 0;
+                                                        // CRITICAL FIX: Immutable state update
+                                                        const newPlan = state.generator.plan.map((pl, idx) => {
+                                                            if (idx !== absoluteIndex) return pl;
+                                                            
+                                                            const newDeps = pl.deps.map((dep, dIndex) => {
+                                                                if (dIndex !== depIdx) return dep;
+                                                                return { ...dep, val };
+                                                            });
+                                                            
+                                                            const newTotal = newDeps.reduce((acc, curr) => acc + curr.val, 0);
+                                                            return { ...pl, deps: newDeps, total: newTotal };
+                                                        });
+                                                        
                                                         updateState({ generator: { ...state.generator, plan: newPlan } });
                                                     }}
                                                 />

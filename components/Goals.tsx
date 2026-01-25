@@ -257,7 +257,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {(state.dreamGoals || []).map((goal) => {
-                    const percent = totalLifetimeNetProfit > 0 ? (totalLifetimeNetProfit / goal.targetValue) * 100 : 0;
+                    const percent = (totalLifetimeNetProfit > 0 && goal.targetValue > 0) ? (totalLifetimeNetProfit / goal.targetValue) * 100 : 0;
                     const cappedPercent = Math.min(Math.max(percent, 0), 100);
                     
                     // Cálculo de Tempo Estimado
