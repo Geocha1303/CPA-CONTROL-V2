@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AppState, DreamGoal } from '../types';
 import { formatarBRL, getMonthlyAggregates } from '../utils';
-import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Sparkles, Image as ImageIcon, Link } from 'lucide-react';
+import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Sparkles, Image as ImageIcon, Link, Loader2 } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -11,6 +11,7 @@ interface Props {
 const Goals: React.FC<Props> = ({ state, updateState }) => {
   const [newDream, setNewDream] = useState({ name: '', val: '', manualUrl: '' });
   const [useAI, setUseAI] = useState(true);
+  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
   
   const currentYear = new Date().getFullYear();
   const currentMonthIndex = new Date().getMonth();
@@ -79,10 +80,12 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
       let finalImageUrl = '';
 
       if (useAI) {
-          // Usa Pollinations.ai para gerar imagem baseada no nome
-          // Adiciona seed aleatória para variar se o nome for igual
-          const encodedName = encodeURIComponent(newDream.name + " realistic 8k masterpiece luxury product photorealistic");
-          finalImageUrl = `https://image.pollinations.ai/prompt/${encodedName}?width=800&height=600&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+          // Simplificando o prompt e a URL para garantir melhor compatibilidade
+          const cleanName = newDream.name.trim().replace(/[^a-zA-Z0-9 ]/g, "");
+          const encodedName = encodeURIComponent(cleanName + " luxury product 4k");
+          // Usando uma seed para garantir que a imagem não mude a cada renderização, mas mude por item
+          const seed = Math.floor(Math.random() * 10000);
+          finalImageUrl = `https://image.pollinations.ai/prompt/${encodedName}?width=600&height=400&nologo=true&seed=${seed}&model=flux`;
       } else {
           finalImageUrl = newDream.manualUrl;
       }
@@ -102,6 +105,10 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
 
   const removeDream = (id: number) => {
       updateState({ dreamGoals: (state.dreamGoals || []).filter(d => d.id !== id) });
+  };
+
+  const handleImageError = (id: number) => {
+      setImgErrors(prev => ({ ...prev, [id]: true }));
   };
 
   return (
@@ -274,7 +281,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                         </div>
 
                         <input 
-                            type="text" placeholder={useAI ? "Ex: Porsche 911 Preto..." : "Ex: Computador"} 
+                            type="text" placeholder={useAI ? "Ex: Porsche 911 Preto" : "Ex: Computador"} 
                             className="bg-transparent text-sm text-white px-3 py-2 outline-none w-full md:w-48 placeholder:text-gray-600"
                             value={newDream.name} onChange={e => setNewDream({...newDream, name: e.target.value})}
                         />
@@ -310,6 +317,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                 {(state.dreamGoals || []).map((goal) => {
                     const percent = (totalLifetimeNetProfit > 0 && goal.targetValue > 0) ? (totalLifetimeNetProfit / goal.targetValue) * 100 : 0;
                     const cappedPercent = Math.min(Math.max(percent, 0), 100);
+                    const hasError = imgErrors[goal.id];
                     
                     // Cálculo de Tempo Estimado
                     let daysLeftStr = "---";
@@ -327,23 +335,30 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                         <div 
                             key={goal.id} 
                             className="gateway-card rounded-xl border border-white/5 hover:border-amber-500/50 transition-all group relative overflow-hidden h-[240px] flex flex-col justify-between shadow-2xl"
-                            style={{
-                                backgroundImage: goal.imageUrl ? `url('${goal.imageUrl}')` : 'none',
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                            }}
                         >
-                            {/* Overlay Escuro para Legibilidade (Gradiente) */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20 z-0"></div>
+                            {/* IMAGEM DE FUNDO (Nova Abordagem) */}
+                            <div className="absolute inset-0 z-0">
+                                {goal.imageUrl && !hasError ? (
+                                    <>
+                                        <div className="absolute inset-0 bg-gray-900 animate-pulse z-0"></div> {/* Skeleton loader atras */}
+                                        <img 
+                                            src={goal.imageUrl} 
+                                            alt={goal.name}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60 group-hover:opacity-40"
+                                            onError={() => handleImageError(goal.id)}
+                                            loading="lazy"
+                                        />
+                                    </>
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
+                                        <Crown size={80} className="text-white/5" />
+                                    </div>
+                                )}
+                                {/* Overlay Gradiente Sempre Presente para garantir leitura */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent z-10"></div>
+                            </div>
 
-                            {/* Ícone de Fundo (Fallback se não tiver imagem) */}
-                            {!goal.imageUrl && (
-                                <div className="absolute -bottom-4 -right-4 text-white/5 group-hover:text-amber-500/10 transition-colors pointer-events-none z-0">
-                                    <Crown size={100} />
-                                </div>
-                            )}
-
-                            <div className="flex justify-between items-start p-5 relative z-10">
+                            <div className="flex justify-between items-start p-5 relative z-20">
                                 <div>
                                     <h4 className="font-black text-white text-xl tracking-tight drop-shadow-md">{goal.name}</h4>
                                     <p className="text-gray-300 text-xs font-mono font-bold uppercase tracking-wider drop-shadow-md">
@@ -355,7 +370,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                 </button>
                             </div>
 
-                            <div className="p-5 relative z-10">
+                            <div className="p-5 relative z-20">
                                 <div className="flex justify-between items-end mb-2">
                                     <span className={`text-3xl font-black font-mono drop-shadow-lg ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
                                         {percent.toFixed(1)}%
@@ -373,7 +388,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                     ></div>
                                 </div>
                                 
-                                {goal.autoImage && (
+                                {goal.autoImage && !hasError && (
                                     <div className="absolute bottom-2 right-2 opacity-50 text-[9px] text-gray-500 flex items-center gap-1">
                                         <Sparkles size={8} /> AI Generated
                                     </div>

@@ -41,6 +41,7 @@ import DailyControl from './components/DailyControl';
 import Expenses from './components/Expenses';
 import Settings from './components/Settings';
 import Goals from './components/Goals';
+import Admin from './components/Admin';
 
 // Initial State definition
 const initialState: AppState = {
@@ -253,7 +254,13 @@ function App() {
           setIsAuthenticated(true);
           setCurrentUserKey(savedKey);
           // Check simples de admin visual baseado no prefixo antigo ou lógica local, idealmente validaria com DB novamente
-          if(savedKey.startsWith('ADMIN') || savedKey === 'ADMIN-GROCHA013') setIsAdmin(true);
+          // MAS: Como o LoginScreen já verifica is_admin no DB, apenas confiamos se a sessão estiver ativa, 
+          // ou se quisermos ser seguros, refazemos o fetch. Para UI rápida, assumimos false default e deixamos o usuário logar de novo se precisar.
+          // NOTA: Para simplificar aqui, se a chave começar com ADMIN (legado) ou se o usuário logar agora, o state isAdmin será setado pelo LoginScreen.
+          // Se for refresh F5, o isAdmin pode se perder se não salvarmos no localstorage.
+          // FIX: Salvar isAdmin no localStorage também.
+          const savedIsAdmin = localStorage.getItem('cpa_is_admin') === 'true';
+          setIsAdmin(savedIsAdmin);
       }
   }, []);
 
@@ -284,6 +291,7 @@ function App() {
   const handleLogout = () => {
       if(confirm('Encerrar sessão segura?')) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
+          localStorage.removeItem('cpa_is_admin');
           setIsAuthenticated(false);
           setIsAdmin(false);
           setCurrentUserKey('');
@@ -403,6 +411,14 @@ function App() {
     { id: 'configuracoes', label: 'Sistema', icon: SettingsIcon },
   ];
 
+  // Adiciona Admin ao menu se for admin
+  if (isAdmin) {
+      // Evita duplicatas se re-renderizar
+      if (!navItems.find(i => i.id === 'admin')) {
+        navItems.push({ id: 'admin', label: 'Painel Admin', icon: Crown });
+      }
+  }
+
   const renderContent = () => {
     const props = { state, updateState, notify };
     switch (activeView) {
@@ -412,6 +428,7 @@ function App() {
         case 'despesas': return <Expenses {...props} />;
         case 'configuracoes': return <Settings {...props} />;
         case 'metas': return <Goals {...props} />;
+        case 'admin': return <Admin notify={notify} />;
         default: return null;
     }
   };
@@ -420,6 +437,7 @@ function App() {
       return <LoginScreen onLogin={(key, admin, owner) => { 
           setIsAuthenticated(true); 
           setIsAdmin(admin); 
+          localStorage.setItem('cpa_is_admin', String(admin));
           setCurrentUserKey(key); 
           if(owner) setState(prev => ({...prev, config: {...prev.config, userName: owner}}));
       }} />;
@@ -476,6 +494,8 @@ function App() {
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeView === item.id;
+                    const isAdminItem = item.id === 'admin';
+                    
                     return (
                         <button
                             key={item.id}
@@ -483,14 +503,14 @@ function App() {
                             className={`
                                 w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all duration-200 group relative
                                 ${isActive 
-                                    ? 'text-white bg-blue-600/10 border border-blue-600/20' 
+                                    ? (isAdminItem ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'text-white bg-blue-600/10 border border-blue-600/20')
                                     : 'text-gray-500 hover:text-gray-200 hover:bg-white/5 border border-transparent'
                                 }
                             `}
                         >
-                            <Icon size={18} className={`transition-colors ${isActive ? 'text-blue-500' : 'group-hover:text-gray-300'}`} />
+                            <Icon size={18} className={`transition-colors ${isActive ? (isAdminItem ? 'text-amber-400' : 'text-blue-500') : 'group-hover:text-gray-300'}`} />
                             <span className="tracking-wide">{item.label}</span>
-                            {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full"></div>}
+                            {isActive && <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full ${isAdminItem ? 'bg-amber-500' : 'bg-blue-500'}`}></div>}
                         </button>
                     );
                 })}
