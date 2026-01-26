@@ -103,29 +103,8 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         
         const rawKey = inputKey.trim().toUpperCase();
 
-        // --- MODO DE TESTE / ACESSO DE EMERGÊNCIA ---
-        // Permite entrar sem configurar o Supabase (Invisível para o usuário final)
-        if (rawKey === 'TESTE-ADMIN') {
-             setStatusText('Modo de Teste Local...');
-             setTimeout(() => {
-                localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
-                onLogin(rawKey, true, 'Modo Teste');
-             }, 800);
-             return;
-        }
-
-        // Verificação de Segurança da Configuração
-        // @ts-ignore
-        const currentUrl = supabase.supabaseUrl;
-        if (currentUrl.includes('seu-projeto-id') || currentUrl.includes('SUA_PROJECT_URL')) {
-             setError('ERRO DE SISTEMA: Banco de dados não conectado.');
-             setLoading(false);
-             setStatusText('Erro de Configuração');
-             return;
-        }
-
         try {
-            // 1. Consulta ao Supabase
+            // 1. Consulta ao Supabase (OBRIGATÓRIA - SEM BACKDOORS)
             const { data, error } = await supabase
                 .from('access_keys')
                 .select('*')
@@ -133,24 +112,21 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 .single();
 
             if (error || !data) {
-                // Mensagem amigável para erros comuns
-                if (error && error.message && (error.message.includes('FetchError') || error.message.includes('Failed to fetch'))) {
-                    throw new Error('Falha na conexão com o servidor. Verifique sua internet.');
-                }
-                throw new Error('Chave inválida ou não encontrada.');
+                // Se der erro ou não achar dados, BLOQUEIA.
+                console.warn("Tentativa de acesso negada:", rawKey);
+                throw new Error('Chave inválida ou não encontrada no sistema.');
             }
 
             // 2. Verifica se está ativa
             if (data.active === false) {
-                 throw new Error('Esta chave foi desativada pelo administrador.');
+                 throw new Error('Esta chave foi revogada pelo administrador.');
             }
 
             setStatusText('Autorizado. Carregando...');
             
             setTimeout(() => {
                 localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
-                // Define Admin se a chave for a chave mestre (você pode criar uma flag no banco tb)
-                const isAdmin = rawKey.startsWith('ADMIN-') || data.is_admin === true;
+                const isAdmin = data.is_admin === true;
                 onLogin(rawKey, isAdmin, data.owner_name || 'Usuário');
             }, 800);
 
@@ -158,7 +134,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
             console.error(err);
             setError(err.message || 'Erro de conexão.');
             setLoading(false);
-            setStatusText('Conectar ao Servidor');
+            setStatusText('Acesso Negado');
         }
     };
 
@@ -183,7 +159,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         <div>
                             <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-3 block flex justify-between">
                                 <span>Chave de Licença</span>
-                                <span className="text-primary-glow/70 flex items-center gap-1"><Server size={10}/> ONLINE</span>
+                                <span className="text-primary-glow/70 flex items-center gap-1"><Server size={10}/> ONLINE CHECK</span>
                             </label>
                             <div className="relative group">
                                 <Key className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />

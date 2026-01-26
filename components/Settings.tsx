@@ -1,16 +1,20 @@
 import React, { useRef, useState } from 'react';
 import { AppState } from '../types';
-import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, Key, Copy, Check, Database } from 'lucide-react';
+import { supabase } from '../supabaseClient';
+import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, Key, Copy, Check, Database, CloudUpload, RefreshCw } from 'lucide-react';
 
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
+  notify: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-const Settings: React.FC<Props> = ({ state, updateState }) => {
+const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [generatedKey, setGeneratedKey] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [ownerNameInput, setOwnerNameInput] = useState('');
 
   const handleConfigChange = (key: 'valorBonus' | 'taxaImposto', value: number) => {
     updateState({
@@ -32,6 +36,7 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
       const newKey = `${prefix}-${part1}-${part2}`;
       setGeneratedKey(newKey);
       setCopied(false);
+      setOwnerNameInput('');
   };
 
   const copyKeyToClipboard = () => {
@@ -39,6 +44,37 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
           navigator.clipboard.writeText(generatedKey);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
+          notify('Chave copiada!', 'info');
+      }
+  };
+
+  const saveKeyToSupabase = async () => {
+      if (!generatedKey) return;
+      setIsSavingKey(true);
+      
+      try {
+          const { error } = await supabase
+            .from('access_keys')
+            .insert([
+                { 
+                    key: generatedKey, 
+                    active: true, 
+                    is_admin: false,
+                    owner_name: ownerNameInput || 'Cliente Novo'
+                }
+            ]);
+
+          if (error) throw error;
+          
+          notify('Chave registrada no Banco de Dados com sucesso!', 'success');
+          setGeneratedKey(''); // Limpa após salvar
+          setOwnerNameInput('');
+
+      } catch (err: any) {
+          console.error(err);
+          notify('Erro ao salvar no banco. Verifique sua conexão ou permissões.', 'error');
+      } finally {
+          setIsSavingKey(false);
       }
   };
 
@@ -53,6 +89,7 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
+    notify('Download iniciado.', 'success');
   };
 
   // Função para importar dados (Restore)
@@ -71,15 +108,15 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
                     if (parsedData.dailyRecords && parsedData.config) {
                         if(confirm('Isso substituirá os dados atuais pelos do arquivo. Deseja continuar?')) {
                             updateState(parsedData);
-                            alert('Dados restaurados com sucesso!');
+                            notify('Dados restaurados com sucesso!', 'success');
                         }
                     } else {
-                        alert('Arquivo inválido. Verifique se é um backup do CPA Control.');
+                        notify('Arquivo inválido. Verifique se é um backup do CPA Control.', 'error');
                     }
                 }
             } catch (error) {
                 console.error(error);
-                alert('Erro ao ler o arquivo de backup.');
+                notify('Erro ao ler o arquivo de backup.', 'error');
             } finally {
                 // Reset input so same file can be selected again
                 if (fileInputRef.current) {
@@ -97,7 +134,7 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
             generalExpenses: [],
             generator: { ...state.generator, plan: [], history: [] }
         });
-        alert('Sistema resetado com sucesso.');
+        notify('Sistema resetado com sucesso.', 'info');
     }
   };
 
@@ -255,41 +292,65 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
                     </div>
                 </div>
 
-                {/* LICENSE GENERATOR */}
+                {/* LICENSE GENERATOR - ATUALIZADO V2 */}
                 <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5">
                     <div className="p-6 border-b border-amber-500/10">
                         <h3 className="font-bold text-amber-400 flex items-center gap-2">
-                            <Key size={18} /> Gerador de Chaves
+                            <Key size={18} /> Gerador de Chaves (Admin)
                         </h3>
                     </div>
                     <div className="p-6">
                         <p className="text-sm text-gray-400 mb-4">
-                            Gere uma chave única. Copie e adicione manualmente na tabela <strong className="text-white">access_keys</strong> do Supabase.
+                            Gere uma chave única e salve no banco de dados para permitir o acesso de um novo usuário.
                         </p>
                         
+                        {/* Nome do Cliente */}
+                         <div className="mb-4">
+                            <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome do Cliente / Usuário</label>
+                            <input 
+                                type="text" 
+                                value={ownerNameInput}
+                                onChange={(e) => setOwnerNameInput(e.target.value)}
+                                className="w-full bg-black/40 border border-amber-500/20 rounded-lg p-2 text-white font-medium focus:border-amber-500 outline-none"
+                                placeholder="Ex: Cliente VIP 01"
+                            />
+                        </div>
+
+                        {/* Display da Chave */}
                         <div className="flex gap-2 mb-4">
-                            <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono text-center font-bold tracking-widest text-lg">
+                            <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono text-center font-bold tracking-widest text-lg select-all">
                                 {generatedKey || '---- ---- ----'}
                             </div>
                             <button 
                                 onClick={copyKeyToClipboard}
                                 className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 p-3 rounded-xl transition-colors"
                                 disabled={!generatedKey}
+                                title="Copiar"
                             >
                                 {copied ? <Check size={20} /> : <Copy size={20} />}
                             </button>
                         </div>
 
-                        <button 
-                            onClick={generateNewKey}
-                            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-900/20 mb-3"
-                        >
-                            GERAR NOVA CHAVE
-                        </button>
-                        
-                        <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 text-xs text-amber-500/70 hover:text-amber-500 font-bold uppercase tracking-widest mt-2">
-                             <Database size={12} /> Abrir Banco de Dados
-                        </a>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button 
+                                onClick={generateNewKey}
+                                className="w-full bg-black/40 hover:bg-black/60 text-white border border-white/10 font-bold py-3 rounded-xl transition-all"
+                            >
+                                GERAR CÓDIGO
+                            </button>
+                            
+                            <button 
+                                onClick={saveKeyToSupabase}
+                                disabled={!generatedKey || isSavingKey}
+                                className={`w-full font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
+                                    !generatedKey ? 'bg-gray-700 text-gray-400 cursor-not-allowed' :
+                                    'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/20'
+                                }`}
+                            >
+                                {isSavingKey ? <RefreshCw className="animate-spin" size={18}/> : <CloudUpload size={18} />}
+                                SALVAR NO DB
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
