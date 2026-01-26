@@ -34,6 +34,8 @@ export interface DreamGoal {
   name: string;
   targetValue: number;
   icon?: string;
+  imageUrl?: string; // URL da imagem (AI ou Manual)
+  autoImage?: boolean; // Se foi gerada automaticamente
 }
 
 export interface Config {

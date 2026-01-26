@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AppState, DreamGoal } from '../types';
 import { formatarBRL, getMonthlyAggregates } from '../utils';
-import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Car, Home, Smartphone, Plane } from 'lucide-react';
+import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Sparkles, Image as ImageIcon, Link } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -9,7 +9,8 @@ interface Props {
 }
 
 const Goals: React.FC<Props> = ({ state, updateState }) => {
-  const [newDream, setNewDream] = useState({ name: '', val: '' });
+  const [newDream, setNewDream] = useState({ name: '', val: '', manualUrl: '' });
+  const [useAI, setUseAI] = useState(true);
   
   const currentYear = new Date().getFullYear();
   const currentMonthIndex = new Date().getMonth();
@@ -74,15 +75,29 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
 
   const handleAddDream = () => {
       if(!newDream.name || !newDream.val) return;
+      
+      let finalImageUrl = '';
+
+      if (useAI) {
+          // Usa Pollinations.ai para gerar imagem baseada no nome
+          // Adiciona seed aleatória para variar se o nome for igual
+          const encodedName = encodeURIComponent(newDream.name + " realistic 8k masterpiece luxury product photorealistic");
+          finalImageUrl = `https://image.pollinations.ai/prompt/${encodedName}?width=800&height=600&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+      } else {
+          finalImageUrl = newDream.manualUrl;
+      }
+
       const newItem: DreamGoal = {
           id: Date.now(),
           name: newDream.name,
-          targetValue: parseFloat(newDream.val)
+          targetValue: parseFloat(newDream.val),
+          imageUrl: finalImageUrl,
+          autoImage: useAI
       };
-      // Inicializa array se não existir (para compatibilidade)
+
       const currentDreams = state.dreamGoals || [];
       updateState({ dreamGoals: [...currentDreams, newItem] });
-      setNewDream({ name: '', val: '' });
+      setNewDream({ name: '', val: '', manualUrl: '' });
   };
 
   const removeDream = (id: number) => {
@@ -227,7 +242,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
 
         {/* --- SEÇÃO 2: SONHOS & BENS (DREAM GOALS) --- */}
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
                 <div>
                     <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                         <Crown className="text-amber-400" /> Quadro dos Sonhos
@@ -238,20 +253,56 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                 </div>
 
                 {/* Input Rápido */}
-                <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-white/10">
-                    <input 
-                        type="text" placeholder="Ex: Moto, Macbook..." 
-                        className="bg-transparent text-sm text-white px-3 py-2 outline-none w-32 sm:w-48 placeholder:text-gray-600"
-                        value={newDream.name} onChange={e => setNewDream({...newDream, name: e.target.value})}
-                    />
-                    <input 
-                        type="number" placeholder="Valor" 
-                        className="bg-transparent text-sm text-white px-3 py-2 outline-none w-24 border-l border-white/10 placeholder:text-gray-600"
-                        value={newDream.val} onChange={e => setNewDream({...newDream, val: e.target.value})}
-                    />
-                    <button onClick={handleAddDream} className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors">
-                        <Plus size={16} />
-                    </button>
+                <div className="w-full md:w-auto flex flex-col gap-3">
+                    {/* Controles de Entrada */}
+                    <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-white/10">
+                        <div className="flex items-center gap-1 pr-2 border-r border-white/10">
+                            <button 
+                                onClick={() => setUseAI(true)}
+                                className={`p-2 rounded-lg transition-colors ${useAI ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                                title="Gerar Imagem com IA"
+                            >
+                                <Sparkles size={16} />
+                            </button>
+                            <button 
+                                onClick={() => setUseAI(false)}
+                                className={`p-2 rounded-lg transition-colors ${!useAI ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
+                                title="URL Manual"
+                            >
+                                <Link size={16} />
+                            </button>
+                        </div>
+
+                        <input 
+                            type="text" placeholder={useAI ? "Ex: Porsche 911 Preto..." : "Ex: Computador"} 
+                            className="bg-transparent text-sm text-white px-3 py-2 outline-none w-full md:w-48 placeholder:text-gray-600"
+                            value={newDream.name} onChange={e => setNewDream({...newDream, name: e.target.value})}
+                        />
+                        <input 
+                            type="number" placeholder="Valor" 
+                            className="bg-transparent text-sm text-white px-3 py-2 outline-none w-24 border-l border-white/10 placeholder:text-gray-600"
+                            value={newDream.val} onChange={e => setNewDream({...newDream, val: e.target.value})}
+                        />
+                        <button onClick={handleAddDream} className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex-shrink-0">
+                            <Plus size={16} />
+                        </button>
+                    </div>
+
+                    {/* Campo de URL Manual (Condicional) */}
+                    {!useAI && (
+                        <input 
+                            type="text" 
+                            placeholder="Cole o link da imagem aqui..." 
+                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-gray-500 outline-none animate-fade-in"
+                            value={newDream.manualUrl}
+                            onChange={e => setNewDream({...newDream, manualUrl: e.target.value})}
+                        />
+                    )}
+                     {useAI && (
+                        <p className="text-[10px] text-violet-400 text-right animate-fade-in flex items-center justify-end gap-1">
+                            <Sparkles size={10} /> IA buscará a melhor foto
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -273,42 +324,60 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                     }
 
                     return (
-                        <div key={goal.id} className="gateway-card rounded-xl p-5 border border-white/5 hover:border-amber-500/30 transition-all group relative overflow-hidden">
-                            {/* Ícone de Fundo */}
-                            <div className="absolute -bottom-4 -right-4 text-white/5 group-hover:text-amber-500/10 transition-colors pointer-events-none">
-                                <Crown size={100} />
-                            </div>
+                        <div 
+                            key={goal.id} 
+                            className="gateway-card rounded-xl border border-white/5 hover:border-amber-500/50 transition-all group relative overflow-hidden h-[240px] flex flex-col justify-between shadow-2xl"
+                            style={{
+                                backgroundImage: goal.imageUrl ? `url('${goal.imageUrl}')` : 'none',
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                            }}
+                        >
+                            {/* Overlay Escuro para Legibilidade (Gradiente) */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/20 z-0"></div>
 
-                            <div className="flex justify-between items-start mb-4 relative z-10">
-                                <div>
-                                    <h4 className="font-bold text-white text-lg">{goal.name}</h4>
-                                    <p className="text-gray-500 text-xs font-mono font-bold uppercase tracking-wider">Alvo: {formatarBRL(goal.targetValue)}</p>
+                            {/* Ícone de Fundo (Fallback se não tiver imagem) */}
+                            {!goal.imageUrl && (
+                                <div className="absolute -bottom-4 -right-4 text-white/5 group-hover:text-amber-500/10 transition-colors pointer-events-none z-0">
+                                    <Crown size={100} />
                                 </div>
-                                <button onClick={() => removeDream(goal.id)} className="text-gray-600 hover:text-rose-500 transition-colors">
+                            )}
+
+                            <div className="flex justify-between items-start p-5 relative z-10">
+                                <div>
+                                    <h4 className="font-black text-white text-xl tracking-tight drop-shadow-md">{goal.name}</h4>
+                                    <p className="text-gray-300 text-xs font-mono font-bold uppercase tracking-wider drop-shadow-md">
+                                        Alvo: {formatarBRL(goal.targetValue)}
+                                    </p>
+                                </div>
+                                <button onClick={() => removeDream(goal.id)} className="bg-black/40 text-gray-400 hover:text-rose-400 hover:bg-black/60 transition-colors p-2 rounded-lg backdrop-blur-sm border border-white/10">
                                     <Trash2 size={16} />
                                 </button>
                             </div>
 
-                            <div className="relative z-10">
+                            <div className="p-5 relative z-10">
                                 <div className="flex justify-between items-end mb-2">
-                                    <span className={`text-2xl font-black font-mono ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
+                                    <span className={`text-3xl font-black font-mono drop-shadow-lg ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
                                         {percent.toFixed(1)}%
                                     </span>
                                     <div className="text-right">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Estimativa</p>
-                                        <p className="text-xs font-bold text-amber-400">{daysLeftStr}</p>
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold drop-shadow-md">Estimativa</p>
+                                        <p className="text-xs font-bold text-amber-400 drop-shadow-md">{daysLeftStr}</p>
                                     </div>
                                 </div>
 
-                                <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
+                                <div className="h-2 w-full bg-gray-800/80 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm">
                                     <div 
-                                        className={`h-full rounded-full transition-all duration-1000 ${percent >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
+                                        className={`h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_currentColor] ${percent >= 100 ? 'bg-emerald-500 text-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400 text-amber-400'}`}
                                         style={{ width: `${cappedPercent}%` }}
                                     ></div>
                                 </div>
-                                <p className="text-[10px] text-gray-500 mt-2 text-center">
-                                    Baseado no lucro total acumulado e ritmo atual.
-                                </p>
+                                
+                                {goal.autoImage && (
+                                    <div className="absolute bottom-2 right-2 opacity-50 text-[9px] text-gray-500 flex items-center gap-1">
+                                        <Sparkles size={8} /> AI Generated
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
@@ -316,9 +385,9 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
 
                 {(!state.dreamGoals || state.dreamGoals.length === 0) && (
                     <div className="col-span-full py-12 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
-                        <Crown size={48} className="mx-auto text-gray-600 mb-4" />
-                        <h4 className="text-gray-400 font-bold">Nenhum sonho cadastrado</h4>
-                        <p className="text-gray-600 text-sm mt-1">Adicione objetivos acima para projetar suas conquistas.</p>
+                        <ImageIcon size={48} className="mx-auto text-gray-600 mb-4" />
+                        <h4 className="text-gray-400 font-bold">Nenhum sonho visualizado</h4>
+                        <p className="text-gray-600 text-sm mt-1">Adicione objetivos e deixe a IA encontrar a imagem para você.</p>
                     </div>
                 )}
             </div>

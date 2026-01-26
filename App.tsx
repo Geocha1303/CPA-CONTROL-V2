@@ -152,7 +152,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                     <h1 className="text-4xl font-black text-white tracking-tight mb-2">CPA <span className="text-blue-500">MASTER</span></h1>
                     <div className="flex items-center justify-center gap-2 text-[10px] font-bold tracking-[0.3em] uppercase text-gray-500">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        System V3.0 Online
+                        Sistema V3.0 Online
                     </div>
                 </div>
 
@@ -199,7 +199,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 </div>
                 
                 <p className="text-center text-[10px] text-gray-600 mt-8 font-mono">
-                    ID: {deviceId} <br/> PROTECTED BY SUPABASE
+                    ID: {deviceId} <br/> PROTEGIDO POR SUPABASE
                 </p>
             </div>
         </div>
@@ -522,9 +522,9 @@ function App() {
                         ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : (saveStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500')}
                     `}></div>
                     <div className="overflow-hidden">
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">SYSTEM STATUS</p>
+                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">STATUS DO SISTEMA</p>
                         <p className={`text-[10px] font-bold truncate ${saveStatus === 'saving' ? 'text-blue-500' : 'text-gray-300'}`}>
-                            {saveStatus === 'saving' ? 'SYNCING...' : 'ONLINE'}
+                            {saveStatus === 'saving' ? 'SALVANDO...' : 'ONLINE'}
                         </p>
                     </div>
                 </div>
