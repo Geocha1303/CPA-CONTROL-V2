@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppState } from '../types';
-import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User } from 'lucide-react';
+import { Save, AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, Key, Copy, Check, Database } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -9,6 +9,8 @@ interface Props {
 
 const Settings: React.FC<Props> = ({ state, updateState }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [generatedKey, setGeneratedKey] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const handleConfigChange = (key: 'valorBonus' | 'taxaImposto', value: number) => {
     updateState({
@@ -20,6 +22,24 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
     updateState({
         config: { ...state.config, userName: val }
     });
+  };
+
+  // Gerador de Chaves para Venda
+  const generateNewKey = () => {
+      const prefix = "CPA";
+      const part1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const part2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const newKey = `${prefix}-${part1}-${part2}`;
+      setGeneratedKey(newKey);
+      setCopied(false);
+  };
+
+  const copyKeyToClipboard = () => {
+      if(generatedKey) {
+          navigator.clipboard.writeText(generatedKey);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+      }
   };
 
   // Função para exportar dados (Backup)
@@ -171,64 +191,105 @@ const Settings: React.FC<Props> = ({ state, updateState }) => {
                 </div>
             </div>
 
-            {/* Coluna 2: Backup & Segurança */}
-            <div className="glass-card rounded-2xl overflow-hidden border border-emerald-500/20 shadow-2xl shadow-emerald-900/10 h-fit">
-                <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-900/20 to-transparent">
-                    <h3 className="font-bold text-emerald-400 flex items-center gap-2">
-                        <ShieldCheck size={20} /> Cofre de Dados (Backup)
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-1">Evite perder dados se limpar o navegador.</p>
-                </div>
-                
-                <div className="p-8 space-y-8">
-                    {/* Exportar */}
-                    <div>
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
-                                <Download size={24} />
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-white text-lg">Salvar Backup</h4>
-                                <p className="text-sm text-gray-400">Baixe um arquivo .json com seus dados.</p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={handleExportData}
-                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-3"
-                        >
-                            <FileJson size={20} /> BAIXAR DADOS AGORA
-                        </button>
-                        <p className="text-xs text-gray-500 mt-3 text-center">Recomendado fazer diariamente após o fechamento.</p>
+            {/* Coluna 2: Backup & Segurança & License Gen */}
+            <div className="space-y-8">
+                {/* BACKUP */}
+                <div className="glass-card rounded-2xl overflow-hidden border border-emerald-500/20 shadow-2xl shadow-emerald-900/10 h-fit">
+                    <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-900/20 to-transparent">
+                        <h3 className="font-bold text-emerald-400 flex items-center gap-2">
+                            <ShieldCheck size={20} /> Cofre de Dados (Backup)
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-1">Evite perder dados se limpar o navegador.</p>
                     </div>
-
-                    <div className="h-px bg-white/5 w-full"></div>
-
-                    {/* Importar */}
-                    <div>
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 border border-violet-500/20">
-                                <Upload size={24} />
+                    
+                    <div className="p-8 space-y-8">
+                        {/* Exportar */}
+                        <div>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
+                                    <Download size={24} />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white text-lg">Salvar Backup</h4>
+                                    <p className="text-sm text-gray-400">Baixe um arquivo .json com seus dados.</p>
+                                </div>
                             </div>
-                            <div>
-                                <h4 className="font-bold text-white text-lg">Restaurar Backup</h4>
-                                <p className="text-sm text-gray-400">Recupere dados de um arquivo salvo.</p>
-                            </div>
+                            <button 
+                                onClick={handleExportData}
+                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-3"
+                            >
+                                <FileJson size={20} /> BAIXAR DADOS AGORA
+                            </button>
+                            <p className="text-xs text-gray-500 mt-3 text-center">Recomendado fazer diariamente após o fechamento.</p>
                         </div>
+
+                        <div className="h-px bg-white/5 w-full"></div>
+
+                        {/* Importar */}
+                        <div>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 border border-violet-500/20">
+                                    <Upload size={24} />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white text-lg">Restaurar Backup</h4>
+                                    <p className="text-sm text-gray-400">Recupere dados de um arquivo salvo.</p>
+                                </div>
+                            </div>
+                            
+                            <input 
+                                type="file" 
+                                accept=".json"
+                                ref={fileInputRef}
+                                style={{display: 'none'}}
+                                onChange={handleImportData}
+                            />
+                            
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-3 hover:text-white"
+                            >
+                                <Upload size={20} /> SELECIONAR ARQUIVO
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* LICENSE GENERATOR */}
+                <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5">
+                    <div className="p-6 border-b border-amber-500/10">
+                        <h3 className="font-bold text-amber-400 flex items-center gap-2">
+                            <Key size={18} /> Gerador de Chaves
+                        </h3>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-sm text-gray-400 mb-4">
+                            Gere uma chave única. Copie e adicione manualmente na tabela <strong className="text-white">access_keys</strong> do Supabase.
+                        </p>
                         
-                        <input 
-                            type="file" 
-                            accept=".json"
-                            ref={fileInputRef}
-                            style={{display: 'none'}}
-                            onChange={handleImportData}
-                        />
-                        
+                        <div className="flex gap-2 mb-4">
+                            <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono text-center font-bold tracking-widest text-lg">
+                                {generatedKey || '---- ---- ----'}
+                            </div>
+                            <button 
+                                onClick={copyKeyToClipboard}
+                                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 p-3 rounded-xl transition-colors"
+                                disabled={!generatedKey}
+                            >
+                                {copied ? <Check size={20} /> : <Copy size={20} />}
+                            </button>
+                        </div>
+
                         <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-3 hover:text-white"
+                            onClick={generateNewKey}
+                            className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-900/20 mb-3"
                         >
-                            <Upload size={20} /> SELECIONAR ARQUIVO
+                            GERAR NOVA CHAVE
                         </button>
+                        
+                        <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 text-xs text-amber-500/70 hover:text-amber-500 font-bold uppercase tracking-widest mt-2">
+                             <Database size={12} /> Abrir Banco de Dados
+                        </a>
                     </div>
                 </div>
             </div>

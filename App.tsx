@@ -18,10 +18,18 @@ import {
   ExternalLink,
   Download,
   Upload,
-  Cpu
+  Cpu,
+  Lock,
+  User,
+  Key,
+  LogOut,
+  ShieldCheck,
+  Smartphone,
+  Server
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO } from './utils';
+import { supabase } from './supabaseClient';
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -36,7 +44,7 @@ const initialState: AppState = {
   dailyRecords: {},
   generalExpenses: [],
   monthlyGoals: {},
-  dreamGoals: [], // Inicialização vazia
+  dreamGoals: [], 
   config: { valorBonus: 20.00, taxaImposto: 0.06, userName: 'OPERADOR' },
   generator: {
     plan: [],
@@ -66,8 +74,162 @@ const mergeDeep = (target: any, source: any): any => {
 };
 
 const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
+const AUTH_STORAGE_KEY = 'cpa_auth_session_v2';
+const DEVICE_ID_KEY = 'cpa_device_fingerprint';
+
+// --- LOGIN COMPONENT ---
+const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void }) => {
+    const [inputKey, setInputKey] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [statusText, setStatusText] = useState('Conectar ao Servidor');
+    const [deviceId, setDeviceId] = useState('');
+
+    useEffect(() => {
+        // Gera Fingerprint Único
+        let storedId = localStorage.getItem(DEVICE_ID_KEY);
+        if (!storedId) {
+            storedId = 'HWID-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Date.now().toString(16).toUpperCase();
+            localStorage.setItem(DEVICE_ID_KEY, storedId);
+        }
+        setDeviceId(storedId);
+    }, []);
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+        setStatusText('Verificando Chave...');
+        
+        const rawKey = inputKey.trim().toUpperCase();
+
+        // --- MODO DE TESTE / ACESSO DE EMERGÊNCIA ---
+        // Permite entrar sem configurar o Supabase
+        if (rawKey === 'TESTE-ADMIN') {
+             setStatusText('Modo de Teste Local...');
+             setTimeout(() => {
+                localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
+                onLogin(rawKey, true, 'Modo Teste');
+             }, 800);
+             return;
+        }
+
+        // Verificação de Segurança da Configuração
+        // @ts-ignore
+        const currentUrl = supabase.supabaseUrl;
+        if (currentUrl.includes('seu-projeto-id') || currentUrl.includes('SUA_PROJECT_URL')) {
+             setError('ERRO: Supabase não configurado. Use a chave "TESTE-ADMIN" para testar.');
+             setLoading(false);
+             setStatusText('Erro de Configuração');
+             return;
+        }
+
+        try {
+            // 1. Consulta ao Supabase
+            const { data, error } = await supabase
+                .from('access_keys')
+                .select('*')
+                .eq('key', rawKey)
+                .single();
+
+            if (error || !data) {
+                // Mensagem amigável para erros comuns
+                if (error && error.message && (error.message.includes('FetchError') || error.message.includes('Failed to fetch'))) {
+                    throw new Error('Falha na conexão. Use "TESTE-ADMIN" se estiver testando.');
+                }
+                throw new Error('Chave inválida ou não encontrada.');
+            }
+
+            // 2. Verifica se está ativa
+            if (data.active === false) {
+                 throw new Error('Chave bloqueada pelo administrador.');
+            }
+
+            setStatusText('Autorizado. Carregando...');
+            
+            setTimeout(() => {
+                localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
+                // Define Admin se a chave for a chave mestre (você pode criar uma flag no banco tb)
+                const isAdmin = rawKey.startsWith('ADMIN-') || data.is_admin === true;
+                onLogin(rawKey, isAdmin, data.owner_name || 'Usuário');
+            }, 800);
+
+        } catch (err: any) {
+            console.error(err);
+            setError(err.message || 'Erro de conexão.');
+            setLoading(false);
+            setStatusText('Conectar ao Servidor');
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-[#030014] relative overflow-hidden font-sans select-none">
+            <div className="absolute inset-0 bg-mesh opacity-30 pointer-events-none"></div>
+            
+            <div className="relative z-10 w-full max-w-md p-8 animate-fade-in">
+                <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 border border-primary/30 mb-6 shadow-[0_0_40px_rgba(112,0,255,0.4)] relative">
+                        <ShieldCheck size={40} className="text-primary" />
+                        <div className="absolute inset-0 border border-white/10 rounded-2xl animate-pulse"></div>
+                    </div>
+                    <h1 className="text-4xl font-black text-white tracking-tighter mb-2">CPA <span className="text-primary">PRO</span></h1>
+                    <p className="text-gray-500 text-xs font-bold tracking-[0.3em] uppercase">Secure Access Gateway</p>
+                </div>
+
+                <div className="gateway-card p-8 rounded-2xl backdrop-blur-xl border border-white/10 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50 animate-slide-in-right"></div>
+
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div>
+                            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-3 block flex justify-between">
+                                <span>Chave de Licença</span>
+                                <span className="text-primary-glow/70 flex items-center gap-1"><Server size={10}/> ONLINE</span>
+                            </label>
+                            <div className="relative group">
+                                <Key className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />
+                                <input 
+                                    type="text" 
+                                    value={inputKey}
+                                    onChange={(e) => setInputKey(e.target.value.toUpperCase())}
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white font-mono font-bold tracking-widest focus:border-primary focus:outline-none transition-all placeholder:text-gray-700 text-center"
+                                    placeholder="XXXX-XXXX-XXXX"
+                                    autoFocus
+                                />
+                            </div>
+                            <p className="text-[9px] text-gray-600 text-center mt-2">Para testar, use: <span className="text-gray-400 font-mono">TESTE-ADMIN</span></p>
+                        </div>
+
+                        {error && (
+                            <div className="flex items-center gap-2 text-rose-400 text-xs font-bold bg-rose-500/10 p-3 rounded-lg border border-rose-500/20 animate-fade-in">
+                                <AlertCircle size={14} /> {error}
+                            </div>
+                        )}
+
+                        <button 
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full bg-gradient-to-r from-primary to-violet-600 hover:from-primary/80 hover:to-violet-600/80 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(112,0,255,0.3)] transition-all transform hover:scale-[1.02] active:scale-[0.98] uppercase tracking-wider text-sm flex justify-center items-center gap-2 ${loading ? 'opacity-70 cursor-wait' : ''}`}
+                        >
+                            {loading ? <RefreshCw className="animate-spin" size={18}/> : <Lock size={18} />}
+                            {statusText}
+                        </button>
+
+                        <div className="flex items-center justify-center gap-2 text-[10px] text-gray-600 font-mono mt-4 pt-4 border-t border-white/5">
+                            <Smartphone size={12} />
+                            <span>HWID: {deviceId}</span>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserKey, setCurrentUserKey] = useState('');
+  
   const [state, setState] = useState<AppState>(initialState);
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -84,15 +246,56 @@ function App() {
   const [isIframe, setIsIframe] = useState(false);
   const [hasFileSystemSupport, setHasFileSystemSupport] = useState(true);
 
-  // Verifica ambiente
+  // --- BLINDAGEM DE CÓDIGO (ANTI-INSPEÇÃO) ---
+  useEffect(() => {
+    // Desabilita menu de contexto (Botão Direito)
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // Desabilita atalhos de desenvolvedor (F12, Ctrl+Shift+I, etc)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && e.key === 'I') || 
+        (e.ctrlKey && e.shiftKey && e.key === 'J') || 
+        (e.ctrlKey && e.key === 'u')
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Verifica ambiente e Login Persistente
   useEffect(() => {
       try {
           if (window.self !== window.top) setIsIframe(true);
       } catch (e) { setIsIframe(true); }
       if (!('showOpenFilePicker' in window)) setHasFileSystemSupport(false);
+
+      // Check LocalStorage for Auth
+      const savedKey = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (savedKey) {
+          // Revalida silentemente com Supabase se necessário, ou confia no local por enquanto
+          // Para máxima segurança, deveria revalidar aqui.
+          setIsAuthenticated(true);
+          setCurrentUserKey(savedKey);
+          // Assume admin se começar com ADMIN (simplificação visual)
+          if(savedKey.startsWith('ADMIN') || savedKey === 'TESTE-ADMIN') setIsAdmin(true);
+      }
   }, []);
 
-  // --- CARREGAMENTO INICIAL ---
+  // --- CARREGAMENTO INICIAL DADOS ---
   useEffect(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
@@ -116,6 +319,16 @@ function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [state]);
+
+  // --- LOGOUT ---
+  const handleLogout = () => {
+      if(confirm('Deseja encerrar a sessão segura?')) {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          setIsAuthenticated(false);
+          setIsAdmin(false);
+          setCurrentUserKey('');
+      }
+  };
 
   // --- DOWNLOAD MANUAL ---
   const handleManualDownload = () => {
@@ -251,6 +464,16 @@ function App() {
     }
   };
 
+  if (!isAuthenticated) {
+      return <LoginScreen onLogin={(key, admin, owner) => { 
+          setIsAuthenticated(true); 
+          setIsAdmin(admin); 
+          setCurrentUserKey(key); 
+          // Atualiza nome se vier do banco
+          if(owner) setState(prev => ({...prev, config: {...prev.config, userName: owner}}));
+      }} />;
+  }
+
   return (
     <div className="flex h-screen bg-background text-gray-100 overflow-hidden font-sans selection:bg-primary selection:text-white">
       
@@ -295,9 +518,12 @@ function App() {
                 </div>
                 <div>
                     <h1 className="font-black text-xl leading-none tracking-tight text-white mb-1">CPA <span className="text-primary">PRO</span></h1>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate max-w-[120px]">
-                        {state.config.userName || 'OPERADOR'}
-                    </p>
+                    <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${isAdmin ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`}></div>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest truncate max-w-[120px] ${isAdmin ? 'text-amber-500' : 'text-gray-500'}`}>
+                             {isAdmin ? 'ADMIN' : 'USER'}
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -333,12 +559,22 @@ function App() {
 
             <input type="file" ref={legacyFileInputRef} style={{display: 'none'}} accept=".json" onChange={handleLegacyUpload} />
 
-            <button 
-                onClick={handleManualDownload}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 py-3 rounded-lg text-xs font-bold transition-all hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] mb-2 group font-mono"
-            >
-                <Download size={14} className="group-hover:translate-y-0.5 transition-transform" /> BACKUP_DATA.JSON
-            </button>
+            <div className="flex gap-2">
+                <button 
+                    onClick={handleManualDownload}
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 py-3 rounded-lg text-xs font-bold transition-all hover:shadow-[0_0_15px_rgba(16,185,129,0.2)] mb-2 group font-mono"
+                    title="Baixar Backup"
+                >
+                    <Download size={14} /> DADOS
+                </button>
+                <button 
+                    onClick={handleLogout}
+                    className="w-10 flex items-center justify-center bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-3 rounded-lg text-xs font-bold transition-all hover:shadow-[0_0_15px_rgba(244,63,94,0.2)] mb-2 group"
+                    title="Logout"
+                >
+                    <LogOut size={14} />
+                </button>
+            </div>
 
             {!fileHandle && (
                 <button 

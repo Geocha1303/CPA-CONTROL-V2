@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AppState, GeneratedPlayer, HistoryItem } from '../types';
+import { AppState, GeneratedPlayer, HistoryItem, Account } from '../types';
 import { formatarBRL, generatePlan, getHojeISO, getManualAvoidanceValues, generateConstrainedSum, regeneratePlayerValues } from '../utils';
-import { Play, RotateCw, Send, Sliders, Trash2, BrainCircuit, Target, BarChart2, User, Layers, Info, Check, AlertTriangle, ChevronRight, Settings2, Users } from 'lucide-react';
+import { Play, RotateCw, Send, Sliders, Trash2, BrainCircuit, Target, BarChart2, User, Layers, Info, AlertTriangle, ChevronRight, Settings2, Users, Rocket, CheckCircle2, RefreshCw, Cpu, Database, ArrowRight } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -18,6 +18,14 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
   const [dist, setDist] = useState(state.generator.distribuicaoAgentes);
   const [totalAgentes, setTotalAgentes] = useState(state.generator.totalAgentes);
   const [jogadoresPorCiclo, setJogadoresPorCiclo] = useState(state.generator.jogadoresPorCiclo);
+  
+  // --- ESTADO DE PROCESSAMENTO VISUAL ---
+  const [processingState, setProcessingState] = useState({
+      isActive: false,
+      currentLot: 0,
+      totalLots: 0,
+      status: 'idle' as 'idle' | 'processing' | 'saving' | 'completed'
+  });
   
   // Sync local state when global state changes (e.g. File Restore)
   useEffect(() => {
@@ -192,23 +200,126 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       notify(`Ajuste aplicado! +R$${formatarBRL(deficit)} no total do agente.`, 'success');
   };
 
-  const handleSaveHistory = () => {
-      if(!state.generator.plan.length) return;
-      const newHistoryItems: HistoryItem[] = [];
-      state.generator.plan.forEach(p => {
-          p.deps.forEach(d => {
-              newHistoryItems.push({ valor: d.val, tipo: d.type });
-          });
-      });
+  // --- LÓGICA DE ENVIO SEQUENCIAL (VISUAL) ---
+  const handleSendAll = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-      updateState({
+      const plan = state.generator.plan;
+      if(!plan || plan.length === 0) {
+          notify("Nenhum plano para enviar.", "error");
+          return;
+      }
+
+      if(!window.confirm(`CONFIRMAÇÃO:\n\nTem certeza que deseja processar ${plan.length} jogadores e criar lotes no Controle Diário?`)) {
+          return;
+      }
+
+      // 1. Prepara os chunks (Lotes)
+      const chunksData: { accounts: Account[], history: HistoryItem[] }[] = [];
+      let currentIndex = 0;
+      let lotIndex = 1;
+
+      while (currentIndex < plan.length) {
+          const customSize = state.generator.customLotSizes[lotIndex];
+          const size = (customSize !== undefined && customSize > 0) ? customSize : (jogadoresPorCiclo || 5);
+          const chunk = plan.slice(currentIndex, currentIndex + size);
+          
+          if (chunk.length === 0) break;
+
+          const lotAccounts: Account[] = [];
+          const lotHistory: HistoryItem[] = [];
+
+          let dep = 0, redep = 0, ciclos = 0;
+          
+          chunk.forEach(p => {
+              p.deps.forEach(d => {
+                  lotHistory.push({ valor: d.val, tipo: d.type });
+                  if(d.type === 'deposito') dep += d.val;
+                  else redep += d.val;
+              });
+              ciclos += 1;
+          });
+
+          // Gera ID único
+          const uniqueId = Date.now() + Math.floor(Math.random() * 1000000) + (lotIndex * 10000);
+
+          lotAccounts.push({
+              id: uniqueId,
+              deposito: dep,
+              redeposito: redep,
+              saque: 0,
+              ciclos: ciclos
+          });
+
+          chunksData.push({ accounts: lotAccounts, history: lotHistory });
+
+          currentIndex += chunk.length; 
+          lotIndex++;
+      }
+
+      // 2. Inicia o Processamento Visual
+      const totalLots = chunksData.length;
+      setProcessingState({ isActive: true, currentLot: 0, totalLots, status: 'processing' });
+
+      // Acumulador Final
+      let finalNewAccounts: Account[] = [];
+      let finalNewHistory: HistoryItem[] = [];
+
+      // 3. Loop com Delay (Simulação de Envio 1 a 1)
+      for (let i = 0; i < totalLots; i++) {
+          setProcessingState(prev => ({ ...prev, currentLot: i + 1 }));
+          
+          // Delay estético para o usuário ver o progresso
+          await new Promise(resolve => setTimeout(resolve, 800)); 
+
+          finalNewAccounts = [...finalNewAccounts, ...chunksData[i].accounts];
+          finalNewHistory = [...finalNewHistory, ...chunksData[i].history];
+      }
+
+      // 4. Salvando Dados Reais
+      setProcessingState(prev => ({ ...prev, status: 'saving' }));
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      const today = getHojeISO();
+      const currentDay = state.dailyRecords[today] 
+        ? JSON.parse(JSON.stringify(state.dailyRecords[today]))
+        : { expenses: {proxy:0, numeros:0}, accounts: [] };
+      
+      const finalAccounts = [...currentDay.accounts, ...finalNewAccounts];
+      
+      const newState = {
+          dailyRecords: { 
+              ...state.dailyRecords, 
+              [today]: { ...currentDay, accounts: finalAccounts } 
+          },
           generator: { 
               ...state.generator, 
-              history: [...(state.generator.history || []), ...newHistoryItems],
-              plan: [] 
+              history: [...(state.generator.history || []), ...finalNewHistory],
+              plan: [], 
+              lotWithdrawals: {},
+              customLotSizes: {} 
           }
-      });
-      notify('Depósitos salvos no histórico e plano limpo.', 'success');
+      };
+
+      updateState(newState);
+
+      // 5. Finalização
+      setProcessingState(prev => ({ ...prev, status: 'completed' }));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      notify(`Sucesso! ${totalLots} lotes processados.`, 'success');
+      navigateToDaily(today);
+  };
+
+  const handleClearPlan = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if(window.confirm('TEM CERTEZA?\n\nIsso apagará todo o plano atual.')) {
+         updateState({generator: {...state.generator, plan: []}});
+         notify('Plano limpo com sucesso.', 'info');
+      }
   };
 
   // --- RENDERS ---
@@ -401,6 +512,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                             />
                         </div>
                         <button 
+                            type="button"
                             onClick={() => handleRegenerateLot(chunkStartIndex, size)}
                             className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors text-xs font-bold border border-white/5"
                             title="Regerar Valores"
@@ -408,10 +520,14 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                             <RotateCw size={14} /> Regerar
                         </button>
                         <button 
+                            type="button"
                             onClick={() => {
                                 const lotChunk = plan.slice(chunkStartIndex, chunkStartIndex + size);
                                 const today = getHojeISO();
-                                const currentDay = state.dailyRecords[today] || { expenses: {proxy:0, numeros:0}, accounts: [] };
+                                // Recupera corretamente o estado
+                                const currentDay = state.dailyRecords[today] 
+                                    ? JSON.parse(JSON.stringify(state.dailyRecords[today]))
+                                    : { expenses: {proxy:0, numeros:0}, accounts: [] };
                                 
                                 let dep = 0, redep = 0, ciclos = 0;
                                 lotChunk.forEach(p => {
@@ -423,9 +539,23 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                     ciclos += 1;
                                 });
                                 
-                                const newAccount = { id: Date.now(), deposito: dep, redeposito: redep, saque: 0, ciclos };
-                                updateState({ dailyRecords: { ...state.dailyRecords, [today]: { ...currentDay, accounts: [...currentDay.accounts, newAccount] } } });
-                                notify(`Lote ${lotNumber} enviado para Controle Diário (Split OK)!`, 'success');
+                                // ID Único garantido
+                                const newAccount = { 
+                                    id: Date.now() + Math.floor(Math.random() * 100000), 
+                                    deposito: dep, 
+                                    redeposito: redep, 
+                                    saque: 0, 
+                                    ciclos 
+                                };
+                                
+                                // Update sem perder dados
+                                updateState({ 
+                                    dailyRecords: { 
+                                        ...state.dailyRecords, 
+                                        [today]: { ...currentDay, accounts: [...currentDay.accounts, newAccount] } 
+                                    } 
+                                });
+                                notify(`Lote ${lotNumber} enviado para Controle Diário!`, 'success');
                                 navigateToDaily(today);
                             }}
                             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-900/20"
@@ -513,6 +643,60 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
     
   return (
     <div className="flex flex-col xl:flex-row gap-8 h-full overflow-hidden">
+      
+      {/* --- MODAL DE PROCESSAMENTO DE LOTES (OVERLAY) --- */}
+      {processingState.isActive && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center animate-fade-in">
+              <div className="bg-[#0a0a0a] border border-emerald-500/30 rounded-2xl w-full max-w-md p-8 shadow-[0_0_50px_rgba(16,185,129,0.2)] relative overflow-hidden">
+                  {/* Background Grid */}
+                  <div className="absolute inset-0 bg-mesh opacity-10 pointer-events-none"></div>
+                  
+                  <div className="relative z-10 flex flex-col items-center text-center">
+                      <div className="mb-6 relative">
+                          <div className="w-20 h-20 rounded-full border-2 border-dashed border-emerald-500/50 flex items-center justify-center animate-spin-slow"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                              {processingState.status === 'saving' ? (
+                                  <Database className="text-emerald-400 animate-pulse" size={32} />
+                              ) : processingState.status === 'completed' ? (
+                                  <CheckCircle2 className="text-emerald-400" size={32} />
+                              ) : (
+                                  <Cpu className="text-emerald-400" size={32} />
+                              )}
+                          </div>
+                      </div>
+
+                      <h3 className="text-2xl font-black text-white tracking-tight mb-2">
+                          {processingState.status === 'saving' ? 'SALVANDO DADOS...' : 
+                           processingState.status === 'completed' ? 'SUCESSO!' :
+                           'PROCESSANDO...'}
+                      </h3>
+                      
+                      <p className="text-gray-400 font-mono text-sm mb-6">
+                           {processingState.status === 'completed' 
+                            ? 'Todos os lotes foram enviados.' 
+                            : `Transferindo Lote ${processingState.currentLot} de ${processingState.totalLots}`}
+                      </p>
+
+                      {/* Progress Bar Container */}
+                      <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-white/5 mb-4 relative">
+                          <div 
+                                className="h-full bg-emerald-500 transition-all duration-300 ease-out relative"
+                                style={{ width: `${(processingState.currentLot / processingState.totalLots) * 100}%` }}
+                          >
+                               <div className="absolute inset-0 bg-white/30 w-full h-full animate-shimmer"></div>
+                          </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[10px] text-emerald-500/70 font-bold uppercase tracking-widest">
+                          <RefreshCw size={10} className="animate-spin" />
+                          <span>Não feche o navegador</span>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+
       {/* --- PANEL DE CONFIGURAÇÃO (ESQUERDA) --- */}
       <div className="w-full xl:w-[420px] flex-shrink-0 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2 pb-10">
         
@@ -715,16 +899,24 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
              </div>
              
              {state.generator.plan.length > 0 && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 relative z-50">
                     <button 
-                         onClick={handleSaveHistory}
-                         className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-950/40 px-4 py-2 rounded-xl border border-emerald-900/50 hover:bg-emerald-900/50 transition-colors uppercase tracking-wide hover:scale-105 transform"
+                         type="button"
+                         onClick={handleSendAll}
+                         disabled={processingState.isActive}
+                         className={`flex items-center gap-2 text-xs font-bold text-white px-5 py-2.5 rounded-xl border transition-all uppercase tracking-wide transform hover:-translate-y-0.5 active:scale-95 ${
+                            processingState.isActive 
+                            ? 'bg-emerald-600/50 border-emerald-500/50 cursor-wait' 
+                            : 'bg-emerald-600 border-emerald-500 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                         }`}
                      >
-                        <Check size={16} /> Aprovar Tudo
+                        {processingState.isActive ? <RefreshCw className="animate-spin" size={16} /> : <Rocket size={16} />} 
+                        {processingState.isActive ? 'ENVIANDO...' : 'ENVIAR TUDO'}
                     </button>
                     <button 
-                         onClick={() => { if(confirm('Limpar o plano atual?')) updateState({generator: {...state.generator, plan: []}}) }}
-                         className="p-2 text-gray-500 hover:text-rose-500 transition-colors hover:bg-rose-950/30 rounded-lg"
+                         onClick={handleClearPlan}
+                         disabled={processingState.isActive}
+                         className="p-2.5 text-gray-500 hover:text-rose-500 transition-colors hover:bg-rose-950/30 rounded-lg border border-transparent hover:border-rose-900/30 active:scale-95 disabled:opacity-50"
                      >
                         <Trash2 size={20} />
                     </button>
@@ -733,7 +925,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 relative">
             {!state.generator.plan.length ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-60">
                     <div className="bg-white/5 p-8 rounded-full mb-6 border border-white/5">
