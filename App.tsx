@@ -104,7 +104,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         const rawKey = inputKey.trim().toUpperCase();
 
         // --- MODO DE TESTE / ACESSO DE EMERGÊNCIA ---
-        // Permite entrar sem configurar o Supabase
+        // Permite entrar sem configurar o Supabase (Invisível para o usuário final)
         if (rawKey === 'TESTE-ADMIN') {
              setStatusText('Modo de Teste Local...');
              setTimeout(() => {
@@ -118,7 +118,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         // @ts-ignore
         const currentUrl = supabase.supabaseUrl;
         if (currentUrl.includes('seu-projeto-id') || currentUrl.includes('SUA_PROJECT_URL')) {
-             setError('ERRO: Supabase não configurado. Use a chave "TESTE-ADMIN" para testar.');
+             setError('ERRO DE SISTEMA: Banco de dados não conectado.');
              setLoading(false);
              setStatusText('Erro de Configuração');
              return;
@@ -135,14 +135,14 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
             if (error || !data) {
                 // Mensagem amigável para erros comuns
                 if (error && error.message && (error.message.includes('FetchError') || error.message.includes('Failed to fetch'))) {
-                    throw new Error('Falha na conexão. Use "TESTE-ADMIN" se estiver testando.');
+                    throw new Error('Falha na conexão com o servidor. Verifique sua internet.');
                 }
                 throw new Error('Chave inválida ou não encontrada.');
             }
 
             // 2. Verifica se está ativa
             if (data.active === false) {
-                 throw new Error('Chave bloqueada pelo administrador.');
+                 throw new Error('Esta chave foi desativada pelo administrador.');
             }
 
             setStatusText('Autorizado. Carregando...');
@@ -196,7 +196,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                                     autoFocus
                                 />
                             </div>
-                            <p className="text-[9px] text-gray-600 text-center mt-2">Para testar, use: <span className="text-gray-400 font-mono">TESTE-ADMIN</span></p>
                         </div>
 
                         {error && (
