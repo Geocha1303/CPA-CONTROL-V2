@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
-import { AppState } from '../types';
+import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL } from '../utils';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  Funnel, FunnelChart, LabelList, Cell
+  PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { 
-  TrendingUp, Activity, Zap, ArrowUpRight, ArrowDownRight,
-  Filter, BarChart2, DollarSign, Globe, Wifi, Lock, ShieldCheck, Cpu, LayoutDashboard
+  TrendingUp, Activity, Zap, ArrowDownRight,
+  Filter, PieChart as PieIcon, History, ChevronRight, CheckCircle2, ArrowUpRight,
+  LayoutDashboard
 } from 'lucide-react';
 
 interface Props {
@@ -23,55 +24,106 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     let totalDespGeral = 0;
     let totalCheckoutEvents = 0; 
     
-    // Para o gráfico de funil
+    // Breakdown Data
     let totalDepositos = 0;
     let totalRedepositos = 0;
+    
+    // Config Bônus Safety Check
+    const safeBonus = (state.config && typeof state.config.valorBonus === 'number') ? state.config.valorBonus : 20;
 
     const chartData = dates.map(date => {
-        const m = calculateDayMetrics(state.dailyRecords[date], state.config.valorBonus);
-        
-        totalInv += m.invest;
-        totalRet += m.ret;
-        totalLucro += m.lucro;
-        
+        const m = calculateDayMetrics(state.dailyRecords[date], safeBonus);
         const record = state.dailyRecords[date];
-        if (record) {
+
+        // Accumulate specific breakdowns
+        if(record && record.accounts) {
+            record.accounts.forEach(acc => {
+                totalDepositos += (acc.deposito || 0);
+                totalRedepositos += (acc.redeposito || 0);
+            });
+        }
+
+        const safeInvest = isNaN(m.invest) ? 0 : m.invest;
+        const safeRet = isNaN(m.ret) ? 0 : m.ret;
+        const safeLucro = isNaN(m.lucro) ? 0 : m.lucro;
+
+        totalInv += safeInvest;
+        totalRet += safeRet;
+        totalLucro += safeLucro;
+        
+        if (record && Array.isArray(record.accounts)) {
              record.accounts.forEach(a => {
-                 totalDepositos += a.deposito;
-                 totalRedepositos += a.redeposito;
-                 totalCheckoutEvents += a.ciclos; 
+                 totalCheckoutEvents += (a.ciclos || 0); 
              });
         }
 
         return {
             date: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-            lucro: m.lucro,
-            faturamento: m.ret,
-            investimento: m.invest
+            lucro: safeLucro,
+            faturamento: safeRet,
+            investimento: safeInvest
         };
     });
 
-    state.generalExpenses.forEach(e => totalDespGeral += e.valor);
-    const lucroLiquido = totalLucro - totalDespGeral;
-    
-    const funnelChartData = [
-        { "value": totalInv + totalDespGeral, "name": "CUSTO", "fill": "#3b82f6" },
-        { "value": totalRet, "name": "RECEITA", "fill": "#10b981" },
-        { "value": lucroLiquido, "name": "LUCRO", "fill": "#8b5cf6" }
-    ];
+    if (Array.isArray(state.generalExpenses)) {
+        state.generalExpenses.forEach(e => {
+            const val = parseFloat(String(e.valor));
+            if (!isNaN(val)) totalDespGeral += val;
+        });
+    }
 
-    const roi = totalInv > 0 ? ((totalRet - totalInv) / totalInv) * 100 : 0;
-    const margin = totalRet > 0 ? (lucroLiquido / totalRet) * 100 : 0;
+    const lucroLiquido = totalLucro - totalDespGeral;
+    const totalInvestimentoReal = totalInv + totalDespGeral;
+    
+    // KPI Percentages for Funnel
+    // Base 100% is Revenue for visual scaling if Revenue > Investment, else Investment is base
+    const baseScale = Math.max(totalInvestimentoReal, totalRet) || 1;
+    const investPct = (totalInvestimentoReal / baseScale) * 100;
+    const retPct = (totalRet / baseScale) * 100;
+    
+    // PIE CHART DATA
+    const pieData = [
+        { name: 'Depósitos', value: totalDepositos, color: '#3b82f6' }, // Blue
+        { name: 'Redepósitos', value: totalRedepositos, color: '#8b5cf6' }, // Purple
+        { name: 'Custos/Desp.', value: (totalDespGeral + (totalInv - totalDepositos - totalRedepositos)), color: '#ef4444' } // Red (includes proxy/sms costs)
+    ].filter(d => d.value > 0);
+
+    const roi = (totalInvestimentoReal > 0) 
+        ? ((totalRet - totalInvestimentoReal) / totalInvestimentoReal) * 100 
+        : 0;
+        
+    const margin = (totalRet > 0) 
+        ? (lucroLiquido / totalRet) * 100 
+        : 0;
+
+    // --- RECENT ACTIVITY LOGIC ---
+    const allAccounts: any[] = [];
+    Object.entries(state.dailyRecords).forEach(([date, record]) => {
+        const dayRecord = record as DayRecord;
+        if(dayRecord.accounts){
+            dayRecord.accounts.forEach(acc => {
+                const invest = (acc.deposito || 0) + (acc.redeposito || 0);
+                const ret = (acc.saque || 0) + ((acc.ciclos || 0) * safeBonus);
+                const profit = ret - invest;
+                allAccounts.push({ ...acc, date, profit, ret });
+            });
+        }
+    });
+    // Ordena por ID (timestamp) decrescente
+    const recentActivity = allAccounts.sort((a, b) => b.id - a.id).slice(0, 10); // Mostra 10 agora
 
     return {
-        totalInv: totalInv + totalDespGeral,
+        totalInv: totalInvestimentoReal,
         totalRet,
         lucroLiquido,
         chartData: chartData.slice(-14),
-        funnelChartData,
-        roi,
-        margin,
-        totalCheckoutEvents
+        pieData,
+        investPct,
+        retPct,
+        roi: isNaN(roi) ? 0 : roi,
+        margin: isNaN(margin) ? 0 : margin,
+        totalCheckoutEvents,
+        recentActivity
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
@@ -90,18 +142,6 @@ const Dashboard: React.FC<Props> = ({ state }) => {
       );
     }
     return null;
-  };
-
-  const FunnelLabel = (props: any) => {
-    const { x, y, width, height, name, value } = props;
-    const centerX = x + width / 2;
-    const centerY = y + height / 2;
-    return (
-      <g>
-        <text x={centerX} y={centerY - 8} fill="#fff" textAnchor="middle" dominantBaseline="middle" className="text-xs font-bold uppercase tracking-wider" style={{ textShadow: '0px 2px 4px rgba(0,0,0,0.5)' }}>{name}</text>
-        <text x={centerX} y={centerY + 12} fill="#fff" textAnchor="middle" dominantBaseline="middle" className="text-sm font-bold font-mono" style={{ textShadow: '0px 2px 4px rgba(0,0,0,0.5)' }}>{formatarBRL(value)}</text>
-      </g>
-    );
   };
 
   return (
@@ -194,33 +234,106 @@ const Dashboard: React.FC<Props> = ({ state }) => {
             </div>
         </div>
 
-        {/* --- CHARTS SECTION --- */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* --- MIDDLE SECTION: FUNNEL & BREAKDOWN --- */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             
-            {/* FUNNEL */}
-            <div className="gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden h-[400px]">
-                <div className="mb-6 flex items-center justify-between">
-                    <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                        <Filter size={16} className="text-gray-400" /> Eficiência de Capital
-                    </h3>
-                </div>
-                <div className="flex-1 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <FunnelChart>
-                            <Tooltip content={<CustomTooltip />} />
-                            <Funnel dataKey="value" data={metrics.funnelChartData} isAnimationActive>
-                                <LabelList position="center" content={<FunnelLabel />} />
-                                {metrics.funnelChartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-                                ))}
-                            </Funnel>
-                        </FunnelChart>
-                    </ResponsiveContainer>
-                </div>
+            {/* CUSTOM BAR FUNNEL */}
+            <div className="gateway-card rounded-2xl p-8 border border-white/5 flex flex-col justify-center">
+                 <div className="mb-6 flex items-center gap-2">
+                     <Filter size={18} className="text-amber-400" />
+                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">Funil Financeiro</h3>
+                 </div>
+                 
+                 <div className="space-y-6 relative">
+                     {/* Connector Lines */}
+                     <div className="absolute left-1/2 top-10 bottom-10 w-px bg-white/10 -translate-x-1/2 z-0"></div>
+
+                     {/* Investment Bar */}
+                     <div className="relative z-10">
+                         <div 
+                            className="h-16 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 flex items-center justify-center shadow-lg shadow-rose-900/20 mx-auto transition-all duration-1000"
+                            style={{ width: '100%', maxWidth: '100%' }} // Always full width visually for top
+                         >
+                             <span className="text-white font-bold text-xl drop-shadow-md">{formatarBRL(metrics.totalInv)}</span>
+                         </div>
+                         <p className="text-center text-[10px] text-gray-400 uppercase font-bold mt-2 tracking-widest">Investimento Total</p>
+                     </div>
+
+                     {/* Revenue Bar */}
+                     <div className="relative z-10">
+                         <div 
+                            className="h-16 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-900/20 mx-auto transition-all duration-1000"
+                            style={{ width: `${metrics.retPct}%`, minWidth: '200px' }}
+                         >
+                             <span className="text-white font-bold text-xl drop-shadow-md">{formatarBRL(metrics.totalRet)}</span>
+                         </div>
+                         <p className="text-center text-[10px] text-gray-400 uppercase font-bold mt-2 tracking-widest">Faturamento Bruto</p>
+                     </div>
+
+                     {/* Profit Box */}
+                     <div className="relative z-10 pt-2">
+                         <div className="w-48 mx-auto bg-cyan-400 text-black p-4 rounded-2xl shadow-[0_0_20px_rgba(34,211,238,0.3)] text-center transform hover:scale-105 transition-transform">
+                             <span className="block text-2xl font-black">{formatarBRL(metrics.lucroLiquido)}</span>
+                             <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">Lucro Líquido</span>
+                         </div>
+                     </div>
+                 </div>
             </div>
 
-            {/* MAIN CHART */}
-            <div className="xl:col-span-2 gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden h-[400px]">
+            {/* BREAKDOWN PIE CHART */}
+            <div className="gateway-card rounded-2xl p-8 border border-white/5 flex flex-col">
+                <div className="mb-2 flex items-center gap-2">
+                     <PieIcon size={18} className="text-rose-400" />
+                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">Breakdown de Custos</h3>
+                 </div>
+                
+                <div className="flex-1 flex items-center justify-center relative">
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={metrics.pieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={90}
+                                paddingAngle={5}
+                                dataKey="value"
+                                stroke="none"
+                            >
+                                {metrics.pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: '#0a0516', borderColor: '#333', borderRadius: '12px', color: '#fff' }}
+                                itemStyle={{ color: '#fff' }}
+                                formatter={(value: number) => formatarBRL(value)}
+                            />
+                            <Legend 
+                                verticalAlign="bottom" 
+                                height={36} 
+                                iconType="circle"
+                                formatter={(value) => <span className="text-gray-400 text-xs font-bold uppercase ml-1">{value}</span>}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    
+                    {/* Center Text */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center">
+                            <span className="text-xs text-gray-500 font-bold block">TOTAL</span>
+                            <span className="text-white font-bold">SAÍDAS</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* --- BOTTOM SECTION: CHART & TRANSACTIONS --- */}
+        <div className="grid grid-cols-1 gap-6">
+            
+            {/* MAIN AREA CHART */}
+            <div className="gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden h-[400px]">
                 <div className="mb-6 flex items-center justify-between">
                     <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
                         <Activity size={16} className="text-gray-400" /> Analítico de Performance
@@ -283,6 +396,68 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                             />
                         </AreaChart>
                     </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* RECENT ACTIVITY TABLE (FULL WIDTH) */}
+            <div className="gateway-card rounded-2xl p-6 border border-white/5 bg-white/[0.02]">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                        <History className="text-primary" size={20} /> Transações Recentes
+                    </h3>
+                    <button className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
+                        Últimos 10 registros <ChevronRight size={14} />
+                    </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase font-bold border-b border-white/5">
+                            <tr>
+                                <th className="px-4 py-3">ID / Data</th>
+                                <th className="px-4 py-3">Resultado</th>
+                                <th className="px-4 py-3 text-right">Valor Líquido</th>
+                                <th className="px-4 py-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {metrics.recentActivity.length === 0 ? (
+                                 <tr>
+                                    <td colSpan={4} className="py-8 text-center text-gray-500 text-xs uppercase font-bold tracking-widest">
+                                        Nenhuma atividade registrada
+                                    </td>
+                                 </tr>
+                            ) : (
+                                metrics.recentActivity.map((item: any) => (
+                                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
+                                        <td className="px-4 py-3">
+                                            <div className="font-mono text-white text-xs">#{item.id.toString().slice(-6)}</div>
+                                            <div className="text-[10px] text-gray-500 font-bold uppercase">{new Date(item.date).toLocaleDateString('pt-BR')}</div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {item.profit >= 0 ? (
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 w-fit uppercase">
+                                                    <ArrowUpRight size={12} /> Lucro
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded border border-rose-400/20 w-fit uppercase">
+                                                    <ArrowDownRight size={12} /> Prejuízo
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className={`px-4 py-3 text-right font-mono font-bold ${item.profit >= 0 ? 'text-white' : 'text-gray-400'}`}>
+                                            {formatarBRL(item.profit)}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="inline-flex items-center justify-center p-1 rounded-full bg-emerald-500/10 text-emerald-500">
+                                                <CheckCircle2 size={14} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

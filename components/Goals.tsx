@@ -334,65 +334,77 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                     return (
                         <div 
                             key={goal.id} 
-                            className="gateway-card rounded-xl border border-white/5 hover:border-amber-500/50 transition-all group relative overflow-hidden h-[240px] flex flex-col justify-between shadow-2xl"
+                            className="gateway-card rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all duration-500 group relative overflow-hidden h-[320px] flex flex-col justify-end shadow-2xl"
                         >
-                            {/* IMAGEM DE FUNDO (Nova Abordagem) */}
-                            <div className="absolute inset-0 z-0">
+                            {/* IMAGEM DE FUNDO */}
+                            <div className="absolute inset-0 z-0 bg-gray-900">
                                 {goal.imageUrl && !hasError ? (
-                                    <>
-                                        <div className="absolute inset-0 bg-gray-900 animate-pulse z-0"></div> {/* Skeleton loader atras */}
-                                        <img 
-                                            src={goal.imageUrl} 
-                                            alt={goal.name}
-                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60 group-hover:opacity-40"
-                                            onError={() => handleImageError(goal.id)}
-                                            loading="lazy"
-                                        />
-                                    </>
+                                    <img 
+                                        src={goal.imageUrl} 
+                                        alt={goal.name}
+                                        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-70 group-hover:opacity-100"
+                                        onError={() => handleImageError(goal.id)}
+                                        loading="lazy"
+                                    />
                                 ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
-                                        <Crown size={80} className="text-white/5" />
+                                    <div className="w-full h-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center">
+                                        <Crown size={60} className="text-white/10" />
                                     </div>
                                 )}
-                                {/* Overlay Gradiente Sempre Presente para garantir leitura */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent z-10"></div>
+                                {/* Overlay Gradiente Suave apenas na parte inferior */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#02000f] via-[#02000f]/80 to-transparent opacity-90 z-10"></div>
                             </div>
 
-                            <div className="flex justify-between items-start p-5 relative z-20">
-                                <div>
-                                    <h4 className="font-black text-white text-xl tracking-tight drop-shadow-md">{goal.name}</h4>
-                                    <p className="text-gray-300 text-xs font-mono font-bold uppercase tracking-wider drop-shadow-md">
-                                        Alvo: {formatarBRL(goal.targetValue)}
-                                    </p>
-                                </div>
-                                <button onClick={() => removeDream(goal.id)} className="bg-black/40 text-gray-400 hover:text-rose-400 hover:bg-black/60 transition-colors p-2 rounded-lg backdrop-blur-sm border border-white/10">
+                            {/* Botão Delete (Topo Direita - Hover Only) */}
+                            <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-[-10px] group-hover:translate-y-0">
+                                 <button onClick={() => removeDream(goal.id)} className="bg-black/60 hover:bg-rose-500 text-white p-2.5 rounded-full backdrop-blur-md border border-white/20 transition-all shadow-lg hover:scale-110">
                                     <Trash2 size={16} />
                                 </button>
                             </div>
-
-                            <div className="p-5 relative z-20">
-                                <div className="flex justify-between items-end mb-2">
-                                    <span className={`text-3xl font-black font-mono drop-shadow-lg ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
-                                        {percent.toFixed(1)}%
-                                    </span>
-                                    <div className="text-right">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold drop-shadow-md">Estimativa</p>
-                                        <p className="text-xs font-bold text-amber-400 drop-shadow-md">{daysLeftStr}</p>
+                            
+                            {/* Conteúdo (Bottom) */}
+                            <div className="p-6 relative z-20 w-full transform transition-transform duration-500 translate-y-2 group-hover:translate-y-0">
+                                {/* Cabeçalho do Item */}
+                                <div className="flex justify-between items-end mb-3">
+                                    <div className="flex-1 mr-2">
+                                         <h4 className="font-bold text-white text-xl leading-tight drop-shadow-lg line-clamp-1">{goal.name}</h4>
+                                         <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-300 uppercase font-bold tracking-wider backdrop-blur-sm border border-white/5">
+                                                Alvo: {formatarBRL(goal.targetValue)}
+                                            </span>
+                                         </div>
+                                    </div>
+                                    
+                                     <div className="text-right">
+                                        <span className={`text-3xl font-black font-mono tracking-tighter drop-shadow-lg ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
+                                            {Math.floor(cappedPercent)}<span className="text-lg">%</span>
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div className="h-2 w-full bg-gray-800/80 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm">
-                                    <div 
-                                        className={`h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_currentColor] ${percent >= 100 ? 'bg-emerald-500 text-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400 text-amber-400'}`}
+                                {/* Progress Bar */}
+                                <div className="relative h-2.5 w-full bg-gray-800/50 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm mb-3">
+                                     <div 
+                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_currentColor] ${percent >= 100 ? 'bg-emerald-500 text-emerald-500' : 'bg-gradient-to-r from-amber-500 to-yellow-400 text-yellow-400'}`}
                                         style={{ width: `${cappedPercent}%` }}
-                                    ></div>
+                                     >
+                                        <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
+                                     </div>
                                 </div>
-                                
-                                {goal.autoImage && !hasError && (
-                                    <div className="absolute bottom-2 right-2 opacity-50 text-[9px] text-gray-500 flex items-center gap-1">
-                                        <Sparkles size={8} /> AI Generated
-                                    </div>
-                                )}
+
+                                {/* Footer Info */}
+                                <div className="flex justify-between items-center text-xs font-medium text-gray-400">
+                                     <div className="flex items-center gap-1.5">
+                                         {percent >= 100 ? (
+                                            <span className="text-emerald-400 flex items-center gap-1 font-bold"><Crown size={12} fill="currentColor"/> Conquistado</span>
+                                         ) : (
+                                            <span className="text-amber-400 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Em progresso</span>
+                                         )}
+                                     </div>
+                                     <div className="font-mono text-gray-500">
+                                        {daysLeftStr}
+                                     </div>
+                                </div>
                             </div>
                         </div>
                     );

@@ -13,13 +13,20 @@ interface Props {
 const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   
-  const handleExpenseChange = (field: 'proxy' | 'numeros', value: number) => {
+  // Helper para evitar NaN
+  const safeFloat = (val: string) => {
+      if (val === '') return 0;
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const handleExpenseChange = (field: 'proxy' | 'numeros', value: string) => {
     updateState({
         dailyRecords: {
             ...state.dailyRecords,
             [currentDate]: {
                 ...dayRecord,
-                expenses: { ...dayRecord.expenses, [field]: value }
+                expenses: { ...dayRecord.expenses, [field]: safeFloat(value) }
             }
         }
     });
@@ -35,9 +42,9 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
     });
   };
 
-  const handleAccountChange = (id: number, field: keyof Account, value: number) => {
+  const handleAccountChange = (id: number, field: keyof Account, value: string) => {
     const updatedAccounts = dayRecord.accounts.map(acc => 
-        acc.id === id ? { ...acc, [field]: value } : acc
+        acc.id === id ? { ...acc, [field]: safeFloat(value) } : acc
     );
     updateState({
         dailyRecords: {
@@ -57,10 +64,10 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   // Metrics
-  const totalSaques = dayRecord.accounts.reduce((acc, curr) => acc + curr.saque, 0);
-  const totalBonus = dayRecord.accounts.reduce((acc, curr) => acc + (curr.ciclos * state.config.valorBonus), 0);
-  const totalInvestido = dayRecord.accounts.reduce((acc, curr) => acc + curr.deposito + curr.redeposito, 0);
-  const totalDespesas = dayRecord.expenses.proxy + dayRecord.expenses.numeros;
+  const totalSaques = dayRecord.accounts.reduce((acc, curr) => acc + (curr.saque || 0), 0);
+  const totalBonus = dayRecord.accounts.reduce((acc, curr) => acc + ((curr.ciclos || 0) * (state.config.valorBonus || 20)), 0);
+  const totalInvestido = dayRecord.accounts.reduce((acc, curr) => acc + (curr.deposito || 0) + (curr.redeposito || 0), 0);
+  const totalDespesas = (dayRecord.expenses.proxy || 0) + (dayRecord.expenses.numeros || 0);
   const totalLucroDia = (totalSaques + totalBonus) - totalInvestido - totalDespesas;
 
   return (
@@ -114,14 +121,18 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
             <span className="text-sm text-gray-300 font-bold font-mono">CUSTO PROXY</span>
             <div className="relative w-40">
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
-                    value={dayRecord.expenses.proxy} onChange={(e) => handleExpenseChange('proxy', +e.target.value)} />
+                    value={dayRecord.expenses.proxy === 0 ? '' : dayRecord.expenses.proxy} 
+                    placeholder="0"
+                    onChange={(e) => handleExpenseChange('proxy', e.target.value)} />
             </div>
          </div>
          <div className="gateway-card p-4 rounded-xl flex items-center justify-between">
             <span className="text-sm text-gray-300 font-bold font-mono">CUSTO SMS/OUTROS</span>
             <div className="relative w-40">
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
-                    value={dayRecord.expenses.numeros} onChange={(e) => handleExpenseChange('numeros', +e.target.value)} />
+                    value={dayRecord.expenses.numeros === 0 ? '' : dayRecord.expenses.numeros} 
+                    placeholder="0"
+                    onChange={(e) => handleExpenseChange('numeros', e.target.value)} />
             </div>
          </div>
       </div>
@@ -162,26 +173,35 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         </tr>
                     ) : (
                         dayRecord.accounts.map((acc, index) => {
-                            const lucro = (acc.saque + (acc.ciclos * state.config.valorBonus)) - (acc.deposito + acc.redeposito);
+                            const bonus = state.config.valorBonus || 20;
+                            const lucro = ((acc.saque||0) + ((acc.ciclos||0) * bonus)) - ((acc.deposito||0) + (acc.redeposito||0));
                             return (
                                 <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
                                     <td className="px-6 py-3">
                                         <input type="number" className="gateway-input w-full py-2 px-3 rounded text-white font-mono font-bold"
-                                            value={acc.deposito} onChange={(e) => handleAccountChange(acc.id, 'deposito', +e.target.value)} />
+                                            value={acc.deposito === 0 ? '' : acc.deposito} 
+                                            placeholder="0"
+                                            onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} />
                                     </td>
                                     <td className="px-6 py-3">
                                         <input type="number" className="gateway-input w-full py-2 px-3 rounded text-white font-mono font-bold"
-                                            value={acc.redeposito} onChange={(e) => handleAccountChange(acc.id, 'redeposito', +e.target.value)} />
+                                            value={acc.redeposito === 0 ? '' : acc.redeposito} 
+                                            placeholder="0"
+                                            onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} />
                                     </td>
                                     <td className="px-6 py-3">
                                         <input type="number" className="gateway-input w-full py-2 px-3 rounded text-accent-cyan font-mono font-bold border-accent-cyan/30 focus:border-accent-cyan"
-                                            value={acc.saque} onChange={(e) => handleAccountChange(acc.id, 'saque', +e.target.value)} />
+                                            value={acc.saque === 0 ? '' : acc.saque} 
+                                            placeholder="0"
+                                            onChange={(e) => handleAccountChange(acc.id, 'saque', e.target.value)} />
                                     </td>
                                     <td className="px-6 py-3">
                                         <div className="flex items-center gap-2">
                                             <input type="number" className="gateway-input w-16 py-2 px-0 text-center rounded text-primary-glow font-mono font-bold border-primary/30 focus:border-primary"
-                                                value={acc.ciclos} onChange={(e) => handleAccountChange(acc.id, 'ciclos', +e.target.value)} />
-                                            <span className="text-[10px] text-gray-500 font-mono">x{state.config.valorBonus}</span>
+                                                value={acc.ciclos === 0 ? '' : acc.ciclos} 
+                                                placeholder="0"
+                                                onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} />
+                                            <span className="text-[10px] text-gray-500 font-mono">x{bonus}</span>
                                         </div>
                                     </td>
                                     <td className={`px-6 py-3 text-right font-black font-mono text-lg ${lucro >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>

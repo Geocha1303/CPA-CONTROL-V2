@@ -25,7 +25,7 @@ import {
   Activity
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
-import { getHojeISO } from './utils';
+import { getHojeISO, mergeDeep } from './utils';
 import { supabase } from './supabaseClient';
 
 // Components
@@ -57,18 +57,6 @@ const initialState: AppState = {
     customLotSizes: {},
     history: []
   }
-};
-
-const mergeDeep = (target: any, source: any): any => {
-    if (typeof target !== 'object' || target === null) return source !== undefined ? source : target;
-    if (Array.isArray(target)) return Array.isArray(source) ? source : target;
-    if (typeof source !== 'object' || source === null || Array.isArray(source)) return target;
-    const output = { ...target };
-    Object.keys(source).forEach(key => {
-        if (target[key] !== undefined) output[key] = mergeDeep(target[key], source[key]);
-        else output[key] = source[key];
-    });
-    return output;
 };
 
 const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';

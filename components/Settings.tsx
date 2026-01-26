@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { AppState } from '../types';
+import { mergeDeep } from '../utils'; // Importado de utils
 import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User } from 'lucide-react';
 
 interface Props {
@@ -48,7 +49,11 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                     const parsedData = JSON.parse(content);
                     if (parsedData.dailyRecords && parsedData.config) {
                         if(confirm('Isso substituirá os dados atuais. Continuar?')) {
-                            updateState(parsedData);
+                            // Mescla com estado atual para não perder campos novos em backups antigos
+                            // Mas aqui queremos restaurar, então o mergeDeep deve ser cuidadoso
+                            // A melhor abordagem é usar o estado atual como base e sobrescrever com o backup
+                            const newState = mergeDeep(state, parsedData);
+                            updateState(newState);
                             notify('Dados restaurados com sucesso!', 'success');
                         }
                     } else {
@@ -56,6 +61,7 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                     }
                 }
             } catch (error) {
+                console.error(error);
                 notify('Erro ao ler o arquivo.', 'error');
             } finally {
                 if (fileInputRef.current) fileInputRef.current.value = '';

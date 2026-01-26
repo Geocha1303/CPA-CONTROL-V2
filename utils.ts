@@ -1,6 +1,23 @@
 import { AppState, GeneratedPlayer, GeneratorParams, HistoryItem, DayRecord } from './types';
 
-export const formatarBRL = (value: number) => {
+// Utility para mesclar objetos profundamente (Deep Merge)
+export const mergeDeep = (target: any, source: any): any => {
+    if (typeof target !== 'object' || target === null) return source !== undefined ? source : target;
+    if (Array.isArray(target)) return Array.isArray(source) ? source : target;
+    if (typeof source !== 'object' || source === null || Array.isArray(source)) return target;
+    const output = { ...target };
+    Object.keys(source).forEach(key => {
+        if (target[key] !== undefined) output[key] = mergeDeep(target[key], source[key]);
+        else output[key] = source[key];
+    });
+    return output;
+};
+
+export const formatarBRL = (value: number | undefined | null) => {
+  // Proteção contra NaN/Infinity/Null
+  if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+      return 'R$ 0,00';
+  }
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -143,7 +160,6 @@ export const generatePlan = (
 ): GeneratedPlayer[] => {
   
   // 1. Criação do Pool de Agentes (LÓGICA RÍTMICA V36)
-  // Intercala 1, 2, 3, 4, 1, 2, 3, 4... respeitando as quantidades
   let agentPool: number[] = [];
   let distTemp = { ...distribuicao };
   let assigned = 0;
@@ -177,8 +193,6 @@ export const generatePlan = (
     }
   }
 
-  // NÃO EMBARALHA O AGENT POOL (Mantém o ritmo V36)
-
   // 2. Criação do Pool de Perfis
   const c = (pct: number) => Math.round(count * (pct / 100));
   let countTestador = c(params.testador);
@@ -208,7 +222,6 @@ export const generatePlan = (
   let newPlan: GeneratedPlayer[] = [];
   let pId = 1;
 
-  // Combina Pool de Agentes (Rítmico) com Pool de Perfis (Aleatório)
   for(let i=0; i < count; i++) {
     const perfil = profilePool[i];
     const agent = agentPool[i];
@@ -266,16 +279,30 @@ export const generateConstrainedSum = (total: number, count: number, min: number
 };
 
 export const calculateDayMetrics = (record?: DayRecord, bonus: number = 20) => {
+    // Safety check para bonus
+    const safeBonus = (typeof bonus === 'number' && !isNaN(bonus)) ? bonus : 20;
+
     if (!record) return { invest: 0, ret: 0, lucro: 0, despesas: 0 };
     
-    const desp = (record.expenses.proxy || 0) + (record.expenses.numeros || 0);
+    // Safety check para despesas
+    const proxyCost = (typeof record.expenses?.proxy === 'number') ? record.expenses.proxy : 0;
+    const numerosCost = (typeof record.expenses?.numeros === 'number') ? record.expenses.numeros : 0;
+    const desp = proxyCost + numerosCost;
+
     let inv = 0;
     let ret = 0;
     
-    record.accounts.forEach(a => {
-        inv += (a.deposito || 0) + (a.redeposito || 0);
-        ret += (a.saque || 0) + ((a.ciclos || 0) * bonus);
-    });
+    if (Array.isArray(record.accounts)) {
+        record.accounts.forEach(a => {
+            const dep = (typeof a.deposito === 'number') ? a.deposito : 0;
+            const redep = (typeof a.redeposito === 'number') ? a.redeposito : 0;
+            const saque = (typeof a.saque === 'number') ? a.saque : 0;
+            const ciclos = (typeof a.ciclos === 'number') ? a.ciclos : 0;
+
+            inv += dep + redep;
+            ret += saque + (ciclos * safeBonus);
+        });
+    }
 
     return { 
         invest: inv + desp, 
