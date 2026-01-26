@@ -234,106 +234,11 @@ const Dashboard: React.FC<Props> = ({ state }) => {
             </div>
         </div>
 
-        {/* --- MIDDLE SECTION: FUNNEL & BREAKDOWN --- */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* --- MAIN DASHBOARD GRID (CHART LEFT, WIDGETS RIGHT) --- */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
             
-            {/* CUSTOM BAR FUNNEL */}
-            <div className="gateway-card rounded-2xl p-8 border border-white/5 flex flex-col justify-center">
-                 <div className="mb-6 flex items-center gap-2">
-                     <Filter size={18} className="text-amber-400" />
-                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">Funil Financeiro</h3>
-                 </div>
-                 
-                 <div className="space-y-6 relative">
-                     {/* Connector Lines */}
-                     <div className="absolute left-1/2 top-10 bottom-10 w-px bg-white/10 -translate-x-1/2 z-0"></div>
-
-                     {/* Investment Bar */}
-                     <div className="relative z-10">
-                         <div 
-                            className="h-16 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 flex items-center justify-center shadow-lg shadow-rose-900/20 mx-auto transition-all duration-1000"
-                            style={{ width: '100%', maxWidth: '100%' }} // Always full width visually for top
-                         >
-                             <span className="text-white font-bold text-xl drop-shadow-md">{formatarBRL(metrics.totalInv)}</span>
-                         </div>
-                         <p className="text-center text-[10px] text-gray-400 uppercase font-bold mt-2 tracking-widest">Investimento Total</p>
-                     </div>
-
-                     {/* Revenue Bar */}
-                     <div className="relative z-10">
-                         <div 
-                            className="h-16 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-900/20 mx-auto transition-all duration-1000"
-                            style={{ width: `${metrics.retPct}%`, minWidth: '200px' }}
-                         >
-                             <span className="text-white font-bold text-xl drop-shadow-md">{formatarBRL(metrics.totalRet)}</span>
-                         </div>
-                         <p className="text-center text-[10px] text-gray-400 uppercase font-bold mt-2 tracking-widest">Faturamento Bruto</p>
-                     </div>
-
-                     {/* Profit Box */}
-                     <div className="relative z-10 pt-2">
-                         <div className="w-48 mx-auto bg-cyan-400 text-black p-4 rounded-2xl shadow-[0_0_20px_rgba(34,211,238,0.3)] text-center transform hover:scale-105 transition-transform">
-                             <span className="block text-2xl font-black">{formatarBRL(metrics.lucroLiquido)}</span>
-                             <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">Lucro Líquido</span>
-                         </div>
-                     </div>
-                 </div>
-            </div>
-
-            {/* BREAKDOWN PIE CHART */}
-            <div className="gateway-card rounded-2xl p-8 border border-white/5 flex flex-col">
-                <div className="mb-2 flex items-center gap-2">
-                     <PieIcon size={18} className="text-rose-400" />
-                     <h3 className="text-white font-bold text-sm uppercase tracking-wider">Breakdown de Custos</h3>
-                 </div>
-                
-                <div className="flex-1 flex items-center justify-center relative">
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={metrics.pieData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={90}
-                                paddingAngle={5}
-                                dataKey="value"
-                                stroke="none"
-                            >
-                                {metrics.pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <Tooltip 
-                                contentStyle={{ backgroundColor: '#0a0516', borderColor: '#333', borderRadius: '12px', color: '#fff' }}
-                                itemStyle={{ color: '#fff' }}
-                                formatter={(value: number) => formatarBRL(value)}
-                            />
-                            <Legend 
-                                verticalAlign="bottom" 
-                                height={36} 
-                                iconType="circle"
-                                formatter={(value) => <span className="text-gray-400 text-xs font-bold uppercase ml-1">{value}</span>}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    
-                    {/* Center Text */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center">
-                            <span className="text-xs text-gray-500 font-bold block">TOTAL</span>
-                            <span className="text-white font-bold">SAÍDAS</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {/* --- BOTTOM SECTION: CHART & TRANSACTIONS --- */}
-        <div className="grid grid-cols-1 gap-6">
-            
-            {/* MAIN AREA CHART */}
-            <div className="gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden h-[400px]">
+            {/* 1. MAIN AREA CHART (Takes 2/3 Width) */}
+            <div className="xl:col-span-2 gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[500px]">
                 <div className="mb-6 flex items-center justify-between">
                     <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
                         <Activity size={16} className="text-gray-400" /> Analítico de Performance
@@ -399,66 +304,161 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                 </div>
             </div>
 
-            {/* RECENT ACTIVITY TABLE (FULL WIDTH) */}
-            <div className="gateway-card rounded-2xl p-6 border border-white/5 bg-white/[0.02]">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-bold text-white flex items-center gap-2">
-                        <History className="text-primary" size={20} /> Transações Recentes
-                    </h3>
-                    <button className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
-                        Últimos 10 registros <ChevronRight size={14} />
-                    </button>
-                </div>
+            {/* 2. SIDEBAR WIDGETS (Takes 1/3 Width) */}
+            <div className="flex flex-col gap-6 h-full">
                 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-gray-500 uppercase font-bold border-b border-white/5">
-                            <tr>
-                                <th className="px-4 py-3">ID / Data</th>
-                                <th className="px-4 py-3">Resultado</th>
-                                <th className="px-4 py-3 text-right">Valor Líquido</th>
-                                <th className="px-4 py-3 text-center">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {metrics.recentActivity.length === 0 ? (
-                                 <tr>
-                                    <td colSpan={4} className="py-8 text-center text-gray-500 text-xs uppercase font-bold tracking-widest">
-                                        Nenhuma atividade registrada
-                                    </td>
-                                 </tr>
-                            ) : (
-                                metrics.recentActivity.map((item: any) => (
-                                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
-                                        <td className="px-4 py-3">
-                                            <div className="font-mono text-white text-xs">#{item.id.toString().slice(-6)}</div>
-                                            <div className="text-[10px] text-gray-500 font-bold uppercase">{new Date(item.date).toLocaleDateString('pt-BR')}</div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {item.profit >= 0 ? (
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 w-fit uppercase">
-                                                    <ArrowUpRight size={12} /> Lucro
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded border border-rose-400/20 w-fit uppercase">
-                                                    <ArrowDownRight size={12} /> Prejuízo
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className={`px-4 py-3 text-right font-mono font-bold ${item.profit >= 0 ? 'text-white' : 'text-gray-400'}`}>
-                                            {formatarBRL(item.profit)}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <div className="inline-flex items-center justify-center p-1 rounded-full bg-emerald-500/10 text-emerald-500">
-                                                <CheckCircle2 size={14} />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                {/* COMPACT BAR FUNNEL */}
+                <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col justify-center flex-1">
+                     <div className="mb-4 flex items-center gap-2">
+                         <Filter size={16} className="text-amber-400" />
+                         <h3 className="text-white font-bold text-xs uppercase tracking-wider">Funil Financeiro</h3>
+                     </div>
+                     
+                     <div className="space-y-4 relative flex-1 flex flex-col justify-center">
+                         {/* Connector Lines */}
+                         <div className="absolute left-6 top-4 bottom-4 w-px bg-white/10 z-0"></div>
+
+                         {/* Investment Bar */}
+                         <div className="relative z-10 pl-6">
+                             <div className="text-[10px] text-gray-400 uppercase font-bold mb-1 tracking-wider">Investimento</div>
+                             <div 
+                                className="h-10 rounded-lg bg-gradient-to-r from-pink-600 to-rose-500 flex items-center px-4 shadow-lg shadow-rose-900/20"
+                                style={{ width: '100%' }}
+                             >
+                                 <span className="text-white font-bold text-sm drop-shadow-md">{formatarBRL(metrics.totalInv)}</span>
+                             </div>
+                         </div>
+
+                         {/* Revenue Bar */}
+                         <div className="relative z-10 pl-6">
+                             <div className="text-[10px] text-gray-400 uppercase font-bold mb-1 tracking-wider">Faturamento</div>
+                             <div 
+                                className="h-10 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center px-4 shadow-lg shadow-violet-900/20"
+                                style={{ width: `${Math.max(20, metrics.retPct)}%` }} // Minimum width for visibility
+                             >
+                                 <span className="text-white font-bold text-sm drop-shadow-md">{formatarBRL(metrics.totalRet)}</span>
+                             </div>
+                         </div>
+
+                         {/* Profit Box */}
+                         <div className="relative z-10 pl-6 pt-2">
+                             <div className="bg-cyan-400 text-black p-3 rounded-xl shadow-[0_0_15px_rgba(34,211,238,0.3)] text-center w-full">
+                                 <span className="block text-xl font-black">{formatarBRL(metrics.lucroLiquido)}</span>
+                                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-70">Lucro Líquido</span>
+                             </div>
+                         </div>
+                     </div>
                 </div>
+
+                {/* COMPACT BREAKDOWN PIE */}
+                <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col flex-1 min-h-[240px]">
+                    <div className="mb-2 flex items-center gap-2">
+                         <PieIcon size={16} className="text-rose-400" />
+                         <h3 className="text-white font-bold text-xs uppercase tracking-wider">Breakdown</h3>
+                     </div>
+                    
+                    <div className="flex-1 flex items-center justify-center relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={metrics.pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={50}
+                                    outerRadius={70}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                    stroke="none"
+                                >
+                                    {metrics.pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0a0516', borderColor: '#333', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                                    itemStyle={{ color: '#fff' }}
+                                    formatter={(value: number) => formatarBRL(value)}
+                                />
+                                <Legend 
+                                    verticalAlign="bottom" 
+                                    height={30} 
+                                    iconType="circle"
+                                    iconSize={8}
+                                    formatter={(value) => <span className="text-gray-400 text-[10px] font-bold uppercase ml-1">{value}</span>}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        
+                        {/* Center Text */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none mb-6">
+                            <div className="text-center">
+                                <span className="text-[10px] text-gray-500 font-bold block">SAÍDAS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* --- BOTTOM SECTION: RECENT ACTIVITY --- */}
+        <div className="gateway-card rounded-2xl p-6 border border-white/5 bg-white/[0.02]">
+            <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                    <History className="text-primary" size={20} /> Transações Recentes
+                </h3>
+                <button className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
+                    Últimos 10 registros <ChevronRight size={14} />
+                </button>
+            </div>
+            
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 uppercase font-bold border-b border-white/5">
+                        <tr>
+                            <th className="px-4 py-3">ID / Data</th>
+                            <th className="px-4 py-3">Resultado</th>
+                            <th className="px-4 py-3 text-right">Valor Líquido</th>
+                            <th className="px-4 py-3 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {metrics.recentActivity.length === 0 ? (
+                             <tr>
+                                <td colSpan={4} className="py-8 text-center text-gray-500 text-xs uppercase font-bold tracking-widest">
+                                    Nenhuma atividade registrada
+                                </td>
+                             </tr>
+                        ) : (
+                            metrics.recentActivity.map((item: any) => (
+                                <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
+                                    <td className="px-4 py-3">
+                                        <div className="font-mono text-white text-xs">#{item.id.toString().slice(-6)}</div>
+                                        <div className="text-[10px] text-gray-500 font-bold uppercase">{new Date(item.date).toLocaleDateString('pt-BR')}</div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {item.profit >= 0 ? (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 w-fit uppercase">
+                                                <ArrowUpRight size={12} /> Lucro
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded border border-rose-400/20 w-fit uppercase">
+                                                <ArrowDownRight size={12} /> Prejuízo
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className={`px-4 py-3 text-right font-mono font-bold ${item.profit >= 0 ? 'text-white' : 'text-gray-400'}`}>
+                                        {formatarBRL(item.profit)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        <div className="inline-flex items-center justify-center p-1 rounded-full bg-emerald-500/10 text-emerald-500">
+                                            <CheckCircle2 size={14} />
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
