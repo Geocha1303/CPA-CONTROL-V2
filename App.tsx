@@ -6,29 +6,23 @@ import {
   Target, 
   Settings as SettingsIcon, 
   Menu, 
-  Box,
   CheckCircle2,
   AlertCircle,
   Info,
-  Save,
   Zap,
   RefreshCw,
-  HardDrive,
-  FolderOpen,
-  ExternalLink,
   Download,
-  Upload,
   Cpu,
-  Lock,
-  User,
-  Key,
   LogOut,
-  ShieldCheck,
-  Smartphone,
-  Server,
-  Globe,
   Database,
-  Crown
+  Crown,
+  Shield,
+  ShieldCheck,
+  Lock,
+  Terminal,
+  MonitorX,
+  Fingerprint,
+  Activity
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO } from './utils';
@@ -78,21 +72,21 @@ const mergeDeep = (target: any, source: any): any => {
 };
 
 const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
-const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; // Updated Key
+const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; 
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 
-// --- LOGIN COMPONENT V3 ---
+// --- LOGIN COMPONENT (ORIGINAL GLASS STYLE) ---
 const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void }) => {
     const [inputKey, setInputKey] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [statusText, setStatusText] = useState('Autenticar');
     const [deviceId, setDeviceId] = useState('');
 
     useEffect(() => {
         let storedId = localStorage.getItem(DEVICE_ID_KEY);
         if (!storedId) {
-            storedId = 'HWID-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Date.now().toString(16).toUpperCase();
+            // Gera um ID único para este navegador/PC
+            storedId = 'HWID-' + Math.random().toString(36).substring(2, 9).toUpperCase() + '-' + Date.now().toString(16).toUpperCase();
             localStorage.setItem(DEVICE_ID_KEY, storedId);
         }
         setDeviceId(storedId);
@@ -102,12 +96,13 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         e.preventDefault();
         setLoading(true);
         setError('');
-        setStatusText('Verificando Credenciais...');
         
         const rawKey = inputKey.trim().toUpperCase();
+        // MASTER KEY BYPASS CHECK
+        const isMasterKey = rawKey === 'ADMIN-GROCHA013';
 
         try {
-            // Consulta Supabase
+            // 1. Busca a chave
             const { data, error } = await supabase
                 .from('access_keys')
                 .select('*')
@@ -115,61 +110,76 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 .single();
 
             if (error || !data) {
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Anti-brute force delay
+                // Delay artificial para evitar brute-force
+                await new Promise(resolve => setTimeout(resolve, 1000)); 
                 throw new Error('Chave de acesso inválida.');
             }
 
             if (data.active === false) {
-                 throw new Error('Acesso suspenso pelo Administrador.');
+                 throw new Error('Acesso suspenso pelo administrador.');
             }
 
-            setStatusText('Acesso Concedido');
-            
+            // 2. LÓGICA DE VÍNCULO DE DISPOSITIVO (HWID)
+            // Se NÃO for a chave mestre, aplicamos a segurança rigorosa
+            if (!isMasterKey) {
+                // Se a chave já tem um dono (HWID gravado) E não é este PC
+                if (data.hwid && data.hwid !== deviceId) {
+                    throw new Error('Esta chave já está vinculada a outro dispositivo. Entre em contato com o suporte para resetar.');
+                }
+
+                // Se a chave é virgem (sem HWID), gravamos este PC nela agora
+                if (!data.hwid) {
+                    const { error: updateError } = await supabase
+                        .from('access_keys')
+                        .update({ hwid: deviceId })
+                        .eq('id', data.id);
+                    
+                    if (updateError) throw new Error('Erro ao vincular dispositivo. Tente novamente.');
+                }
+            }
+            // Se for MASTER KEY, ignoramos gravação e checagem de HWID.
+
             setTimeout(() => {
                 localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
                 const isAdmin = data.is_admin === true;
-                onLogin(rawKey, isAdmin, data.owner_name || 'Usuário');
-            }, 800);
+                onLogin(rawKey, isAdmin, data.owner_name || 'Operador');
+            }, 500);
 
         } catch (err: any) {
             console.error(err);
             setError(err.message || 'Erro de conexão.');
             setLoading(false);
-            setStatusText('Falha na Autenticação');
         }
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-[#000000] relative overflow-hidden font-sans select-none">
-            {/* Background Inspirado na Imagem (Azul Profundo/Preto) */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0a0f1c] via-[#000000] to-[#050505]"></div>
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600 opacity-50"></div>
-            
-            <div className="relative z-10 w-full max-w-md p-8 animate-fade-in">
-                <div className="text-center mb-10">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#111827] border border-gray-800 mb-6 shadow-2xl relative group">
-                        <Crown size={32} className="text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.5)]" />
-                    </div>
-                    <h1 className="text-4xl font-black text-white tracking-tight mb-2">CPA <span className="text-blue-500">MASTER</span></h1>
-                    <div className="flex items-center justify-center gap-2 text-[10px] font-bold tracking-[0.3em] uppercase text-gray-500">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Sistema V3.0 Online
-                    </div>
-                </div>
+        <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden font-sans select-none">
+            {/* Background Original */}
+            <div className="absolute inset-0 z-0">
+                <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+                <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow" style={{animationDelay: '2s'}}></div>
+            </div>
 
-                <div className="bg-[#0f111a] border border-gray-800/50 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-                    <form onSubmit={handleLogin} className="space-y-6 relative z-10">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-2 block">Chave de Licença</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Key size={16} className="text-gray-600" />
-                                </div>
+            <div className="relative z-10 w-full max-w-md p-6">
+                <div className="gateway-card p-10 rounded-3xl shadow-2xl border border-white/10 backdrop-blur-xl">
+                    <div className="text-center mb-10">
+                        <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-lg shadow-primary/30 mb-6 transform hover:scale-105 transition-transform duration-500">
+                            <Activity size={40} className="text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold text-white tracking-tight mb-2">CPA Gateway</h1>
+                        <p className="text-sm text-gray-400 font-medium">Painel de Controle Profissional</p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Chave de Licença</label>
+                            <div className="relative group">
+                                <Lock className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />
                                 <input 
                                     type="text" 
                                     value={inputKey}
                                     onChange={(e) => setInputKey(e.target.value.toUpperCase())}
-                                    className="w-full bg-[#050505] border border-gray-800 rounded-xl py-3.5 pl-11 pr-4 text-white font-mono font-bold tracking-widest focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all placeholder:text-gray-800 text-center uppercase"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white font-mono text-lg placeholder:text-gray-600 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all uppercase"
                                     placeholder="XXXX-XXXX-XXXX"
                                     autoFocus
                                 />
@@ -177,8 +187,8 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         </div>
 
                         {error && (
-                            <div className="flex items-center gap-3 text-rose-400 text-xs font-bold bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 animate-fade-in">
-                                <AlertCircle size={14} className="shrink-0" /> 
+                            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 text-red-400 text-xs font-bold animate-fade-in">
+                                <AlertCircle size={16} className="flex-shrink-0" /> 
                                 <span>{error}</span>
                             </div>
                         )}
@@ -187,20 +197,28 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                             type="submit"
                             disabled={loading}
                             className={`
-                                w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.2)]
-                                transition-all duration-300 transform active:scale-[0.98] 
-                                uppercase tracking-wider text-xs flex justify-center items-center gap-2
+                                w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-glow hover:to-primary text-white font-bold py-4 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-primary/25 transition-all transform hover:-translate-y-0.5
                                 ${loading ? 'opacity-70 cursor-wait' : ''}
                             `}
                         >
-                            {loading ? <RefreshCw className="animate-spin" size={16}/> : <ShieldCheck size={16} />}
-                            {statusText}
+                            {loading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <RefreshCw className="animate-spin" size={16} /> Verificando...
+                                </span>
+                            ) : (
+                                'Acessar Sistema'
+                            )}
                         </button>
                     </form>
+
+                    <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                         <span className="flex items-center gap-1.5"><ShieldCheck size={10} /> Conexão Segura</span>
+                         <span>v2.1.0 Stable</span>
+                    </div>
                 </div>
                 
-                <p className="text-center text-[10px] text-gray-600 mt-8 font-mono">
-                    ID: {deviceId} <br/> PROTEGIDO POR SUPABASE
+                <p className="text-center text-[10px] text-gray-600 mt-6 font-mono">
+                    ID: {deviceId.substring(0, 12)}...
                 </p>
             </div>
         </div>
@@ -228,6 +246,57 @@ function App() {
   const [isIframe, setIsIframe] = useState(false);
   const [hasFileSystemSupport, setHasFileSystemSupport] = useState(true);
 
+  // --- SECURITY HEARTBEAT (ANTI-RATARIA) ---
+  useEffect(() => {
+      if (!isAuthenticated || !currentUserKey) return;
+
+      // BYPASS PARA O MESTRE
+      if (currentUserKey === 'ADMIN-GROCHA013') return;
+
+      const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+
+      const checkSession = async () => {
+          try {
+              const { data, error } = await supabase
+                .from('access_keys')
+                .select('active, hwid')
+                .eq('key', currentUserKey)
+                .single();
+              
+              if (error) return; // Silent fail on network error
+
+              if (!data) {
+                  alert("Licença não encontrada.");
+                  handleLogout(true);
+                  return;
+              }
+
+              if (data.active === false) {
+                  alert("Acesso bloqueado pelo administrador.");
+                  handleLogout(true);
+                  return;
+              }
+
+              // SE HWID NO BANCO FOR DIFERENTE DO MEU -> TCHAU
+              if (data.hwid && data.hwid !== deviceId) {
+                  alert("Sessão encerrada.\n\nSua conta foi acessada em outro dispositivo.");
+                  handleLogout(true);
+                  return;
+              }
+
+          } catch (e) {
+              console.error("Heartbeat fail", e);
+          }
+      };
+
+      // Verifica imediatamente ao montar e depois a cada 30 segundos
+      checkSession();
+      const interval = setInterval(checkSession, 30000); 
+
+      return () => clearInterval(interval);
+  }, [isAuthenticated, currentUserKey]);
+
+
   // --- BLINDAGEM DE CÓDIGO (ANTI-INSPEÇÃO) ---
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => { e.preventDefault(); return false; };
@@ -253,12 +322,6 @@ function App() {
       if (savedKey) {
           setIsAuthenticated(true);
           setCurrentUserKey(savedKey);
-          // Check simples de admin visual baseado no prefixo antigo ou lógica local, idealmente validaria com DB novamente
-          // MAS: Como o LoginScreen já verifica is_admin no DB, apenas confiamos se a sessão estiver ativa, 
-          // ou se quisermos ser seguros, refazemos o fetch. Para UI rápida, assumimos false default e deixamos o usuário logar de novo se precisar.
-          // NOTA: Para simplificar aqui, se a chave começar com ADMIN (legado) ou se o usuário logar agora, o state isAdmin será setado pelo LoginScreen.
-          // Se for refresh F5, o isAdmin pode se perder se não salvarmos no localstorage.
-          // FIX: Salvar isAdmin no localStorage também.
           const savedIsAdmin = localStorage.getItem('cpa_is_admin') === 'true';
           setIsAdmin(savedIsAdmin);
       }
@@ -288,8 +351,8 @@ function App() {
   }, [state]);
 
   // --- LOGOUT ---
-  const handleLogout = () => {
-      if(confirm('Encerrar sessão segura?')) {
+  const handleLogout = (force: boolean = false) => {
+      if(force || confirm('Encerrar sessão?')) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
           localStorage.removeItem('cpa_is_admin');
           setIsAuthenticated(false);
@@ -413,7 +476,6 @@ function App() {
 
   // Adiciona Admin ao menu se for admin
   if (isAdmin) {
-      // Evita duplicatas se re-renderizar
       if (!navItems.find(i => i.id === 'admin')) {
         navItems.push({ id: 'admin', label: 'Painel Admin', icon: Crown });
       }
@@ -444,21 +506,21 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#050505] text-gray-200 overflow-hidden font-sans selection:bg-blue-500/30 selection:text-white">
+    <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white">
       
       {/* Notifications */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
         {notifications.map(n => (
           <div key={n.id} className={`
             pointer-events-auto flex items-center gap-4 px-5 py-4 rounded-lg shadow-2xl border backdrop-blur-md animate-slide-in-right min-w-[320px]
-            ${n.type === 'success' ? 'bg-[#062c1a]/90 border-emerald-500/20 text-emerald-400' : 
-              n.type === 'error' ? 'bg-[#2c0606]/90 border-rose-500/20 text-rose-400' : 
-              'bg-[#06182c]/90 border-blue-500/20 text-blue-400'}
+            ${n.type === 'success' ? 'bg-emerald-900/90 border-emerald-500/20 text-emerald-400' : 
+              n.type === 'error' ? 'bg-rose-900/90 border-rose-500/20 text-rose-400' : 
+              'bg-blue-900/90 border-blue-500/20 text-blue-400'}
           `}>
             {n.type === 'success' && <CheckCircle2 size={18} />}
             {n.type === 'error' && <AlertCircle size={18} />}
             {n.type === 'info' && <Info size={18} />}
-            <span className="text-xs font-bold tracking-wide font-mono">{n.message}</span>
+            <span className="text-xs font-bold tracking-wide">{n.message}</span>
           </div>
         ))}
       </div>
@@ -471,21 +533,21 @@ function App() {
         />
       )}
 
-      {/* SIDEBAR V3 */}
+      {/* SIDEBAR (GLASS STYLE) */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-30 w-72 bg-[#0a0a0a] border-r border-gray-800/50 transform transition-transform duration-300 ease-out flex flex-col justify-between
+        fixed lg:static inset-y-0 left-0 z-30 w-72 bg-[#050510] border-r border-white/5 transform transition-transform duration-300 ease-out flex flex-col justify-between
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="p-6">
             <div className="flex items-center gap-4 mb-10 px-2">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-blue-900/50">
-                    <Zap size={20} fill="currentColor" />
+                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-primary/30">
+                    <Activity size={22} fill="currentColor" />
                 </div>
                 <div>
-                    <h1 className="font-black text-xl leading-none text-white tracking-tight">CPA <span className="text-blue-500">MASTER</span></h1>
+                    <h1 className="font-bold text-xl leading-none text-white tracking-tight">CPA Gateway</h1>
                     <div className="flex items-center gap-2 mt-1">
-                         <span className="text-[9px] font-bold bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded uppercase tracking-wider">V3.0</span>
-                         {isAdmin && <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1"><Crown size={8}/> ADMIN</span>}
+                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> ONLINE</span>
+                         {isAdmin && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1"><Crown size={10}/> ADMIN</span>}
                     </div>
                 </div>
             </div>
@@ -501,66 +563,63 @@ function App() {
                             key={item.id}
                             onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
                             className={`
-                                w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-all duration-200 group relative
+                                w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 group relative
                                 ${isActive 
-                                    ? (isAdminItem ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'text-white bg-blue-600/10 border border-blue-600/20')
-                                    : 'text-gray-500 hover:text-gray-200 hover:bg-white/5 border border-transparent'
+                                    ? (isAdminItem ? 'bg-amber-500/10 text-amber-400 shadow-sm' : 'bg-primary/10 text-primary shadow-sm')
+                                    : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
                                 }
                             `}
                         >
-                            <Icon size={18} className={`transition-colors ${isActive ? (isAdminItem ? 'text-amber-400' : 'text-blue-500') : 'group-hover:text-gray-300'}`} />
+                            <Icon size={18} className={`transition-colors ${isActive ? (isAdminItem ? 'text-amber-400' : 'text-primary') : 'group-hover:text-gray-300'}`} />
                             <span className="tracking-wide">{item.label}</span>
-                            {isActive && <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full ${isAdminItem ? 'bg-amber-500' : 'bg-blue-500'}`}></div>}
+                            {isActive && <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l-full ${isAdminItem ? 'bg-amber-500' : 'bg-primary'}`}></div>}
                         </button>
                     );
                 })}
             </nav>
         </div>
 
-        <div className="p-6 border-t border-gray-800/50 bg-[#0c0c0c]">
+        <div className="p-6 border-t border-white/5 bg-[#080814]">
             <input type="file" ref={legacyFileInputRef} style={{display: 'none'}} accept=".json" onChange={handleLegacyUpload} />
 
             <div className="flex gap-2 mb-3">
                 <button 
                     onClick={handleManualDownload}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 py-2.5 rounded-lg text-xs font-bold transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5 py-2.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider"
                 >
-                    <Download size={14} /> DADOS
+                    <Download size={14} /> Backup
                 </button>
                 <button 
-                    onClick={handleLogout}
-                    className="w-10 flex items-center justify-center bg-gray-800 hover:bg-rose-900/30 hover:text-rose-400 text-gray-400 border border-gray-700 hover:border-rose-900/50 py-2.5 rounded-lg transition-all"
+                    onClick={() => handleLogout()}
+                    className="w-10 flex items-center justify-center bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-gray-400 border border-white/5 hover:border-red-500/30 py-2.5 rounded-lg transition-all"
                 >
-                    <LogOut size={14} />
+                    <LogOut size={16} />
                 </button>
             </div>
 
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-800 bg-black/40">
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-white/5 bg-black/20">
                 <div className="flex items-center gap-3">
                     <div className={`
                         w-2 h-2 rounded-full
-                        ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : (saveStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500')}
+                        ${saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : (saveStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500')}
                     `}></div>
                     <div className="overflow-hidden">
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">STATUS DO SISTEMA</p>
-                        <p className={`text-[10px] font-bold truncate ${saveStatus === 'saving' ? 'text-blue-500' : 'text-gray-300'}`}>
-                            {saveStatus === 'saving' ? 'SALVANDO...' : 'ONLINE'}
+                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
+                        <p className={`text-[10px] font-bold truncate ${saveStatus === 'saving' ? 'text-blue-400' : 'text-gray-300'}`}>
+                            {saveStatus === 'saving' ? 'Salvando...' : 'Conectado'}
                         </p>
                     </div>
                 </div>
-                {fileHandle && <Database size={12} className="text-blue-500" />}
+                {fileHandle && <Database size={12} className="text-primary" />}
             </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-[#050505]">
-        {/* Top Gradient Line */}
-        <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 opacity-30"></div>
-
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Mobile Header */}
-        <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-800 bg-[#0a0a0a] z-10">
-            <span className="font-black text-lg text-white">CPA <span className="text-blue-500">MASTER</span></span>
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#0a0a0a] z-10">
+            <span className="font-bold text-lg text-white">CPA Gateway</span>
             <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-white">
                 <Menu size={24} />
             </button>

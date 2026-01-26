@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, MonitorCheck, Link, Unlink } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -13,6 +13,7 @@ interface AccessKeyData {
     owner_name: string;
     active: boolean;
     is_admin: boolean;
+    hwid: string | null;
 }
 
 const Admin: React.FC<Props> = ({ notify }) => {
@@ -45,7 +46,6 @@ const Admin: React.FC<Props> = ({ notify }) => {
           if (data) setKeysList(data);
       } catch (err: any) {
           console.error("Erro ao buscar chaves:", err);
-          // Falha silenciosa para não incomodar se for apenas rede
       } finally {
           setIsLoadingKeys(false);
       }
@@ -61,14 +61,32 @@ const Admin: React.FC<Props> = ({ notify }) => {
           if (error) throw error;
           
           setKeysList(prev => prev.map(k => k.id === id ? { ...k, active: !currentStatus } : k));
-          notify(currentStatus ? 'Chave DESATIVADA.' : 'Chave ATIVADA.', 'info');
+          notify(currentStatus ? 'Chave DESATIVADA (Usuário será expulso).' : 'Chave ATIVADA.', 'info');
       } catch (err: any) {
           notify(`Erro ao atualizar: ${err.message}`, 'error');
       }
   };
 
+  const resetHWID = async (id: number) => {
+      if(!confirm("⚠️ ATENÇÃO: Isso permite que a chave seja usada em um NOVO computador. Confirmar reset?")) return;
+      
+      try {
+          const { error } = await supabase
+            .from('access_keys')
+            .update({ hwid: null })
+            .eq('id', id);
+
+          if (error) throw error;
+
+          setKeysList(prev => prev.map(k => k.id === id ? { ...k, hwid: null } : k));
+          notify('Dispositivo desvinculado! A chave pode ser usada novamente.', 'success');
+      } catch (err: any) {
+          notify(`Erro ao resetar: ${err.message}`, 'error');
+      }
+  };
+
   const deleteKey = async (id: number) => {
-      if (!confirm('Tem certeza? Essa chave será excluída permanentemente.')) return;
+      if (!confirm('Tem certeza? Essa chave será excluída permanentemente e o usuário expulso.')) return;
 
       try {
           const { error } = await supabase
@@ -119,16 +137,17 @@ const Admin: React.FC<Props> = ({ notify }) => {
                     key: generatedKey, 
                     active: true, 
                     is_admin: false,
-                    owner_name: ownerNameInput || 'Cliente Novo'
+                    owner_name: ownerNameInput || 'Cliente Novo',
+                    hwid: null // Começa sem dispositivo (VIRGEM)
                 }
             ]);
 
           if (error) throw error;
           
-          notify('Chave registrada com sucesso!', 'success');
+          notify('Chave criada! Aguardando primeiro uso.', 'success');
           setGeneratedKey(''); 
           setOwnerNameInput('');
-          fetchKeys(); // Atualiza a lista imediatamente
+          fetchKeys(); 
 
       } catch (err: any) {
           console.error("Supabase Error:", err);
@@ -142,7 +161,6 @@ const Admin: React.FC<Props> = ({ notify }) => {
       }
   };
 
-  // Filtro da lista
   const filteredKeys = keysList.filter(k => 
       (k.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       (k.key || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -165,9 +183,9 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5 shadow-2xl shadow-amber-900/10">
                     <div className="p-6 border-b border-amber-500/10 bg-gradient-to-r from-amber-900/20 to-transparent">
                         <h3 className="font-bold text-amber-400 flex items-center gap-2">
-                            <Key size={18} /> Nova Licença
+                            <Key size={18} /> Nova Licença (Uso Único)
                         </h3>
-                        <p className="text-xs text-gray-400 mt-1">Crie chaves de acesso para novos clientes.</p>
+                        <p className="text-xs text-gray-400 mt-1">Gera uma chave que trava no primeiro PC que usar.</p>
                     </div>
                     <div className="p-6">
                          <div className="mb-4">
@@ -206,8 +224,8 @@ const Admin: React.FC<Props> = ({ notify }) => {
                             <span className="text-[10px] text-gray-500 uppercase font-bold">Total de Chaves</span>
                         </div>
                         <div className="bg-black/40 p-3 rounded-lg border border-white/5">
-                            <span className="block text-2xl font-bold text-emerald-400">{keysList.filter(k => k.active).length}</span>
-                            <span className="text-[10px] text-gray-500 uppercase font-bold">Ativas Agora</span>
+                            <span className="block text-2xl font-bold text-indigo-400">{keysList.filter(k => k.hwid !== null).length}</span>
+                            <span className="text-[10px] text-gray-500 uppercase font-bold">Já Usadas</span>
                         </div>
                     </div>
                 </div>
@@ -220,7 +238,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                         <h3 className="font-bold text-white flex items-center gap-2">
                             <Database size={18} className="text-blue-400" /> Banco de Chaves
                         </h3>
-                        <p className="text-[10px] text-gray-400 mt-1">Gerencie os acessos do sistema.</p>
+                        <p className="text-[10px] text-gray-400 mt-1">Controle de uso único e bloqueios.</p>
                      </div>
                      <button onClick={fetchKeys} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
                          <RefreshCw size={16} className={isLoadingKeys ? 'animate-spin' : ''} />
@@ -251,7 +269,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                         filteredKeys.map((item) => (
                             <div key={item.id} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors group">
                                 <div className="flex justify-between items-start mb-2">
-                                    <div>
+                                    <div className="w-full">
                                         <div className="flex items-center gap-2">
                                             <h4 className="font-bold text-white text-sm">{item.owner_name}</h4>
                                             {item.is_admin && <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/30 font-bold">ADMIN</span>}
@@ -270,11 +288,30 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         >
                                             {item.key} <Copy size={10} />
                                         </div>
-                                        <p className="text-[9px] text-gray-600 mt-1 font-mono">{new Date(item.created_at).toLocaleDateString('pt-BR')}</p>
+                                        
+                                        {/* STATUS DE VÍNCULO (One Time Use) */}
+                                        <div className="mt-2 flex items-center gap-2 w-full">
+                                            {item.hwid ? (
+                                                <div className="flex-1 bg-indigo-900/20 border border-indigo-500/20 rounded p-1.5 flex items-center gap-2 overflow-hidden">
+                                                    <div className="bg-indigo-500/20 p-1 rounded">
+                                                        <Link size={12} className="text-indigo-400" />
+                                                    </div>
+                                                    <div className="overflow-hidden">
+                                                        <span className="text-[8px] text-gray-400 font-bold uppercase block">ID do PC</span>
+                                                        <span className="text-[9px] text-indigo-300 font-mono font-bold truncate block w-32">{item.hwid}</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[9px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20 flex items-center gap-1 font-bold animate-pulse">
+                                                    <Unlink size={10} /> AGUARDANDO USO
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
+                                    {/* Botão de Bloqueio */}
                                     <button 
                                         onClick={() => toggleKeyStatus(item.id, item.active)}
                                         className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors border ${
@@ -285,6 +322,19 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                     >
                                         <Power size={12} /> {item.active ? 'BLOQUEAR' : 'ATIVAR'}
                                     </button>
+
+                                    {/* Botão de Reset (Permitir novo uso) */}
+                                    {item.hwid && (
+                                        <button 
+                                            onClick={() => resetHWID(item.id)}
+                                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 rounded-lg transition-colors border border-blue-500/20"
+                                            title="Liberar chave para novo PC (Resetar Vínculo)"
+                                        >
+                                            <MonitorX size={14} />
+                                        </button>
+                                    )}
+                                    
+                                    {/* Botão de Excluir */}
                                     <button 
                                         onClick={() => deleteKey(item.id)}
                                         className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-rose-400 rounded-lg transition-colors border border-gray-700"
