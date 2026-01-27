@@ -357,7 +357,11 @@ function App() {
       if (!isAuthenticated || !currentUserKey) return;
 
       // BYPASS PARA O MESTRE
-      if (currentUserKey === 'ADMIN-GROCHA013') return;
+      if (currentUserKey === 'ADMIN-GROCHA013') {
+           // Mestre é sempre admin
+           if(!isAdmin) setIsAdmin(true);
+           return;
+      }
 
       // BYPASS PARA O FREE ACCESS
       // Se a chave for TROPA-FREE, não validamos no banco, permitindo acesso liberado.
@@ -367,9 +371,10 @@ function App() {
 
       const checkSession = async () => {
           try {
+              // AGORA SELECIONA 'is_admin' TAMBÉM PARA FORÇAR SYNC
               const { data, error } = await supabase
                 .from('access_keys')
-                .select('active, hwid')
+                .select('active, hwid, is_admin')
                 .eq('key', currentUserKey)
                 .single();
               
@@ -394,6 +399,13 @@ function App() {
                   return;
               }
 
+              // CRITICAL FIX: SYNC ADMIN STATUS FROM DB
+              // Se o DB diz que é admin e o app não sabia, corrige agora.
+              if (data.is_admin !== isAdmin) {
+                  setIsAdmin(data.is_admin);
+                  localStorage.setItem('cpa_is_admin', String(data.is_admin));
+              }
+
           } catch (e) {
               console.error("Heartbeat fail", e);
           }
@@ -404,7 +416,7 @@ function App() {
       const interval = setInterval(checkSession, 30000); 
 
       return () => clearInterval(interval);
-  }, [isAuthenticated, currentUserKey]);
+  }, [isAuthenticated, currentUserKey, isAdmin]); // Adicionado isAdmin na dependência para evitar loop se não mudar
 
 
   // --- BLINDAGEM DE CÓDIGO (ANTI-INSPEÇÃO) ---

@@ -63,9 +63,6 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     });
 
     // --- A MÁGICA: FILTRAR DIAS ZERADOS (Exceto Hoje) ---
-    // Se o dia não tem atividade (faturamento 0 e investimento 0), removemos do gráfico
-    // para evitar que a linha caia para zero, prejudicando a estética.
-    // Mantemos "hoje" mesmo se for zero, para o usuário saber que o dia atual está lá.
     const cleanChartData = chartData.filter(item => item.hasActivity || item.fullDate === hojeISO);
 
 
@@ -135,7 +132,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
         totalInv: totalInvestimentoReal,
         totalRet,
         lucroLiquido,
-        chartData: cleanChartData, // Usamos os dados filtrados aqui
+        chartData: cleanChartData, 
         pieData: pieDisplayData,
         roi: isNaN(roi) ? 0 : roi,
         margin: isNaN(margin) ? 0 : margin,
@@ -144,23 +141,25 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
-  // Tooltip customizado com efeito "Glass"
+  // Tooltip customizado com efeito "Glass" e design melhorado
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#050510]/80 border border-white/10 p-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-          <p className="text-gray-400 text-[10px] font-bold uppercase mb-3 tracking-widest border-b border-white/5 pb-2">
-            {label}
+        <div className="bg-[#050510]/90 border border-white/20 p-4 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] backdrop-blur-2xl min-w-[200px]">
+          <p className="text-gray-400 text-[10px] font-bold uppercase mb-3 tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
+            <CalendarOff size={12} /> {label}
           </p>
           {payload.map((entry: any) => (
-            <div key={entry.name} className="flex items-center justify-between gap-8 text-sm mb-2 last:mb-0">
+            <div key={entry.name} className="flex items-center justify-between gap-6 text-sm mb-2 last:mb-0">
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.stroke || entry.fill, boxShadow: `0 0 8px ${entry.stroke || entry.fill}` }}></div>
                     <span className="text-gray-300 font-medium capitalize text-xs">
                         {entry.dataKey === 'faturamento' ? 'Faturamento' : 'Lucro Líq.'}
                     </span>
                 </div>
-                <span className="text-white font-bold font-mono text-sm">{formatarBRL(entry.value)}</span>
+                <span className={`font-bold font-mono text-sm ${entry.dataKey === 'lucro' ? 'text-emerald-400' : 'text-white'}`}>
+                    {formatarBRL(entry.value)}
+                </span>
             </div>
           ))}
         </div>
@@ -197,7 +196,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           </div>
         </div>
 
-        {/* --- KPI SUMMARY CARDS (Compact & Sexy) --- */}
+        {/* --- KPI SUMMARY CARDS --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* CARD 1: LUCRO */}
             <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/10 hover:border-emerald-500/30 transition-colors">
@@ -248,7 +247,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
         {/* --- MAIN DASHBOARD GRID --- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
             
-            {/* 1. EXECUTIVE CHART (Takes 2/3 Width) */}
+            {/* 1. EXECUTIVE CHART */}
             <div className="xl:col-span-2 gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[450px] border border-white/5 bg-[#03000a]">
                 <div className="flex items-center justify-between mb-8">
                      <div>
@@ -316,10 +315,14 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                 tickFormatter={(val) => `R$${val/1000}k`}
                                 width={40}
                             />
-
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
                             
-                            {/* BARS: Revenue (Volume) */}
+                            {/* CORREÇÃO DO TOOLTIP: Adicionado contentStyle para resetar padrão do Recharts */}
+                            <Tooltip 
+                                content={<CustomTooltip />} 
+                                cursor={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} 
+                                wrapperStyle={{ outline: 'none' }}
+                            />
+                            
                             <Bar 
                                 yAxisId="left"
                                 dataKey="faturamento" 
@@ -329,7 +332,6 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                 animationDuration={1500}
                             />
 
-                            {/* LINE: Profit (Trend) */}
                             <Line 
                                 yAxisId="right"
                                 type="monotone" 
@@ -349,7 +351,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
             {/* 2. SIDEBAR WIDGETS */}
             <div className="flex flex-col gap-6 h-full">
                 
-                {/* DONUT CHART (Adjusted for Layout) */}
+                {/* DONUT CHART */}
                 <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col flex-1 min-h-[280px]">
                     <div className="flex items-center justify-between mb-2">
                          <h3 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2">
@@ -363,7 +365,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                 <Pie
                                     data={metrics.pieData}
                                     cx="50%"
-                                    cy="35%" // AINDA MAIS PRA CIMA PARA GARANTIR LEGENDA
+                                    cy="40%" // Ajuste para centralizar melhor sem cortar legenda
                                     innerRadius={50} 
                                     outerRadius={70} 
                                     paddingAngle={6}
@@ -376,8 +378,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                     ))}
                                 </Pie>
                                 <Tooltip 
-                                    contentStyle={{ backgroundColor: '#0a0a0a', borderColor: '#333', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                                    contentStyle={{ backgroundColor: '#050510e6', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '12px', backdropFilter: 'blur(10px)' }}
                                     formatter={(value: number) => formatarBRL(value)}
+                                    itemStyle={{ color: '#fff' }}
                                 />
                                 <Legend 
                                     verticalAlign="bottom" 
@@ -389,14 +392,14 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                             </PieChart>
                         </ResponsiveContainer>
                         
-                        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
+                        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
                              <span className="text-lg font-bold text-white">{formatarBRL(metrics.totalInv)}</span>
                              <span className="text-[7px] text-gray-500 font-bold uppercase tracking-widest">Saídas</span>
                         </div>
                     </div>
                 </div>
 
-                {/* MINI FUNNEL (Cleaned Up & Fixed "Entrada") */}
+                {/* MINI FUNNEL */}
                  <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col justify-center flex-1">
                      <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-5 flex items-center gap-2">
                          <Filter size={14} className="text-gray-400" /> Conversão
@@ -406,11 +409,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                          <div>
                              <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-2">
                                  <span>Entrada</span>
-                                 {/* ADICIONADO VALOR DE ENTRADA AQUI */}
                                  <span className="text-gray-300">{formatarBRL(metrics.totalInv)}</span>
                              </div>
                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                 {/* BARRA ATIVA SE HOUVER DADOS */}
                                  <div className={`h-full rounded-full w-full transition-all duration-1000 ${metrics.totalInv > 0 ? 'bg-gray-400' : 'bg-gray-700 opacity-30'}`}></div>
                              </div>
                          </div>
