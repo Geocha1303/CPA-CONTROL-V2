@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -40,25 +40,31 @@ const Admin: React.FC<Props> = ({ notify }) => {
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [activeTab, setActiveTab] = useState<'monitor' | 'keys'>('keys');
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'ERROR'>('CONNECTING');
+  const channelRef = useRef<any>(null);
 
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
+      connectRealtime();
 
-      // INICIA O MONITORAMENTO AO VIVO
+      return () => {
+          if (channelRef.current) supabase.removeChannel(channelRef.current);
+      };
+  }, []);
+
+  const connectRealtime = () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      setConnectionStatus('CONNECTING');
+
       const channel = supabase.channel('online_users');
-      
+      channelRef.current = channel;
+
       const updatePresenceList = () => {
         const newState = channel.presenceState();
         const users: OnlineUser[] = [];
-        
         Object.values(newState).forEach((presences: any) => {
-            presences.forEach((p: any) => {
-                users.push(p as OnlineUser);
-            });
+            presences.forEach((p: any) => users.push(p as OnlineUser));
         });
-        
-        // Filtra duplicatas se houver (mesmo HWID)
         const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id, item])).values());
         setOnlineUsers(uniqueUsers);
       };
@@ -70,7 +76,6 @@ const Admin: React.FC<Props> = ({ notify }) => {
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 setConnectionStatus('CONNECTED');
-                // Admin se registra como monitor para manter o canal ativo
                 await channel.track({
                     user: 'Admin Monitor',
                     key: 'ADMIN-PANEL',
@@ -82,11 +87,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 setConnectionStatus('ERROR');
             }
         });
-
-      return () => {
-          supabase.removeChannel(channel);
-      };
-  }, []);
+  };
 
   // --- FUNÇÕES DO SUPABASE (CRUD) ---
   const fetchKeys = async () => {
@@ -262,22 +263,40 @@ const Admin: React.FC<Props> = ({ notify }) => {
             <div className="space-y-6 animate-fade-in">
                 
                 {/* Diagnóstico de Conexão */}
-                <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                    connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'
+                <div className={`p-3 rounded-xl border flex items-center justify-between transition-colors duration-500 ${
+                    connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20' : 
+                    connectionStatus === 'CONNECTING' ? 'bg-amber-500/10 border-amber-500/20' : 
+                    'bg-red-500/10 border-red-500/20'
                 }`}>
                     <div className="flex items-center gap-3">
-                         {connectionStatus === 'CONNECTED' ? <Wifi size={18} className="text-emerald-400" /> : <WifiOff size={18} className="text-red-400" />}
+                         {connectionStatus === 'CONNECTED' && <Wifi size={18} className="text-emerald-400" />}
+                         {connectionStatus === 'CONNECTING' && <RefreshCw size={18} className="text-amber-400 animate-spin" />}
+                         {connectionStatus === 'ERROR' && <WifiOff size={18} className="text-red-400" />}
+                         
                          <div>
                              <p className={`text-xs font-bold uppercase tracking-widest ${
-                                 connectionStatus === 'CONNECTED' ? 'text-emerald-400' : 'text-red-400'
+                                 connectionStatus === 'CONNECTED' ? 'text-emerald-400' : 
+                                 connectionStatus === 'CONNECTING' ? 'text-amber-400' :
+                                 'text-red-400'
                              }`}>
-                                 {connectionStatus === 'CONNECTED' ? 'Sistema Realtime Conectado' : 'Erro de Conexão (Socket Bloqueado)'}
+                                 {connectionStatus === 'CONNECTED' ? 'Sistema Realtime Conectado' : 
+                                  connectionStatus === 'CONNECTING' ? 'Conectando ao Radar...' :
+                                  'Conexão Instável / Bloqueada'}
                              </p>
                              {connectionStatus === 'ERROR' && (
-                                 <p className="text-[10px] text-gray-400 mt-0.5">Seu proxy ou firewall está bloqueando o WebSocket.</p>
+                                 <p className="text-[10px] text-gray-400 mt-0.5">Verifique sua rede ou proxy.</p>
                              )}
                          </div>
                     </div>
+
+                    {connectionStatus !== 'CONNECTED' && (
+                        <button 
+                            onClick={connectRealtime}
+                            className="text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded flex items-center gap-2 transition-colors border border-white/5"
+                        >
+                            <RotateCcw size={10} /> Reconectar
+                        </button>
+                    )}
                 </div>
 
                 {/* Métricas Rápidas */}
@@ -287,8 +306,10 @@ const Admin: React.FC<Props> = ({ notify }) => {
                         <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total Conectado</h4>
                         <div className="text-4xl font-black text-white">{realUsers.length}</div>
                         <div className="flex items-center gap-2 mt-2">
-                             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                             <span className="text-xs text-emerald-500 font-bold">Online Agora</span>
+                             <span className={`w-2 h-2 rounded-full animate-pulse ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                             <span className={`text-xs font-bold ${connectionStatus === 'CONNECTED' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                 {connectionStatus === 'CONNECTED' ? 'Online Agora' : 'Offline'}
+                             </span>
                         </div>
                     </div>
                     <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden">
@@ -309,7 +330,9 @@ const Admin: React.FC<Props> = ({ notify }) => {
                          <h3 className="font-bold text-white flex items-center gap-2">
                              <MonitorX size={18} className="text-emerald-400" /> Dispositivos Ativos
                          </h3>
-                         <span className="text-[10px] text-gray-500 uppercase font-bold animate-pulse">Atualizando em tempo real...</span>
+                         <span className="text-[10px] text-gray-500 uppercase font-bold animate-pulse">
+                             {connectionStatus === 'CONNECTED' ? 'Atualizando em tempo real...' : 'Aguardando conexão...'}
+                         </span>
                     </div>
                     <div className="p-2 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
                         {realUsers.length === 0 ? (
