@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -39,6 +39,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
   // States do Monitoramento (Realtime)
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [activeTab, setActiveTab] = useState<'monitor' | 'keys'>('keys');
+  const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'ERROR'>('CONNECTING');
 
   // --- EFEITOS ---
   useEffect(() => {
@@ -46,18 +47,41 @@ const Admin: React.FC<Props> = ({ notify }) => {
 
       // INICIA O MONITORAMENTO AO VIVO
       const channel = supabase.channel('online_users');
-      channel.on('presence', { event: 'sync' }, () => {
-          const newState = channel.presenceState();
-          const users: OnlineUser[] = [];
-          
-          Object.values(newState).forEach((presences: any) => {
-              presences.forEach((p: any) => {
-                  users.push(p as OnlineUser);
-              });
-          });
-          
-          setOnlineUsers(users);
-      }).subscribe();
+      
+      const updatePresenceList = () => {
+        const newState = channel.presenceState();
+        const users: OnlineUser[] = [];
+        
+        Object.values(newState).forEach((presences: any) => {
+            presences.forEach((p: any) => {
+                users.push(p as OnlineUser);
+            });
+        });
+        
+        // Filtra duplicatas se houver (mesmo HWID)
+        const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id, item])).values());
+        setOnlineUsers(uniqueUsers);
+      };
+
+      channel
+        .on('presence', { event: 'sync' }, updatePresenceList)
+        .on('presence', { event: 'join' }, updatePresenceList)
+        .on('presence', { event: 'leave' }, updatePresenceList)
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                setConnectionStatus('CONNECTED');
+                // Admin se registra como monitor para manter o canal ativo
+                await channel.track({
+                    user: 'Admin Monitor',
+                    key: 'ADMIN-PANEL',
+                    online_at: new Date().toISOString(),
+                    is_admin: true,
+                    device_id: 'ADMIN-CONSOLE'
+                });
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                setConnectionStatus('ERROR');
+            }
+        });
 
       return () => {
           supabase.removeChannel(channel);
@@ -198,8 +222,10 @@ const Admin: React.FC<Props> = ({ notify }) => {
   );
 
   // Filtros de Monitoramento
-  const freeUsersOnline = onlineUsers.filter(u => u.key === 'TROPA-FREE');
-  const paidUsersOnline = onlineUsers.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
+  // Exclui o próprio admin monitor da lista de contagem de usuários
+  const realUsers = onlineUsers.filter(u => u.device_id !== 'ADMIN-CONSOLE');
+  const freeUsersOnline = realUsers.filter(u => u.key === 'TROPA-FREE');
+  const paidUsersOnline = realUsers.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -226,7 +252,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 >
                     <Activity size={16} className={activeTab === 'monitor' ? 'animate-pulse' : ''} /> 
                     Radar Ao Vivo 
-                    <span className="bg-black/20 px-2 rounded-full text-[10px] ml-1">{onlineUsers.length}</span>
+                    <span className="bg-black/20 px-2 rounded-full text-[10px] ml-1">{realUsers.length}</span>
                 </button>
             </div>
         </div>
@@ -234,12 +260,32 @@ const Admin: React.FC<Props> = ({ notify }) => {
         {activeTab === 'monitor' ? (
             // --- ABA DE MONITORAMENTO EM TEMPO REAL ---
             <div className="space-y-6 animate-fade-in">
+                
+                {/* Diagnóstico de Conexão */}
+                <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                    connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'
+                }`}>
+                    <div className="flex items-center gap-3">
+                         {connectionStatus === 'CONNECTED' ? <Wifi size={18} className="text-emerald-400" /> : <WifiOff size={18} className="text-red-400" />}
+                         <div>
+                             <p className={`text-xs font-bold uppercase tracking-widest ${
+                                 connectionStatus === 'CONNECTED' ? 'text-emerald-400' : 'text-red-400'
+                             }`}>
+                                 {connectionStatus === 'CONNECTED' ? 'Sistema Realtime Conectado' : 'Erro de Conexão (Socket Bloqueado)'}
+                             </p>
+                             {connectionStatus === 'ERROR' && (
+                                 <p className="text-[10px] text-gray-400 mt-0.5">Seu proxy ou firewall está bloqueando o WebSocket.</p>
+                             )}
+                         </div>
+                    </div>
+                </div>
+
                 {/* Métricas Rápidas */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Radio size={60} /></div>
                         <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total Conectado</h4>
-                        <div className="text-4xl font-black text-white">{onlineUsers.length}</div>
+                        <div className="text-4xl font-black text-white">{realUsers.length}</div>
                         <div className="flex items-center gap-2 mt-2">
                              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                              <span className="text-xs text-emerald-500 font-bold">Online Agora</span>
@@ -266,13 +312,13 @@ const Admin: React.FC<Props> = ({ notify }) => {
                          <span className="text-[10px] text-gray-500 uppercase font-bold animate-pulse">Atualizando em tempo real...</span>
                     </div>
                     <div className="p-2 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
-                        {onlineUsers.length === 0 ? (
+                        {realUsers.length === 0 ? (
                             <div className="text-center py-12 text-gray-600">
                                 <Radio size={40} className="mx-auto mb-2 opacity-50" />
                                 <p>Nenhum usuário online no momento.</p>
                             </div>
                         ) : (
-                            onlineUsers.map((user, idx) => (
+                            realUsers.map((user, idx) => (
                                 <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:scale-[1.01] ${
                                     user.key === 'TROPA-FREE' 
                                     ? 'bg-emerald-900/10 border-emerald-500/10' 

@@ -272,15 +272,21 @@ function App() {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const realStateRef = useRef<AppState | null>(null);
 
-  // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR) ---
+  // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR - ROBUST) ---
+  const presenceChannelRef = useRef<any>(null); // Ref persistente para o canal
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Obtém o ID do dispositivo atual
     const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
     const userName = state.config.userName || 'Desconhecido';
     
-    // Conecta ao canal de usuários online
+    // Se já existe um canal conectado, não recria, apenas garante que os dados estão atualizados
+    if (presenceChannelRef.current) {
+        return;
+    }
+
+    // Cria e conecta ao canal de usuários online
     const channel = supabase.channel('online_users', {
         config: {
             presence: {
@@ -289,23 +295,59 @@ function App() {
         },
     });
 
+    presenceChannelRef.current = channel;
+
+    // Função de Tracking (Extraída para ser usada no Heartbeat)
+    const trackPresence = async () => {
+         if(!presenceChannelRef.current) return;
+         await presenceChannelRef.current.track({
+            user: userName,
+            key: currentUserKey,
+            online_at: new Date().toISOString(),
+            is_admin: isAdmin,
+            device_id: deviceId
+        });
+    };
+
     channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
             // Assim que conectar, envia os dados deste usuário
-            await channel.track({
+            await trackPresence();
+        }
+    });
+
+    // HEARTBEAT: Re-envia o status "Estou Aqui" a cada 30 segundos
+    // Isso é vital para dispositivos móveis ou proxies que cortam conexões ociosas
+    const heartbeatInterval = setInterval(() => {
+        trackPresence().catch(e => console.error("Heartbeat fail", e));
+    }, 30000); 
+
+    // Cleanup apenas no unmount real ou logout
+    return () => {
+        clearInterval(heartbeatInterval);
+        if (presenceChannelRef.current) {
+            supabase.removeChannel(presenceChannelRef.current);
+            presenceChannelRef.current = null;
+        }
+    };
+  }, [isAuthenticated]); // Dependência mínima para evitar recriação do canal
+
+  // Efeito secundário para atualizar os dados de presença se o usuário mudar algo (ex: nome)
+  useEffect(() => {
+      if(presenceChannelRef.current && isAuthenticated) {
+           const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
+           const userName = state.config.userName || 'Desconhecido';
+           
+           // Tenta atualizar o track se o canal estiver pronto (mesmo se cair e voltar)
+           presenceChannelRef.current.track({
                 user: userName,
                 key: currentUserKey,
                 online_at: new Date().toISOString(),
                 is_admin: isAdmin,
                 device_id: deviceId
-            });
-        }
-    });
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
-  }, [isAuthenticated, currentUserKey, state.config.userName, isAdmin]);
+           }).catch((err: any) => console.log('Retrying presence track...', err));
+      }
+  }, [state.config.userName, isAdmin, currentUserKey, isAuthenticated]);
 
 
   // --- SECURITY HEARTBEAT (ANTI-RATARIA) ---
