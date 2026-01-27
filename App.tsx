@@ -273,81 +273,76 @@ function App() {
   const realStateRef = useRef<AppState | null>(null);
 
   // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR - ROBUST) ---
-  const presenceChannelRef = useRef<any>(null); // Ref persistente para o canal
+  const presenceChannelRef = useRef<any>(null); 
+  const retryTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
-    const userName = state.config.userName || 'Desconhecido';
-    
-    // Se já existe um canal conectado, não recria, apenas garante que os dados estão atualizados
-    if (presenceChannelRef.current) {
-        return;
-    }
+    const connectPresence = () => {
+        const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
+        const userName = state.config.userName || 'Desconhecido';
 
-    // Cria e conecta ao canal de usuários online
-    const channel = supabase.channel('online_users', {
-        config: {
-            presence: {
-                key: deviceId, // Usa o HWID como chave única de presença
+        if (presenceChannelRef.current) {
+             supabase.removeChannel(presenceChannelRef.current);
+        }
+
+        const channel = supabase.channel('online_users', {
+            config: {
+                presence: { key: deviceId },
             },
-        },
-    });
+        });
 
-    presenceChannelRef.current = channel;
+        presenceChannelRef.current = channel;
 
-    // Função de Tracking (Extraída para ser usada no Heartbeat)
-    const trackPresence = async () => {
-         if(!presenceChannelRef.current) return;
-         await presenceChannelRef.current.track({
-            user: userName,
-            key: currentUserKey,
-            online_at: new Date().toISOString(),
-            is_admin: isAdmin,
-            device_id: deviceId
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.track({
+                    user: userName,
+                    key: currentUserKey,
+                    online_at: new Date().toISOString(),
+                    is_admin: isAdmin,
+                    device_id: deviceId
+                });
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                // Lógica de Retry silencioso para não assustar o usuário
+                console.warn('Realtime desconectado. Tentando reconectar...');
+                if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = setTimeout(connectPresence, 5000);
+            }
         });
     };
 
-    channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-            // Assim que conectar, envia os dados deste usuário
-            await trackPresence();
-        }
-    });
+    connectPresence();
 
-    // HEARTBEAT: Re-envia o status "Estou Aqui" a cada 30 segundos
-    // Isso é vital para dispositivos móveis ou proxies que cortam conexões ociosas
-    const heartbeatInterval = setInterval(() => {
-        trackPresence().catch(e => console.error("Heartbeat fail", e));
-    }, 30000); 
-
-    // Cleanup apenas no unmount real ou logout
-    return () => {
-        clearInterval(heartbeatInterval);
-        if (presenceChannelRef.current) {
-            supabase.removeChannel(presenceChannelRef.current);
-            presenceChannelRef.current = null;
-        }
-    };
-  }, [isAuthenticated]); // Dependência mínima para evitar recriação do canal
-
-  // Efeito secundário para atualizar os dados de presença se o usuário mudar algo (ex: nome)
-  useEffect(() => {
-      if(presenceChannelRef.current && isAuthenticated) {
-           const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
-           const userName = state.config.userName || 'Desconhecido';
-           
-           // Tenta atualizar o track se o canal estiver pronto (mesmo se cair e voltar)
-           presenceChannelRef.current.track({
+    // Heartbeat para manter a conexão ativa em mobile/proxy
+    const heartbeatInterval = setInterval(async () => {
+         if(presenceChannelRef.current) {
+            const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
+            const userName = state.config.userName || 'Desconhecido';
+             await presenceChannelRef.current.track({
                 user: userName,
                 key: currentUserKey,
                 online_at: new Date().toISOString(),
                 is_admin: isAdmin,
                 device_id: deviceId
-           }).catch((err: any) => console.log('Retrying presence track...', err));
-      }
-  }, [state.config.userName, isAdmin, currentUserKey, isAuthenticated]);
+            }).catch(() => {
+                // Se falhar o track, tenta reconectar tudo
+                if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = setTimeout(connectPresence, 2000);
+            });
+         }
+    }, 30000);
+
+    return () => {
+        clearInterval(heartbeatInterval);
+        if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        if (presenceChannelRef.current) {
+            supabase.removeChannel(presenceChannelRef.current);
+            presenceChannelRef.current = null;
+        }
+    };
+  }, [isAuthenticated]); 
 
 
   // --- SECURITY HEARTBEAT (ANTI-RATARIA) ---
