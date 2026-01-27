@@ -349,9 +349,9 @@ const Dashboard: React.FC<Props> = ({ state }) => {
             {/* 2. SIDEBAR WIDGETS */}
             <div className="flex flex-col gap-6 h-full">
                 
-                {/* DONUT CHART */}
-                <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col flex-1 min-h-[250px]">
-                    <div className="flex items-center justify-between mb-4">
+                {/* DONUT CHART (Adjusted for Layout) */}
+                <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col flex-1 min-h-[280px]">
+                    <div className="flex items-center justify-between mb-2">
                          <h3 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2">
                              <PieIcon size={14} className="text-gray-400" /> Distribuição
                          </h3>
@@ -359,13 +359,13 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                     
                     <div className="flex-1 flex items-center justify-center relative">
                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
+                            <PieChart margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
                                 <Pie
                                     data={metrics.pieData}
                                     cx="50%"
-                                    cy="50%"
-                                    innerRadius={55}
-                                    outerRadius={75}
+                                    cy="35%" // AINDA MAIS PRA CIMA PARA GARANTIR LEGENDA
+                                    innerRadius={50} 
+                                    outerRadius={70} 
                                     paddingAngle={6}
                                     dataKey="value"
                                     stroke="none"
@@ -383,41 +383,44 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                     verticalAlign="bottom" 
                                     height={36} 
                                     iconType="circle"
-                                    iconSize={6}
-                                    wrapperStyle={{fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase'}}
+                                    iconSize={8}
+                                    wrapperStyle={{fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '10px', width: '100%'}}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
                         
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mb-8">
-                             <span className="text-xl font-bold text-white">{formatarBRL(metrics.totalInv)}</span>
-                             <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">Saídas</span>
+                        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
+                             <span className="text-lg font-bold text-white">{formatarBRL(metrics.totalInv)}</span>
+                             <span className="text-[7px] text-gray-500 font-bold uppercase tracking-widest">Saídas</span>
                         </div>
                     </div>
                 </div>
 
-                {/* MINI FUNNEL */}
+                {/* MINI FUNNEL (Cleaned Up & Fixed "Entrada") */}
                  <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col justify-center flex-1">
-                     <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                     <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-5 flex items-center gap-2">
                          <Filter size={14} className="text-gray-400" /> Conversão
                      </h3>
                      
-                     <div className="space-y-4">
+                     <div className="space-y-5">
                          <div>
-                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-1">
+                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-2">
                                  <span>Entrada</span>
+                                 {/* ADICIONADO VALOR DE ENTRADA AQUI */}
+                                 <span className="text-gray-300">{formatarBRL(metrics.totalInv)}</span>
                              </div>
                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                 <div className="h-full bg-gray-600 rounded-full w-full opacity-30"></div>
+                                 {/* BARRA ATIVA SE HOUVER DADOS */}
+                                 <div className={`h-full rounded-full w-full transition-all duration-1000 ${metrics.totalInv > 0 ? 'bg-gray-400' : 'bg-gray-700 opacity-30'}`}></div>
                              </div>
                          </div>
                          
-                         <div className="flex justify-center -my-2">
-                             <ArrowDownRight size={14} className="text-gray-700" />
+                         <div className="flex justify-center -my-2.5 opacity-30">
+                             <ArrowDownRight size={12} className="text-gray-500" />
                          </div>
 
                          <div>
-                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-1">
+                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-2">
                                  <span>Retorno</span>
                                  <span className="text-indigo-400">{(metrics.totalRet / (metrics.totalInv || 1)).toFixed(1)}x</span>
                              </div>
@@ -426,19 +429,19 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                              </div>
                          </div>
 
-                          <div className="flex justify-center -my-2">
-                             <ArrowDownRight size={14} className="text-gray-700" />
+                          <div className="flex justify-center -my-2.5 opacity-30">
+                             <ArrowDownRight size={12} className="text-gray-500" />
                          </div>
 
                           <div>
-                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-1">
+                             <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-2">
                                  <span>Lucro</span>
                                  <span className="text-emerald-400">{metrics.margin.toFixed(0)}%</span>
                              </div>
                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                                  <div 
                                     className="h-full bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
-                                    style={{width: `${Math.min(metrics.margin, 100)}%`}}
+                                    style={{width: `${Math.min(Math.max(metrics.margin, 0), 100)}%`}}
                                  ></div>
                              </div>
                          </div>

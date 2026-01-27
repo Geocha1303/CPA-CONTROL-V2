@@ -275,9 +275,16 @@ function App() {
   // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR - ROBUST) ---
   const presenceChannelRef = useRef<any>(null); 
   const retryTimeoutRef = useRef<any>(null);
+  const sessionStartTimeRef = useRef<string>(''); // Armazena a hora do login inicial
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    // Define a hora de início da sessão APENAS se ainda não estiver definida
+    // Isso garante que o horário não mude a cada heartbeat
+    if (!sessionStartTimeRef.current) {
+        sessionStartTimeRef.current = new Date().toISOString();
+    }
 
     const connectPresence = () => {
         const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
@@ -300,7 +307,7 @@ function App() {
                 await channel.track({
                     user: userName,
                     key: currentUserKey,
-                    online_at: new Date().toISOString(),
+                    online_at: sessionStartTimeRef.current, // Usa a hora fixa do login
                     is_admin: isAdmin,
                     device_id: deviceId
                 });
@@ -323,7 +330,7 @@ function App() {
              await presenceChannelRef.current.track({
                 user: userName,
                 key: currentUserKey,
-                online_at: new Date().toISOString(),
+                online_at: sessionStartTimeRef.current, // Mantém a hora fixa no heartbeat também
                 is_admin: isAdmin,
                 device_id: deviceId
             }).catch(() => {
@@ -461,6 +468,7 @@ function App() {
       if(force || confirm('Encerrar sessão?')) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
           localStorage.removeItem('cpa_is_admin');
+          sessionStartTimeRef.current = ''; // Limpa a referência de tempo
           setIsAuthenticated(false);
           setIsAdmin(false);
           setCurrentUserKey('');

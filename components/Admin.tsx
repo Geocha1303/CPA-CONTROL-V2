@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -45,15 +45,20 @@ const Admin: React.FC<Props> = ({ notify }) => {
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
-      connectRealtime();
+      // Tenta conectar ao montar, mas de forma "preguiçosa" para não travar a UI
+      const timer = setTimeout(() => connectRealtime(), 500);
 
       return () => {
+          clearTimeout(timer);
           if (channelRef.current) supabase.removeChannel(channelRef.current);
       };
   }, []);
 
   const connectRealtime = () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
+      }
       setConnectionStatus('CONNECTING');
 
       const channel = supabase.channel('online_users');
@@ -223,37 +228,76 @@ const Admin: React.FC<Props> = ({ notify }) => {
   );
 
   // Filtros de Monitoramento
-  // Exclui o próprio admin monitor da lista de contagem de usuários
   const realUsers = onlineUsers.filter(u => u.device_id !== 'ADMIN-CONSOLE');
   const freeUsersOnline = realUsers.filter(u => u.key === 'TROPA-FREE');
   const paidUsersOnline = realUsers.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
-        <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center p-4 bg-amber-500/10 rounded-full mb-4 border border-amber-500/20">
-                <ShieldCheck size={40} className="text-amber-400" />
+        
+        {/* HEADER MINIMALISTA */}
+        <div className="flex items-end justify-between border-b border-white/5 pb-6 mb-8">
+            <div className="flex items-center gap-4">
+                <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-lg shadow-amber-900/10">
+                    <ShieldCheck size={28} className="text-amber-400" />
+                </div>
+                <div>
+                    <h2 className="text-3xl font-black text-white tracking-tight">Painel Admin</h2>
+                    <p className="text-gray-400 text-sm font-medium">Gestão de Licenças e Radar</p>
+                </div>
             </div>
-            <h2 className="text-3xl font-bold text-white">Painel do Administrador</h2>
-            <p className="text-gray-400 mt-2">Gestão centralizada de acessos e monitoramento.</p>
+
+            {/* STATUS DO RADAR (SEXY & DISCRETO) */}
+            {activeTab === 'monitor' && (
+                <div className={`
+                    flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all
+                    ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
+                      connectionStatus === 'CONNECTING' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                      'bg-white/5 border-white/10 text-gray-500'}
+                `}>
+                    {connectionStatus === 'CONNECTED' && (
+                        <>
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span>LIVE</span>
+                        </>
+                    )}
+                    {connectionStatus === 'CONNECTING' && (
+                        <>
+                            <RefreshCw size={10} className="animate-spin" />
+                            <span>SYNC...</span>
+                        </>
+                    )}
+                    {connectionStatus === 'ERROR' && (
+                        <>
+                            <WifiOff size={10} />
+                            <span>OFFLINE</span>
+                            <button onClick={connectRealtime} className="ml-1 hover:text-white underline decoration-dotted">Retry</button>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
 
         {/* TABS DE NAVEGAÇÃO */}
         <div className="flex justify-center mb-6">
-            <div className="bg-black/40 p-1 rounded-xl border border-white/10 flex gap-2">
+            <div className="bg-black/40 p-1.5 rounded-2xl border border-white/10 flex gap-2 backdrop-blur-sm">
                 <button 
                     onClick={() => setActiveTab('keys')}
-                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'keys' ? 'bg-amber-500 text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'keys' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                 >
                     <Key size={16} /> Gestão de Chaves
                 </button>
                 <button 
                     onClick={() => setActiveTab('monitor')}
-                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'monitor' ? 'bg-emerald-500 text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'monitor' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                 >
-                    <Activity size={16} className={activeTab === 'monitor' ? 'animate-pulse' : ''} /> 
-                    Radar Ao Vivo 
-                    <span className="bg-black/20 px-2 rounded-full text-[10px] ml-1">{realUsers.length}</span>
+                    <Activity size={16} /> Radar Ao Vivo
+                    {realUsers.length > 0 && (
+                        <span className="bg-black/30 px-1.5 py-0.5 rounded text-[10px] ml-1 text-emerald-300">{realUsers.length}</span>
+                    )}
                 </button>
             </div>
         </div>
@@ -262,121 +306,95 @@ const Admin: React.FC<Props> = ({ notify }) => {
             // --- ABA DE MONITORAMENTO EM TEMPO REAL ---
             <div className="space-y-6 animate-fade-in">
                 
-                {/* Diagnóstico de Conexão */}
-                <div className={`p-3 rounded-xl border flex items-center justify-between transition-colors duration-500 ${
-                    connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20' : 
-                    connectionStatus === 'CONNECTING' ? 'bg-amber-500/10 border-amber-500/20' : 
-                    'bg-red-500/10 border-red-500/20'
-                }`}>
-                    <div className="flex items-center gap-3">
-                         {connectionStatus === 'CONNECTED' && <Wifi size={18} className="text-emerald-400" />}
-                         {connectionStatus === 'CONNECTING' && <RefreshCw size={18} className="text-amber-400 animate-spin" />}
-                         {connectionStatus === 'ERROR' && <WifiOff size={18} className="text-red-400" />}
-                         
-                         <div>
-                             <p className={`text-xs font-bold uppercase tracking-widest ${
-                                 connectionStatus === 'CONNECTED' ? 'text-emerald-400' : 
-                                 connectionStatus === 'CONNECTING' ? 'text-amber-400' :
-                                 'text-red-400'
-                             }`}>
-                                 {connectionStatus === 'CONNECTED' ? 'Sistema Realtime Conectado' : 
-                                  connectionStatus === 'CONNECTING' ? 'Conectando ao Radar...' :
-                                  'Conexão Instável / Bloqueada'}
-                             </p>
-                             {connectionStatus === 'ERROR' && (
-                                 <p className="text-[10px] text-gray-400 mt-0.5">Verifique sua rede ou proxy.</p>
-                             )}
-                         </div>
-                    </div>
-
-                    {connectionStatus !== 'CONNECTED' && (
-                        <button 
-                            onClick={connectRealtime}
-                            className="text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded flex items-center gap-2 transition-colors border border-white/5"
-                        >
-                            <RotateCcw size={10} /> Reconectar
-                        </button>
-                    )}
-                </div>
-
                 {/* Métricas Rápidas */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10"><Radio size={60} /></div>
+                    <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Radio size={80} /></div>
                         <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total Conectado</h4>
-                        <div className="text-4xl font-black text-white">{realUsers.length}</div>
+                        <div className="text-5xl font-black text-white">{realUsers.length}</div>
                         <div className="flex items-center gap-2 mt-2">
-                             <span className={`w-2 h-2 rounded-full animate-pulse ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                             <span className={`text-xs font-bold ${connectionStatus === 'CONNECTED' ? 'text-emerald-500' : 'text-red-500'}`}>
-                                 {connectionStatus === 'CONNECTED' ? 'Online Agora' : 'Offline'}
-                             </span>
+                             <div className={`h-1.5 w-1.5 rounded-full ${realUsers.length > 0 ? 'bg-emerald-500 shadow-[0_0_5px_#10b981]' : 'bg-gray-600'}`}></div>
+                             <span className="text-xs text-gray-500 font-bold uppercase">Dispositivos Ativos</span>
                         </div>
                     </div>
-                    <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden">
-                         <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Acesso Gratuito</h4>
-                        <div className="text-4xl font-black text-white">{freeUsersOnline.length}</div>
+                    <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><User size={80} /></div>
+                         <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Visitantes (Free)</h4>
+                        <div className="text-5xl font-black text-white">{freeUsersOnline.length}</div>
                         <p className="text-[10px] text-gray-500 mt-1 font-mono">Chave: TROPA-FREE</p>
                     </div>
-                    <div className="glass-card p-6 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 relative overflow-hidden">
-                         <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-1">Licenciados (Pagos)</h4>
-                        <div className="text-4xl font-black text-white">{paidUsersOnline.length}</div>
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chaves Únicas</p>
+                    <div className="glass-card p-6 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Zap size={80} /></div>
+                         <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-1">Licenciados (VIP)</h4>
+                        <div className="text-5xl font-black text-white">{paidUsersOnline.length}</div>
+                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chaves Pagas</p>
                     </div>
                 </div>
 
                 {/* Lista de Usuários */}
-                <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
-                    <div className="p-4 bg-black/40 border-b border-white/5 flex items-center justify-between">
+                <div className="glass-card rounded-2xl overflow-hidden border border-white/5 min-h-[400px]">
+                    <div className="p-5 bg-white/[0.02] border-b border-white/5 flex items-center justify-between">
                          <h3 className="font-bold text-white flex items-center gap-2">
-                             <MonitorX size={18} className="text-emerald-400" /> Dispositivos Ativos
+                             <MonitorX size={18} className="text-emerald-400" /> Monitoramento de Sessões
                          </h3>
-                         <span className="text-[10px] text-gray-500 uppercase font-bold animate-pulse">
-                             {connectionStatus === 'CONNECTED' ? 'Atualizando em tempo real...' : 'Aguardando conexão...'}
-                         </span>
+                         {connectionStatus === 'CONNECTED' && <span className="text-[9px] text-emerald-500/50 uppercase font-bold tracking-widest animate-pulse">Atualizando...</span>}
                     </div>
-                    <div className="p-2 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
-                        {realUsers.length === 0 ? (
-                            <div className="text-center py-12 text-gray-600">
-                                <Radio size={40} className="mx-auto mb-2 opacity-50" />
-                                <p>Nenhum usuário online no momento.</p>
-                            </div>
-                        ) : (
-                            realUsers.map((user, idx) => (
-                                <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:scale-[1.01] ${
-                                    user.key === 'TROPA-FREE' 
-                                    ? 'bg-emerald-900/10 border-emerald-500/10' 
-                                    : user.is_admin ? 'bg-amber-900/10 border-amber-500/10' : 'bg-indigo-900/10 border-indigo-500/10'
-                                }`}>
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-3 rounded-lg ${
-                                            user.key === 'TROPA-FREE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'
-                                        }`}>
-                                            {user.is_admin ? <ShieldCheck size={20} className="text-amber-400" /> : <User size={20} />}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="font-bold text-white text-sm">{user.user}</h4>
-                                                {user.is_admin && <span className="text-[9px] bg-amber-500 text-black px-1.5 rounded font-bold">ADMIN</span>}
-                                                {user.key === 'TROPA-FREE' && <span className="text-[9px] bg-emerald-500 text-black px-1.5 rounded font-bold">FREE</span>}
-                                            </div>
-                                            <div className="flex items-center gap-3 mt-1">
-                                                <div className="flex items-center gap-1 text-[10px] text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded border border-white/5">
-                                                    <Cpu size={10} /> {user.device_id.substring(0, 16)}...
-                                                </div>
-                                                <div className="text-[10px] text-gray-500 font-mono">
-                                                    Entrou: {new Date(user.online_at).toLocaleTimeString()}
-                                                </div>
-                                            </div>
-                                        </div>
+                    
+                    {connectionStatus === 'ERROR' && realUsers.length === 0 ? (
+                         <div className="flex flex-col items-center justify-center py-20 text-gray-600 opacity-60">
+                            <WifiOff size={48} className="mb-4 text-red-400/50" />
+                            <p className="text-lg font-bold">Conexão Realtime Indisponível</p>
+                            <p className="text-sm">Verifique sua rede ou proxy.</p>
+                            <button onClick={connectRealtime} className="mt-4 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-white border border-white/10">Tentar Novamente</button>
+                        </div>
+                    ) : (
+                        <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
+                            {realUsers.length === 0 ? (
+                                <div className="text-center py-20 text-gray-600">
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Radio size={32} className="opacity-40" />
                                     </div>
-                                    
-                                    <div className="text-right">
-                                        <span className="inline-block w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981] animate-pulse"></span>
-                                    </div>
+                                    <p className="text-sm font-bold">Radar Limpo</p>
+                                    <p className="text-xs">Nenhum usuário online no momento.</p>
                                 </div>
-                            ))
-                        )}
-                    </div>
+                            ) : (
+                                realUsers.map((user, idx) => (
+                                    <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:bg-white/[0.02] group ${
+                                        user.key === 'TROPA-FREE' 
+                                        ? 'bg-emerald-500/[0.02] border-emerald-500/10' 
+                                        : user.is_admin ? 'bg-amber-500/[0.02] border-amber-500/10' : 'bg-indigo-500/[0.02] border-indigo-500/10'
+                                    }`}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                user.key === 'TROPA-FREE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400'
+                                            }`}>
+                                                {user.is_admin ? <ShieldCheck size={20} className="text-amber-400" /> : <User size={20} />}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-bold text-white text-sm">{user.user}</h4>
+                                                    {user.is_admin && <span className="text-[9px] bg-amber-500 text-black px-1.5 rounded font-bold">ADMIN</span>}
+                                                    {user.key === 'TROPA-FREE' && <span className="text-[9px] bg-emerald-500 text-black px-1.5 rounded font-bold">FREE</span>}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-1.5">
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono bg-black/20 px-2 py-0.5 rounded border border-white/5 group-hover:border-white/10 transition-colors">
+                                                        <Cpu size={10} /> {user.device_id.substring(0, 16)}...
+                                                    </div>
+                                                    <span className="text-[10px] text-gray-500 font-mono">
+                                                        Login: {new Date(user.online_at).toLocaleTimeString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="text-right">
+                                            <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981] animate-pulse"></span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         ) : (
