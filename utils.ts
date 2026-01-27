@@ -1,4 +1,4 @@
-import { AppState, GeneratedPlayer, GeneratorParams, HistoryItem, DayRecord } from './types';
+import { AppState, GeneratedPlayer, GeneratorParams, HistoryItem, DayRecord, Config, GeneralExpense, DreamGoal } from './types';
 
 // Utility para mesclar objetos profundamente (Deep Merge)
 export const mergeDeep = (target: any, source: any): any => {
@@ -326,4 +326,161 @@ export const getMonthlyAggregates = (records: Record<string, DayRecord>, bonus: 
   });
   
   return months;
+};
+
+// --- DEMO DATA GENERATOR ---
+export const generateDemoState = (baseConfig: Config): AppState => {
+    const now = new Date();
+    const dailyRecords: Record<string, DayRecord> = {};
+    const generalExpenses: GeneralExpense[] = [];
+    const history: HistoryItem[] = [];
+    const safeBonus = baseConfig.valorBonus || 20;
+    
+    // 30 dias de dados
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        
+        // Fatores de crescimento orgânico
+        const growthTrend = (30 - i) * 80; // Crescimento linear
+        
+        const numAccounts = Math.floor(randomInt(5, 12) + (growthTrend / 200));
+        const accounts = [];
+        
+        let dayProxy = 0;
+        
+        for(let j=0; j<numAccounts; j++) {
+            // Gera valores de Investimento
+            const dep = randomInt(40, 100);
+            const redep = Math.random() > 0.7 ? randomInt(20, 50) : 0;
+            const totalInvest = dep + redep;
+
+            // Gera Lucro Garantido (Entre 1.2x e 1.8x do investimento)
+            const profitFactor = 1.2 + (Math.random() * 0.6); 
+            const desiredReturn = totalInvest * profitFactor;
+
+            // Calcula componentes do retorno (Saque + Bônus)
+            const cycles = randomInt(1, 3);
+            const bonusTotal = cycles * safeBonus;
+            
+            // O saque é o que sobra para atingir o retorno desejado
+            // Se o bônus já cobriu, o saque é menor, mas nunca negativo.
+            let saque = Math.floor(desiredReturn - bonusTotal);
+            if (saque < 0) saque = 0;
+
+            // REMOVED: Random loss chance. All demo data is now profitable.
+
+            // Custos operacionais simulados
+            dayProxy += 2.50;
+
+            accounts.push({
+                id: Date.now() - (i * 100000) + j,
+                deposito: dep,
+                redeposito: redep,
+                saque: saque,
+                ciclos: cycles
+            });
+            
+            history.push({ valor: dep, tipo: 'deposito' });
+            if(redep > 0) history.push({ valor: redep, tipo: 'redeposito' });
+        }
+
+        dailyRecords[dateKey] = {
+            expenses: {
+                proxy: parseFloat(dayProxy.toFixed(2)),
+                numeros: parseFloat((numAccounts * 1.5).toFixed(2)) // SMS cost
+            },
+            accounts
+        };
+
+        // Adiciona despesas gerais aleatórias
+        if (i % 7 === 0) { // Semanal
+             generalExpenses.push({
+                 id: Date.now() - (i * 100000),
+                 date: dateKey,
+                 description: 'Renovação de Proxy 4G',
+                 valor: 150.00,
+                 recorrente: true
+             });
+        }
+        if (i === 15) { // Mensal
+            generalExpenses.push({
+                 id: Date.now() - (i * 100000) + 1,
+                 date: dateKey,
+                 description: 'Servidor VPS Dedicado',
+                 valor: 350.00,
+                 recorrente: true
+             });
+        }
+    }
+
+    // Metas
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthlyGoals = { [currentMonthKey]: 15000 };
+
+    // Sonhos
+    const dreamGoals: DreamGoal[] = [
+        {
+            id: 1,
+            name: "Apple Watch Ultra 2",
+            targetValue: 6500,
+            imageUrl: "https://image.pollinations.ai/prompt/Apple%20Watch%20Ultra%202%20titanium%20wrist%20shot%20realistic%20focus?width=600&height=400&nologo=true",
+            autoImage: true
+        },
+        {
+            id: 2,
+            name: "iPhone 15 Pro Max",
+            targetValue: 9800,
+            imageUrl: "https://image.pollinations.ai/prompt/iphone%2015%20pro%20max%20natural%20titanium%20back%20view%20premium?width=600&height=400&nologo=true",
+            autoImage: true
+        },
+        {
+            id: 3,
+            name: "Yamaha MT-03 ABS",
+            targetValue: 34000,
+            imageUrl: "https://image.pollinations.ai/prompt/Yamaha%20MT-03%20motorcycle%20black%20side%20view%20street%20background%20realistic%204k?width=600&height=400&nologo=true",
+            autoImage: true
+        },
+        {
+            id: 4,
+            name: "Porsche 911 Carrera",
+            targetValue: 850000,
+            imageUrl: "https://image.pollinations.ai/prompt/porsche%20911%20992%20black%20rear%20view%20night%20city%20lights?width=600&height=400&nologo=true",
+            autoImage: true
+        }
+    ];
+
+    // Planning Fake
+    const fakeParams: GeneratorParams = { 
+        testador: 40, cetico: 30, ambicioso: 20, viciado: 10, 
+        minBaixo: 30, maxBaixo: 60, minAlto: 80, maxAlto: 200, alvo: 150 
+    };
+
+    const demoPlan = generatePlan(
+        15, // 15 jogadores no plano
+        2, 
+        {1: 8, 2: 7}, 
+        fakeParams, 
+        history, 
+        new Set()
+    );
+
+    return {
+        dailyRecords,
+        generalExpenses,
+        monthlyGoals,
+        dreamGoals,
+        config: baseConfig,
+        generator: {
+            plan: demoPlan,
+            totalAgentes: 2,
+            jogadoresPorCiclo: 5,
+            distribuicaoAgentes: {1: 8, 2: 7},
+            params: fakeParams,
+            history,
+            lotWithdrawals: {},
+            customLotSizes: {}
+        }
+    };
 };

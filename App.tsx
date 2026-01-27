@@ -22,10 +22,12 @@ import {
   Terminal,
   MonitorX,
   Fingerprint,
-  Activity
+  Activity,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
-import { getHojeISO, mergeDeep } from './utils';
+import { getHojeISO, mergeDeep, generateDemoState } from './utils';
 import { supabase } from './supabaseClient';
 
 // Components
@@ -234,6 +236,10 @@ function App() {
   const [isIframe, setIsIframe] = useState(false);
   const [hasFileSystemSupport, setHasFileSystemSupport] = useState(true);
 
+  // --- DEMO MODE STATES ---
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const realStateRef = useRef<AppState | null>(null);
+
   // --- SECURITY HEARTBEAT (ANTI-RATARIA) ---
   useEffect(() => {
       if (!isAuthenticated || !currentUserKey) return;
@@ -333,10 +339,13 @@ function App() {
 
   // --- SAFETY NET ---
   useEffect(() => {
-    const handleBeforeUnload = () => { if (state) localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); };
+    const handleBeforeUnload = () => { 
+        // Only save to localstorage if NOT in demo mode
+        if (state && !isDemoMode) localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); 
+    };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [state]);
+  }, [state, isDemoMode]);
 
   // --- LOGOUT ---
   const handleLogout = (force: boolean = false) => {
@@ -364,6 +373,10 @@ function App() {
 
   // --- UPLOAD LEGADO ---
   const handleLegacyUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (isDemoMode) {
+          notify("Saia do Modo Demonstração para carregar backups.", "error");
+          return;
+      }
       const files = event.target.files;
       if (files && files.length > 0) {
           const reader = new FileReader();
@@ -387,6 +400,10 @@ function App() {
 
   // --- FILE SYSTEM API ---
   const handleConnectFile = async () => {
+    if (isDemoMode) {
+          notify("Saia do Modo Demonstração para conectar arquivos.", "error");
+          return;
+    }
     if (!hasFileSystemSupport) { legacyFileInputRef.current?.click(); return; }
     try {
         // @ts-ignore
@@ -413,7 +430,12 @@ function App() {
 
   // --- AUTO-SAVE ---
   useEffect(() => {
-    if (!isLoaded) return;
+    // CRITICAL: DISABLE AUTO-SAVE IN DEMO MODE
+    if (!isLoaded || isDemoMode) {
+        if(isDemoMode) setSaveStatus('saved'); // Fake saved status so UI doesn't look broken
+        return;
+    }
+
     setSaveStatus('saving');
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
@@ -439,7 +461,28 @@ function App() {
     }, 500);
 
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [state, fileHandle, isLoaded]);
+  }, [state, fileHandle, isLoaded, isDemoMode]);
+
+  // --- DEMO MODE TOGGLE ---
+  const toggleDemoMode = () => {
+      if (isDemoMode) {
+          // SAIR DO MODO DEMO: Restaurar estado original
+          if (realStateRef.current) {
+              setState(realStateRef.current);
+              realStateRef.current = null;
+          }
+          setIsDemoMode(false);
+          notify("Modo Demonstração ENCERRADO. Dados reais restaurados.", "info");
+      } else {
+          // ENTRAR NO MODO DEMO
+          realStateRef.current = state; // Salva o estado atual na ref (memória)
+          const demoData = generateDemoState(state.config); // Gera dados fake
+          setState(demoData);
+          setIsDemoMode(true);
+          notify("Modo Demonstração ATIVADO. Auto-Save Pausado.", "success");
+      }
+  };
+
 
   const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
@@ -565,9 +608,34 @@ function App() {
                     );
                 })}
             </nav>
+            
+            {/* ADMIN DEMO BUTTON */}
+            {isAdmin && (
+                <div className="mt-4 px-2">
+                    <button 
+                        onClick={toggleDemoMode}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all uppercase tracking-wider border ${
+                            isDemoMode 
+                            ? 'bg-purple-900/50 text-purple-200 border-purple-500/30 animate-pulse' 
+                            : 'bg-white/5 text-gray-500 border-transparent hover:text-white hover:bg-white/10'
+                        }`}
+                    >
+                        {isDemoMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                        {isDemoMode ? 'Sair da Demo' : 'Modo Demo'}
+                    </button>
+                </div>
+            )}
+
         </div>
 
         <div className="p-6 border-t border-white/5 bg-[#080814]">
+            {isDemoMode && (
+                <div className="mb-4 bg-purple-900/20 border border-purple-500/30 p-2 rounded text-center">
+                    <p className="text-[10px] text-purple-300 font-bold uppercase">Modo Demonstração Ativo</p>
+                    <p className="text-[9px] text-gray-400">Dados reais estão seguros e ocultos.</p>
+                </div>
+            )}
+            
             <input type="file" ref={legacyFileInputRef} style={{display: 'none'}} accept=".json" onChange={handleLegacyUpload} />
 
             <div className="flex gap-2 mb-3">
