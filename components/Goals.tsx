@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AppState, DreamGoal } from '../types';
 import { formatarBRL, getMonthlyAggregates } from '../utils';
-import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Sparkles, Image as ImageIcon, Link, Loader2 } from 'lucide-react';
+import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash2, Image as ImageIcon, Link as LinkIcon, ExternalLink, Lock, Hourglass, ArrowRight } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -10,7 +10,6 @@ interface Props {
 
 const Goals: React.FC<Props> = ({ state, updateState }) => {
   const [newDream, setNewDream] = useState({ name: '', val: '', manualUrl: '' });
-  const [useAI, setUseAI] = useState(true);
   const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
   
   const currentYear = new Date().getFullYear();
@@ -77,25 +76,12 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
   const handleAddDream = () => {
       if(!newDream.name || !newDream.val) return;
       
-      let finalImageUrl = '';
-
-      if (useAI) {
-          // Simplificando o prompt e a URL para garantir melhor compatibilidade
-          const cleanName = newDream.name.trim().replace(/[^a-zA-Z0-9 ]/g, "");
-          const encodedName = encodeURIComponent(cleanName + " luxury product 4k");
-          // Usando uma seed para garantir que a imagem não mude a cada renderização, mas mude por item
-          const seed = Math.floor(Math.random() * 10000);
-          finalImageUrl = `https://image.pollinations.ai/prompt/${encodedName}?width=600&height=400&nologo=true&seed=${seed}&model=flux`;
-      } else {
-          finalImageUrl = newDream.manualUrl;
-      }
-
       const newItem: DreamGoal = {
           id: Date.now(),
           name: newDream.name,
           targetValue: parseFloat(newDream.val),
-          imageUrl: finalImageUrl,
-          autoImage: useAI
+          imageUrl: newDream.manualUrl || '',
+          autoImage: false
       };
 
       const currentDreams = state.dreamGoals || [];
@@ -111,6 +97,10 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
       setImgErrors(prev => ({ ...prev, [id]: true }));
   };
 
+  // --- LÓGICA DE CÁLCULO SEQUENCIAL (WATERFALL) ---
+  // Variável mutável para controlar o saldo restante enquanto renderizamos a lista
+  let remainingBudget = totalLifetimeNetProfit;
+
   return (
     <div className="space-y-10 animate-fade-in max-w-[1600px] mx-auto pb-20">
         
@@ -121,7 +111,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
             </div>
             <div>
                 <h2 className="text-3xl font-black text-white tracking-tight">Metas & Sonhos</h2>
-                <p className="text-gray-400">Acompanhamento tático mensal e objetivos de vida.</p>
+                <p className="text-gray-400">Acompanhamento tático mensal e objetivos de vida (Sequencial).</p>
             </div>
         </div>
 
@@ -260,81 +250,88 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                 </div>
 
                 {/* Input Rápido */}
-                <div className="w-full md:w-auto flex flex-col gap-3">
-                    {/* Controles de Entrada */}
-                    <div className="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-white/10">
-                        <div className="flex items-center gap-1 pr-2 border-r border-white/10">
-                            <button 
-                                onClick={() => setUseAI(true)}
-                                className={`p-2 rounded-lg transition-colors ${useAI ? 'bg-violet-600 text-white' : 'text-gray-500 hover:text-white'}`}
-                                title="Gerar Imagem com IA"
-                            >
-                                <Sparkles size={16} />
-                            </button>
-                            <button 
-                                onClick={() => setUseAI(false)}
-                                className={`p-2 rounded-lg transition-colors ${!useAI ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-white'}`}
-                                title="URL Manual"
-                            >
-                                <Link size={16} />
-                            </button>
-                        </div>
-
+                <div className="w-full md:w-auto bg-black/40 p-4 rounded-xl border border-white/10 flex flex-col gap-3">
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Novo Objetivo (Entra no final da fila)</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
                         <input 
-                            type="text" placeholder={useAI ? "Ex: Porsche 911 Preto" : "Ex: Computador"} 
-                            className="bg-transparent text-sm text-white px-3 py-2 outline-none w-full md:w-48 placeholder:text-gray-600"
+                            type="text" placeholder="Nome (Ex: Porsche)" 
+                            className="bg-black/40 border border-white/10 text-sm text-white px-3 py-2 rounded-lg outline-none w-full sm:w-48 placeholder:text-gray-600 focus:border-gray-500"
                             value={newDream.name} onChange={e => setNewDream({...newDream, name: e.target.value})}
                         />
                         <input 
-                            type="number" placeholder="Valor" 
-                            className="bg-transparent text-sm text-white px-3 py-2 outline-none w-24 border-l border-white/10 placeholder:text-gray-600"
+                            type="number" placeholder="Valor (R$)" 
+                            className="bg-black/40 border border-white/10 text-sm text-white px-3 py-2 rounded-lg outline-none w-full sm:w-32 placeholder:text-gray-600 focus:border-gray-500"
                             value={newDream.val} onChange={e => setNewDream({...newDream, val: e.target.value})}
                         />
+                    </div>
+                    <div className="flex gap-2">
+                         <div className="relative flex-1">
+                            <LinkIcon size={14} className="absolute left-3 top-2.5 text-gray-500" />
+                            <input 
+                                type="text" 
+                                placeholder="Link da Imagem (https://...)" 
+                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-gray-500 outline-none"
+                                value={newDream.manualUrl}
+                                onChange={e => setNewDream({...newDream, manualUrl: e.target.value})}
+                            />
+                        </div>
                         <button onClick={handleAddDream} className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors flex-shrink-0">
                             <Plus size={16} />
                         </button>
                     </div>
-
-                    {/* Campo de URL Manual (Condicional) */}
-                    {!useAI && (
-                        <input 
-                            type="text" 
-                            placeholder="Cole o link da imagem aqui..." 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-gray-500 outline-none animate-fade-in"
-                            value={newDream.manualUrl}
-                            onChange={e => setNewDream({...newDream, manualUrl: e.target.value})}
-                        />
-                    )}
-                     {useAI && (
-                        <p className="text-[10px] text-violet-400 text-right animate-fade-in flex items-center justify-end gap-1">
-                            <Sparkles size={10} /> IA buscará a melhor foto
-                        </p>
-                    )}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {(state.dreamGoals || []).map((goal) => {
-                    const percent = (totalLifetimeNetProfit > 0 && goal.targetValue > 0) ? (totalLifetimeNetProfit / goal.targetValue) * 100 : 0;
+                    // LÓGICA SEQUENCIAL (WATERFALL)
+                    const cost = goal.targetValue;
+                    
+                    // Quanto deste sonho podemos pagar com o saldo atual?
+                    let allocated = 0;
+                    if (remainingBudget >= cost) {
+                        allocated = cost;
+                        remainingBudget -= cost; // Deduz o custo total
+                    } else {
+                        allocated = remainingBudget;
+                        remainingBudget = 0; // Acabou o dinheiro
+                    }
+
+                    // Porcentagem deste item específico
+                    const percent = cost > 0 ? (allocated / cost) * 100 : 0;
                     const cappedPercent = Math.min(Math.max(percent, 0), 100);
+                    const isCompleted = percent >= 100;
+                    // É o item da vez se não está completo mas tem alguma verba OU é o primeiro da fila sem verba
+                    const isActive = !isCompleted && allocated > 0;
+                    const isWaiting = !isCompleted && allocated === 0;
+
                     const hasError = imgErrors[goal.id];
                     
-                    // Cálculo de Tempo Estimado
+                    // Cálculo de Tempo Estimado (Apenas para o item Ativo)
                     let daysLeftStr = "---";
-                    if (percent < 100 && currentMonthStats.currentDailyAvg > 0) {
-                        const remaining = goal.targetValue - totalLifetimeNetProfit;
-                        const days = Math.ceil(remaining / currentMonthStats.currentDailyAvg);
-                        daysLeftStr = `${days} dias`;
-                    } else if (percent >= 100) {
+                    
+                    if (isCompleted) {
                         daysLeftStr = "Conquistado!";
-                    } else if (currentMonthStats.currentDailyAvg <= 0) {
-                         daysLeftStr = "Aumente o ritmo";
+                    } else if (isActive) {
+                         if (currentMonthStats.currentDailyAvg > 0) {
+                            const remaining = cost - allocated;
+                            const days = Math.ceil(remaining / currentMonthStats.currentDailyAvg);
+                            daysLeftStr = `${days} dias restantes`;
+                         } else {
+                            daysLeftStr = "Aumente o ritmo";
+                         }
+                    } else {
+                         daysLeftStr = "Aguardando anterior";
                     }
 
                     return (
                         <div 
                             key={goal.id} 
-                            className="gateway-card rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all duration-500 group relative overflow-hidden h-[320px] flex flex-col justify-end shadow-2xl"
+                            className={`gateway-card rounded-2xl border transition-all duration-500 group relative overflow-hidden h-[320px] flex flex-col justify-end shadow-2xl
+                                ${isCompleted ? 'border-emerald-500/30' : 
+                                  isActive ? 'border-amber-500/50 scale-[1.02] shadow-amber-900/20' : 
+                                  'border-white/10 opacity-75 hover:opacity-100'}
+                            `}
                         >
                             {/* IMAGEM DE FUNDO */}
                             <div className="absolute inset-0 z-0 bg-gray-900">
@@ -342,21 +339,53 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                     <img 
                                         src={goal.imageUrl} 
                                         alt={goal.name}
-                                        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-70 group-hover:opacity-100"
+                                        className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110
+                                            ${isWaiting ? 'grayscale opacity-30' : 'opacity-70 group-hover:opacity-100'}
+                                        `}
                                         onError={() => handleImageError(goal.id)}
                                         loading="lazy"
                                     />
                                 ) : (
                                     <div className="w-full h-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center">
-                                        <Crown size={60} className="text-white/10" />
+                                        <ImageIcon size={60} className="text-white/10" />
                                     </div>
                                 )}
-                                {/* Overlay Gradiente Suave apenas na parte inferior */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#02000f] via-[#02000f]/80 to-transparent opacity-90 z-10"></div>
+                                {/* Overlay Gradiente */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#02000f] via-[#02000f]/90 to-transparent z-10"></div>
                             </div>
 
-                            {/* Botão Delete (Topo Direita - Hover Only) */}
-                            <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-[-10px] group-hover:translate-y-0">
+                            {/* Badge de Status (Topo Esquerda) */}
+                            <div className="absolute top-4 left-4 z-30">
+                                {isCompleted && (
+                                    <span className="bg-emerald-500 text-black text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1">
+                                        <Crown size={10} fill="currentColor" /> DONE
+                                    </span>
+                                )}
+                                {isActive && (
+                                    <span className="bg-amber-500 text-black text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1 animate-pulse">
+                                        <Target size={10} /> FOCO ATUAL
+                                    </span>
+                                )}
+                                {isWaiting && (
+                                    <span className="bg-gray-700 text-gray-300 text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1 border border-white/10">
+                                        <Lock size={10} /> NA FILA
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Botões de Ação */}
+                            <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-[-10px] group-hover:translate-y-0 flex items-center">
+                                 {goal.imageUrl && (
+                                     <a 
+                                        href={goal.imageUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="bg-black/60 hover:bg-blue-500 text-white p-2.5 rounded-full backdrop-blur-md border border-white/20 transition-all shadow-lg hover:scale-110 mr-2"
+                                        title="Ver imagem original"
+                                    >
+                                        <ExternalLink size={16} />
+                                    </a>
+                                 )}
                                  <button onClick={() => removeDream(goal.id)} className="bg-black/60 hover:bg-rose-500 text-white p-2.5 rounded-full backdrop-blur-md border border-white/20 transition-all shadow-lg hover:scale-110">
                                     <Trash2 size={16} />
                                 </button>
@@ -367,16 +396,16 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                 {/* Cabeçalho do Item */}
                                 <div className="flex justify-between items-end mb-3">
                                     <div className="flex-1 mr-2">
-                                         <h4 className="font-bold text-white text-xl leading-tight drop-shadow-lg line-clamp-1">{goal.name}</h4>
+                                         <h4 className={`font-bold text-xl leading-tight drop-shadow-lg line-clamp-1 ${isWaiting ? 'text-gray-500' : 'text-white'}`}>{goal.name}</h4>
                                          <div className="flex items-center gap-2 mt-1">
                                             <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-300 uppercase font-bold tracking-wider backdrop-blur-sm border border-white/5">
-                                                Alvo: {formatarBRL(goal.targetValue)}
+                                                Custo: {formatarBRL(goal.targetValue)}
                                             </span>
                                          </div>
                                     </div>
                                     
                                      <div className="text-right">
-                                        <span className={`text-3xl font-black font-mono tracking-tighter drop-shadow-lg ${percent >= 100 ? 'text-emerald-400' : 'text-white'}`}>
+                                        <span className={`text-3xl font-black font-mono tracking-tighter drop-shadow-lg ${isCompleted ? 'text-emerald-400' : isActive ? 'text-amber-400' : 'text-gray-600'}`}>
                                             {Math.floor(cappedPercent)}<span className="text-lg">%</span>
                                         </span>
                                     </div>
@@ -385,23 +414,29 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                 {/* Progress Bar */}
                                 <div className="relative h-2.5 w-full bg-gray-800/50 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm mb-3">
                                      <div 
-                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_currentColor] ${percent >= 100 ? 'bg-emerald-500 text-emerald-500' : 'bg-gradient-to-r from-amber-500 to-yellow-400 text-yellow-400'}`}
+                                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_currentColor] 
+                                            ${isCompleted ? 'bg-emerald-500 text-emerald-500' : 
+                                              isActive ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-yellow-400' : 
+                                              'bg-gray-600 text-gray-600'}
+                                        `}
                                         style={{ width: `${cappedPercent}%` }}
                                      >
-                                        <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>
+                                        {isActive && <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"></div>}
                                      </div>
                                 </div>
 
                                 {/* Footer Info */}
                                 <div className="flex justify-between items-center text-xs font-medium text-gray-400">
                                      <div className="flex items-center gap-1.5">
-                                         {percent >= 100 ? (
-                                            <span className="text-emerald-400 flex items-center gap-1 font-bold"><Crown size={12} fill="currentColor"/> Conquistado</span>
+                                         {isCompleted ? (
+                                            <span className="text-emerald-400 flex items-center gap-1 font-bold"><Crown size={12} fill="currentColor"/> Item Adquirido</span>
+                                         ) : isActive ? (
+                                            <span className="text-amber-400 flex items-center gap-1"><ArrowRight size={12} /> Próximo da fila</span>
                                          ) : (
-                                            <span className="text-amber-400 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Em progresso</span>
+                                            <span className="text-gray-500 flex items-center gap-1"><Hourglass size={12} /> Aguardando</span>
                                          )}
                                      </div>
-                                     <div className="font-mono text-gray-500">
+                                     <div className={`font-mono ${isActive ? 'text-white font-bold' : 'text-gray-600'}`}>
                                         {daysLeftStr}
                                      </div>
                                 </div>
@@ -414,7 +449,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                     <div className="col-span-full py-12 text-center border border-dashed border-white/10 rounded-xl bg-white/5">
                         <ImageIcon size={48} className="mx-auto text-gray-600 mb-4" />
                         <h4 className="text-gray-400 font-bold">Nenhum sonho visualizado</h4>
-                        <p className="text-gray-600 text-sm mt-1">Adicione objetivos e deixe a IA encontrar a imagem para você.</p>
+                        <p className="text-gray-600 text-sm mt-1">Adicione objetivos e cole o link da foto que você desejar.</p>
                     </div>
                 )}
             </div>

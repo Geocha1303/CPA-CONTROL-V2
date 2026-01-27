@@ -419,35 +419,35 @@ export const generateDemoState = (baseConfig: Config): AppState => {
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const monthlyGoals = { [currentMonthKey]: 15000 };
 
-    // Sonhos
+    // Sonhos com FOTOS REAIS (Unsplash) - Nada de IA Feia
     const dreamGoals: DreamGoal[] = [
         {
             id: 1,
-            name: "Apple Watch Ultra 2",
-            targetValue: 6500,
-            imageUrl: "https://image.pollinations.ai/prompt/Apple%20Watch%20Ultra%202%20titanium%20wrist%20shot%20realistic%20focus?width=600&height=400&nologo=true",
-            autoImage: true
+            name: "Air Jordan 1 High",
+            targetValue: 1500,
+            imageUrl: "https://images.unsplash.com/photo-1600269452121-4f2416e55c28?q=80&w=800&auto=format&fit=crop",
+            autoImage: false
         },
         {
             id: 2,
-            name: "iPhone 15 Pro Max",
-            targetValue: 9800,
-            imageUrl: "https://image.pollinations.ai/prompt/iphone%2015%20pro%20max%20natural%20titanium%20back%20view%20premium?width=600&height=400&nologo=true",
-            autoImage: true
+            name: "PlayStation 5 Slim",
+            targetValue: 3800,
+            imageUrl: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?q=80&w=800&auto=format&fit=crop",
+            autoImage: false
         },
         {
             id: 3,
             name: "Yamaha MT-03 ABS",
-            targetValue: 34000,
-            imageUrl: "https://image.pollinations.ai/prompt/Yamaha%20MT-03%20motorcycle%20black%20side%20view%20street%20background%20realistic%204k?width=600&height=400&nologo=true",
-            autoImage: true
+            targetValue: 34500,
+            imageUrl: "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?q=80&w=800&auto=format&fit=crop",
+            autoImage: false
         },
         {
             id: 4,
             name: "Porsche 911 Carrera",
             targetValue: 850000,
-            imageUrl: "https://image.pollinations.ai/prompt/porsche%20911%20992%20black%20rear%20view%20night%20city%20lights?width=600&height=400&nologo=true",
-            autoImage: true
+            imageUrl: "https://images.unsplash.com/photo-1503376763036-066120622c74?q=80&w=800&auto=format&fit=crop",
+            autoImage: false
         }
     ];
 

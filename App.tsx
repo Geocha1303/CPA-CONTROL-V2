@@ -24,7 +24,8 @@ import {
   Fingerprint,
   Activity,
   Eye,
-  EyeOff
+  EyeOff,
+  Unlock
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState } from './utils';
@@ -142,6 +143,17 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         }
     };
 
+    // --- ACESSO LIBERADO (FREE) ---
+    const handleFreeAccess = () => {
+        setLoading(true);
+        setTimeout(() => {
+            const freeKey = 'TROPA-FREE';
+            localStorage.setItem(AUTH_STORAGE_KEY, freeKey);
+            // Não é admin, nome genérico
+            onLogin(freeKey, false, 'Visitante Gratuito');
+        }, 800);
+    };
+
     return (
         <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden font-sans select-none">
             {/* Background Original */}
@@ -160,6 +172,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         <p className="text-sm text-gray-400 font-medium">Painel de Controle Profissional</p>
                     </div>
 
+                    {/* OPÇÃO 1: LOGIN OFICIAL */}
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
                             <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Chave de Licença</label>
@@ -191,7 +204,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                                 ${loading ? 'opacity-70 cursor-wait' : ''}
                             `}
                         >
-                            {loading ? (
+                            {loading && inputKey ? (
                                 <span className="flex items-center justify-center gap-2">
                                     <RefreshCw className="animate-spin" size={16} /> Verificando...
                                 </span>
@@ -200,6 +213,25 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                             )}
                         </button>
                     </form>
+
+                    <div className="relative my-8">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-white/10"></div>
+                        </div>
+                        <div className="relative flex justify-center">
+                            <span className="bg-[#0c061d] px-2 text-[10px] text-gray-500 uppercase tracking-widest">Ou acesse como</span>
+                        </div>
+                    </div>
+
+                    {/* OPÇÃO 2: ACESSO FREE */}
+                    <button 
+                        onClick={handleFreeAccess}
+                        disabled={loading}
+                        className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-3 rounded-xl text-sm uppercase tracking-wider transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10"
+                    >
+                         {loading && !inputKey ? <RefreshCw className="animate-spin" size={16} /> : <Unlock size={16} />} 
+                         ACESSO LIBERADO GRATUITO
+                    </button>
 
                     <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
                          <span className="flex items-center gap-1.5"><ShieldCheck size={10} /> Conexão Segura</span>
@@ -240,12 +272,52 @@ function App() {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const realStateRef = useRef<AppState | null>(null);
 
+  // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR) ---
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Obtém o ID do dispositivo atual
+    const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
+    const userName = state.config.userName || 'Desconhecido';
+    
+    // Conecta ao canal de usuários online
+    const channel = supabase.channel('online_users', {
+        config: {
+            presence: {
+                key: deviceId, // Usa o HWID como chave única de presença
+            },
+        },
+    });
+
+    channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+            // Assim que conectar, envia os dados deste usuário
+            await channel.track({
+                user: userName,
+                key: currentUserKey,
+                online_at: new Date().toISOString(),
+                is_admin: isAdmin,
+                device_id: deviceId
+            });
+        }
+    });
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, currentUserKey, state.config.userName, isAdmin]);
+
+
   // --- SECURITY HEARTBEAT (ANTI-RATARIA) ---
   useEffect(() => {
       if (!isAuthenticated || !currentUserKey) return;
 
       // BYPASS PARA O MESTRE
       if (currentUserKey === 'ADMIN-GROCHA013') return;
+
+      // BYPASS PARA O FREE ACCESS
+      // Se a chave for TROPA-FREE, não validamos no banco, permitindo acesso liberado.
+      if (currentUserKey === 'TROPA-FREE') return;
 
       const deviceId = localStorage.getItem(DEVICE_ID_KEY);
 
