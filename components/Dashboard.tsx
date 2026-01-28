@@ -8,7 +8,7 @@ import {
 import { 
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
-  MoreHorizontal, Wallet, CalendarOff
+  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3
 } from 'lucide-react';
 
 interface Props {
@@ -128,6 +128,8 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     });
     const recentActivity = allAccounts.sort((a, b) => b.id - a.id).slice(0, 8);
 
+    const hasData = cleanChartData.some(d => d.hasActivity);
+
     return {
         totalInv: totalInvestimentoReal,
         totalRet,
@@ -137,7 +139,8 @@ const Dashboard: React.FC<Props> = ({ state }) => {
         roi: isNaN(roi) ? 0 : roi,
         margin: isNaN(margin) ? 0 : margin,
         totalCheckoutEvents,
-        recentActivity
+        recentActivity,
+        hasData
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
@@ -168,6 +171,15 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     return null;
   };
 
+  const InfoTooltip = ({ text }: { text: string }) => (
+      <div className="group relative ml-1 inline-flex">
+          <HelpCircle size={10} className="text-gray-500 hover:text-white cursor-help" />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 border border-white/10 p-2 rounded-lg text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 text-center shadow-xl">
+              {text}
+          </div>
+      </div>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
         
@@ -183,14 +195,18 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           </div>
           
           <div className="flex gap-2">
-               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">ROI Total</p>
+               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default">
+                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center justify-end gap-1">
+                       ROI Total <InfoTooltip text="Retorno sobre Investimento. Quanto você lucrou percentualmente sobre o gasto." />
+                   </p>
                    <p className={`text-xl font-black font-mono leading-none ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                        {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
                    </p>
                </div>
-               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Margem Líq.</p>
+               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default">
+                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center justify-end gap-1">
+                       Margem Líq. <InfoTooltip text="Porcentagem de dinheiro que realmente sobra no bolso após pagar tudo." />
+                   </p>
                    <p className="text-xl font-black text-blue-400 font-mono leading-none">{metrics.margin.toFixed(0)}%</p>
                </div>
           </div>
@@ -256,95 +272,108 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                         </h3>
                         <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1">
                             {metrics.chartData.length < 2 && <CalendarOff size={10} />}
-                            {metrics.chartData.length < 2 ? 'Dados insuficientes para tendência' : 'Dias sem atividade foram ocultados'}
+                            {metrics.chartData.length < 2 && metrics.hasData ? 'Dados insuficientes para tendência' : metrics.hasData ? 'Dias sem atividade foram ocultados' : 'Comece a operar para ver dados'}
                         </p>
                      </div>
                      
                      {/* Custom Legend */}
-                     <div className="flex gap-4">
-                         <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
-                             <div className="w-2.5 h-2.5 rounded-sm bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
-                             <span className="text-[10px] text-indigo-300 font-bold uppercase">Volume</span>
-                         </div>
-                         <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
-                             <div className="w-4 h-0.5 rounded bg-emerald-400 shadow-[0_0_8px_#34d399]"></div>
-                             <span className="text-[10px] text-emerald-300 font-bold uppercase">Lucro</span>
-                         </div>
-                     </div>
+                     {metrics.hasData && (
+                        <div className="flex gap-4">
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
+                                <div className="w-2.5 h-2.5 rounded-sm bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
+                                <span className="text-[10px] text-indigo-300 font-bold uppercase">Volume</span>
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                                <div className="w-4 h-0.5 rounded bg-emerald-400 shadow-[0_0_8px_#34d399]"></div>
+                                <span className="text-[10px] text-emerald-300 font-bold uppercase">Lucro</span>
+                            </div>
+                        </div>
+                     )}
                 </div>
                 
                 <div className="flex-1 w-full h-full min-h-[350px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={metrics.chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5}/>
-                                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1}/>
-                                </linearGradient>
-                                <filter id="neonGlow" height="300%" width="300%" x="-100%" y="-100%">
-                                    <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                                    <feMerge>
-                                        <feMergeNode in="coloredBlur" />
-                                        <feMergeNode in="SourceGraphic" />
-                                    </feMerge>
-                                </filter>
-                            </defs>
-                            
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                            
-                            <XAxis 
-                                dataKey="dateStr" 
-                                stroke="none" 
-                                tick={{fill: '#6b7280', fontSize: 10, fontWeight: 500}} 
-                                dy={10}
-                                minTickGap={30}
-                            />
-                            
-                            <YAxis 
-                                yAxisId="left"
-                                stroke="none" 
-                                tick={{fill: '#6366f1', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
-                                tickFormatter={(val) => `R$${val/1000}k`}
-                                width={40}
-                            />
-                            <YAxis 
-                                yAxisId="right"
-                                orientation="right"
-                                stroke="none" 
-                                tick={{fill: '#10b981', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
-                                tickFormatter={(val) => `R$${val/1000}k`}
-                                width={40}
-                            />
-                            
-                            {/* CORREÇÃO DO TOOLTIP: Adicionado contentStyle para resetar padrão do Recharts */}
-                            <Tooltip 
-                                content={<CustomTooltip />} 
-                                cursor={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} 
-                                wrapperStyle={{ outline: 'none' }}
-                            />
-                            
-                            <Bar 
-                                yAxisId="left"
-                                dataKey="faturamento" 
-                                fill="url(#barGradient)" 
-                                radius={[4, 4, 0, 0]}
-                                barSize={30}
-                                animationDuration={1500}
-                            />
+                    {!metrics.hasData ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-center opacity-60">
+                            <div className="bg-white/5 p-6 rounded-full border border-white/5 mb-4">
+                                <BarChart3 size={48} className="text-indigo-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">Aguardando Dados</h3>
+                            <p className="text-sm text-gray-500 max-w-xs">
+                                Seu gráfico de evolução aparecerá aqui assim que você registrar suas primeiras operações no menu <strong>Planejamento</strong>.
+                            </p>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={metrics.chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5}/>
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1}/>
+                                    </linearGradient>
+                                    <filter id="neonGlow" height="300%" width="300%" x="-100%" y="-100%">
+                                        <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                                        <feMerge>
+                                            <feMergeNode in="coloredBlur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                                
+                                <XAxis 
+                                    dataKey="dateStr" 
+                                    stroke="none" 
+                                    tick={{fill: '#6b7280', fontSize: 10, fontWeight: 500}} 
+                                    dy={10}
+                                    minTickGap={30}
+                                />
+                                
+                                <YAxis 
+                                    yAxisId="left"
+                                    stroke="none" 
+                                    tick={{fill: '#6366f1', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
+                                    tickFormatter={(val) => `R$${val/1000}k`}
+                                    width={40}
+                                />
+                                <YAxis 
+                                    yAxisId="right"
+                                    orientation="right"
+                                    stroke="none" 
+                                    tick={{fill: '#10b981', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
+                                    tickFormatter={(val) => `R$${val/1000}k`}
+                                    width={40}
+                                />
+                                
+                                <Tooltip 
+                                    content={<CustomTooltip />} 
+                                    cursor={{ fill: 'rgba(255,255,255,0.03)', radius: 4 }} 
+                                    wrapperStyle={{ outline: 'none' }}
+                                />
+                                
+                                <Bar 
+                                    yAxisId="left"
+                                    dataKey="faturamento" 
+                                    fill="url(#barGradient)" 
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={30}
+                                    animationDuration={1500}
+                                />
 
-                            <Line 
-                                yAxisId="right"
-                                type="monotone" 
-                                dataKey="lucro" 
-                                stroke="#10b981" 
-                                strokeWidth={3}
-                                dot={false}
-                                activeDot={{ r: 6, fill: '#064e3b', stroke: '#34d399', strokeWidth: 2 }}
-                                filter="url(#neonGlow)"
-                                animationDuration={2000}
-                            />
-                        </ComposedChart>
-                    </ResponsiveContainer>
+                                <Line 
+                                    yAxisId="right"
+                                    type="monotone" 
+                                    dataKey="lucro" 
+                                    stroke="#10b981" 
+                                    strokeWidth={3}
+                                    dot={false}
+                                    activeDot={{ r: 6, fill: '#064e3b', stroke: '#34d399', strokeWidth: 2 }}
+                                    filter="url(#neonGlow)"
+                                    animationDuration={2000}
+                                />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
             </div>
 

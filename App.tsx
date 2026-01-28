@@ -25,7 +25,12 @@ import {
   Activity,
   Eye,
   EyeOff,
-  Unlock
+  Unlock,
+  ListTodo,
+  X,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState } from './utils';
@@ -39,6 +44,7 @@ import Expenses from './components/Expenses';
 import Settings from './components/Settings';
 import Goals from './components/Goals';
 import Admin from './components/Admin';
+import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
 const initialState: AppState = {
@@ -59,6 +65,15 @@ const initialState: AppState = {
     lotWithdrawals: {},
     customLotSizes: {},
     history: []
+  },
+  onboarding: {
+      steps: {
+          configName: false,
+          generatedPlan: false,
+          sentLot: false,
+          addedExpense: false
+      },
+      dismissed: false
   }
 };
 
@@ -66,7 +81,7 @@ const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
 const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; 
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 
-// --- LOGIN COMPONENT (ORIGINAL GLASS STYLE) ---
+// --- LOGIN COMPONENT ---
 const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void }) => {
     const [inputKey, setInputKey] = useState('');
     const [error, setError] = useState('');
@@ -76,7 +91,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
     useEffect(() => {
         let storedId = localStorage.getItem(DEVICE_ID_KEY);
         if (!storedId) {
-            // Gera um ID único para este navegador/PC
             storedId = 'HWID-' + Math.random().toString(36).substring(2, 9).toUpperCase() + '-' + Date.now().toString(16).toUpperCase();
             localStorage.setItem(DEVICE_ID_KEY, storedId);
         }
@@ -89,11 +103,9 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         setError('');
         
         const rawKey = inputKey.trim().toUpperCase();
-        // MASTER KEY BYPASS CHECK
         const isMasterKey = rawKey === 'ADMIN-GROCHA013';
 
         try {
-            // 1. Busca a chave
             const { data, error } = await supabase
                 .from('access_keys')
                 .select('*')
@@ -101,7 +113,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 .single();
 
             if (error || !data) {
-                // Delay artificial para evitar brute-force
                 await new Promise(resolve => setTimeout(resolve, 1000)); 
                 throw new Error('Chave de acesso inválida.');
             }
@@ -110,25 +121,18 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                  throw new Error('Acesso suspenso pelo administrador.');
             }
 
-            // 2. LÓGICA DE VÍNCULO DE DISPOSITIVO (HWID)
-            // Se NÃO for a chave mestre, aplicamos a segurança rigorosa
             if (!isMasterKey) {
-                // Se a chave já tem um dono (HWID gravado) E não é este PC
                 if (data.hwid && data.hwid !== deviceId) {
                     throw new Error('Esta chave já está vinculada a outro dispositivo. Entre em contato com o suporte para resetar.');
                 }
-
-                // Se a chave é virgem (sem HWID), gravamos este PC nela agora
                 if (!data.hwid) {
                     const { error: updateError } = await supabase
                         .from('access_keys')
                         .update({ hwid: deviceId })
                         .eq('id', data.id);
-                    
                     if (updateError) throw new Error('Erro ao vincular dispositivo. Tente novamente.');
                 }
             }
-            // Se for MASTER KEY, ignoramos gravação e checagem de HWID.
 
             setTimeout(() => {
                 localStorage.setItem(AUTH_STORAGE_KEY, rawKey);
@@ -143,20 +147,17 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         }
     };
 
-    // --- ACESSO LIBERADO (FREE) ---
     const handleFreeAccess = () => {
         setLoading(true);
         setTimeout(() => {
             const freeKey = 'TROPA-FREE';
             localStorage.setItem(AUTH_STORAGE_KEY, freeKey);
-            // Não é admin, nome genérico
             onLogin(freeKey, false, 'Visitante Gratuito');
         }, 800);
     };
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden font-sans select-none">
-            {/* Background Original */}
             <div className="absolute inset-0 z-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
                 <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow" style={{animationDelay: '2s'}}></div>
@@ -172,7 +173,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         <p className="text-sm text-gray-400 font-medium">Painel de Controle Profissional</p>
                     </div>
 
-                    {/* OPÇÃO 1: LOGIN OFICIAL */}
                     <form onSubmit={handleLogin} className="space-y-6">
                         <div className="space-y-2">
                             <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Chave de Licença</label>
@@ -223,7 +223,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         </div>
                     </div>
 
-                    {/* OPÇÃO 2: ACESSO FREE */}
                     <button 
                         onClick={handleFreeAccess}
                         disabled={loading}
@@ -271,6 +270,214 @@ function App() {
   // --- DEMO MODE STATES ---
   const [isDemoMode, setIsDemoMode] = useState(false);
   const realStateRef = useRef<AppState | null>(null);
+
+  // --- ONBOARDING & TOUR ---
+  const [onboardingOpen, setOnboardingOpen] = useState(true);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [canProceed, setCanProceed] = useState(true); // Controle de bloqueio do Next
+
+  // --- TOUR STEPS DEFINITION (Roteiro com Interação Obrigatória) ---
+  const tourSteps: TourStep[] = [
+      {
+          targetId: 'nav-configuracoes',
+          title: 'Configuração Inicial',
+          view: 'configuracoes',
+          content: 'Vamos começar ajustando o sistema para você. Clique em "Sistema" no menu para acessar as configurações.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-settings-name',
+          title: 'Quem é você?',
+          view: 'configuracoes',
+          content: 'Para continuar, apague "OPERADOR" e digite seu nome ou apelido no campo destacado.',
+          position: 'bottom',
+          requiresInteraction: true 
+      },
+      {
+          targetId: 'tour-settings-bonus',
+          title: 'Valor do Bônus (CPA)',
+          view: 'configuracoes',
+          content: (
+              <>
+                  <p>Defina quanto você ganha por ciclo (BAÚ + GERENTE).</p>
+                  <p className="text-xs text-gray-400 mt-2">Ex: Se ganha 15 do gerente e 10 do baú, coloque 25. Digite um valor diferente de 0 para prosseguir.</p>
+              </>
+          ),
+          position: 'bottom',
+          requiresInteraction: true
+      },
+      {
+          targetId: 'nav-planejamento',
+          title: 'Vamos Planejar',
+          view: 'planejamento',
+          content: 'Configuração feita! Agora vamos para o "Planejamento IA" criar sua estratégia do dia.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-agents',
+          title: 'Agentes (Mães)',
+          view: 'planejamento',
+          content: 'Quantas contas principais ("Mães") você vai usar? Digite um número (Ex: 2 ou 3) para testar.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-lot',
+          title: 'Ciclo / Lote',
+          view: 'planejamento',
+          content: 'Quantas contas você fará nesta rodada? Defina o tamanho do lote.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-dist',
+          title: 'Distribuição',
+          view: 'planejamento',
+          content: 'Agora distribua os jogadores entre os Agentes. Garanta que o "Total" no topo bata com a soma dos agentes.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-profiles',
+          title: 'Perfis de Jogador',
+          view: 'planejamento',
+          content: (
+              <ul className="space-y-2 text-xs">
+                  <li><strong>🛡️ Testador:</strong> Depósito baixo, 1 vez.</li>
+                  <li><strong>🧐 Cético:</strong> Baixo na 1ª, alto na 2ª.</li>
+                  <li><strong>📈 Ambicioso:</strong> Procura o alvo de R$100.</li>
+                  <li><strong>🎰 Viciado:</strong> Deposita 3x alto.</li>
+              </ul>
+          ),
+          position: 'left',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-generate',
+          title: 'A Hora da Mágica',
+          view: 'planejamento',
+          content: 'Clique no botão "GERAR PLANO RÍTMICO" para criar a estratégia baseada nos perfis acima. O botão de "Próximo" só vai liberar quando o plano for gerado.',
+          position: 'top',
+          requiresInteraction: true 
+      },
+      {
+          targetId: 'tour-lot-send-1', // Atualizado para o botão do lote
+          title: 'Enviar para Execução',
+          view: 'planejamento',
+          content: 'Ótimo! Plano gerado. Agora clique no botão "Enviar" verde do Lote #1 para mandar esses dados para o Controle Diário.',
+          position: 'bottom',
+          requiresInteraction: true 
+      },
+      {
+          targetId: 'nav-controle',
+          title: 'Controle Diário',
+          view: 'controle',
+          content: 'Veja como ficou! Seus lotes chegaram aqui. Clique no menu "Controle Diário" para ver.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-daily-table',
+          title: 'Registrando o Real',
+          view: 'controle',
+          content: 'Aqui estão as contas. Na prática, quando você finalizar um ciclo, você virá aqui e digitará o valor do SAQUE e confirmará os depósitos.',
+          position: 'top',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'nav-metas',
+          title: 'Finalizando',
+          view: 'metas',
+          content: 'Pronto! Você aprendeu o fluxo básico: Configurar -> Planejar -> Executar -> Controlar. Vamos concluir para limpar esses dados de teste e começar "A Vera"!',
+          position: 'right',
+          requiresInteraction: false
+      }
+  ];
+
+  // Logic to handle View change during Tour
+  useEffect(() => {
+      if(tourOpen) {
+          const step = tourSteps[tourStepIndex];
+          if(step && step.view !== activeView) {
+              setActiveView(step.view as ViewType);
+          }
+      }
+  }, [tourStepIndex, tourOpen]);
+
+  // --- VALIDAÇÃO DE PASSOS DO TOUR ---
+  useEffect(() => {
+      if (!tourOpen) return;
+
+      const currentStep = tourSteps[tourStepIndex];
+      if (!currentStep.requiresInteraction) {
+          setCanProceed(true);
+          return;
+      }
+
+      let valid = false;
+
+      // Validação por Título do Passo
+      switch (currentStep.title) {
+          case 'Quem é você?':
+              valid = state.config.userName !== 'OPERADOR' && (state.config.userName || '').trim() !== '';
+              break;
+          case 'Valor do Bônus (CPA)':
+              valid = state.config.valorBonus > 0;
+              break;
+          case 'A Hora da Mágica':
+              valid = state.generator.plan.length > 0;
+              break;
+          case 'Enviar para Execução':
+              const today = getHojeISO();
+              valid = (state.dailyRecords[today]?.accounts?.length || 0) > 0;
+              break;
+          default:
+              valid = true;
+      }
+
+      setCanProceed(valid);
+
+  }, [state, tourStepIndex, tourOpen]);
+
+
+  // Handle Tour Completion (AUTO-EXCLUSÃO)
+  const handleTourComplete = async () => {
+      setTourOpen(false);
+      
+      notify("Tutorial Concluído! Limpando dados de teste...", "info");
+      
+      // Alerta explícito solicitado
+      alert("🎉 TUTORIAL CONCLUÍDO!\n\nOs dados de teste inseridos agora serão apagados para que você possa começar sua operação real com um banco de dados limpo.\n\nBoa sorte, Operador!");
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const freshState: AppState = {
+          ...initialState,
+          config: { ...state.config }, // Mantém o nome e config que ele digitou
+          onboarding: { ...initialState.onboarding!, dismissed: true } // Marca como visto
+      };
+      
+      setState(freshState);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(freshState));
+      localStorage.setItem('cpa_tour_completed', 'true');
+
+      notify("Dados limpos! O sistema está pronto para uso real.", "success");
+      setActiveView('dashboard');
+  };
+
+  // Check initial tour status
+  useEffect(() => {
+      if (isLoaded && isAuthenticated) {
+          const tourDone = localStorage.getItem('cpa_tour_completed');
+          if (!tourDone && !isDemoMode) {
+              setTimeout(() => setTourOpen(true), 1000); // Auto start for new users
+          }
+      }
+  }, [isLoaded, isAuthenticated, isDemoMode]);
+
 
   // --- ONLINE PRESENCE TRACKER (REAL-TIME MONITOR - ROBUST) ---
   const presenceChannelRef = useRef<any>(null); 
@@ -475,6 +682,55 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [state, isDemoMode]);
 
+  // --- ONBOARDING LOGIC CHECK ---
+  useEffect(() => {
+      if (!isLoaded || !state.onboarding || isDemoMode) return;
+
+      const currentSteps = state.onboarding.steps;
+      let hasChanges = false;
+      const newSteps = { ...currentSteps };
+
+      // Check Config (Se mudou nome do operador)
+      if (!newSteps.configName && state.config.userName !== 'OPERADOR' && state.config.userName !== 'Desconhecido') {
+          newSteps.configName = true;
+          hasChanges = true;
+          notify("Passo 1 concluído: Nome configurado!", "success");
+      }
+
+      // Check Plan Generated
+      if (!newSteps.generatedPlan && state.generator.plan.length > 0) {
+          newSteps.generatedPlan = true;
+          hasChanges = true;
+          notify("Passo 2 concluído: Plano Gerado!", "success");
+      }
+
+      // Check Sent Lot (Se tem algum registro diário com contas)
+      if (!newSteps.sentLot) {
+          const hasAccounts = Object.values(state.dailyRecords).some(day => day.accounts && day.accounts.length > 0);
+          if (hasAccounts) {
+              newSteps.sentLot = true;
+              hasChanges = true;
+              notify("Passo 3 concluído: Lote enviado!", "success");
+          }
+      }
+
+      // Check Expense
+      if (!newSteps.addedExpense && state.generalExpenses.length > 0) {
+          newSteps.addedExpense = true;
+          hasChanges = true;
+          notify("Passo 4 concluído: Despesa registrada!", "success");
+      }
+
+      if (hasChanges) {
+          setState(prev => ({
+              ...prev,
+              onboarding: { ...prev.onboarding!, steps: newSteps }
+          }));
+      }
+
+  }, [state.config, state.generator.plan, state.dailyRecords, state.generalExpenses, isLoaded, isDemoMode]);
+
+
   // --- LOGOUT ---
   const handleLogout = (force: boolean = false) => {
       if(force || confirm('Encerrar sessão?')) {
@@ -665,9 +921,26 @@ function App() {
       }} />;
   }
 
+  // Calculate Progress
+  const onboardingSteps = state.onboarding?.steps || { configName: false, generatedPlan: false, sentLot: false, addedExpense: false };
+  const completedCount = Object.values(onboardingSteps).filter(Boolean).length;
+  const progressPercent = (completedCount / 4) * 100;
+  const showOnboarding = state.onboarding && !state.onboarding.dismissed && completedCount < 4;
+
   return (
-    <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white">
+    <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white relative">
       
+      {/* --- TOUR INTERATIVO --- */}
+      <TourGuide 
+        steps={tourSteps}
+        isOpen={tourOpen}
+        onClose={() => setTourOpen(false)}
+        onComplete={handleTourComplete}
+        currentStepIndex={tourStepIndex}
+        setCurrentStepIndex={setTourStepIndex}
+        disableNext={!canProceed} // Bloqueia se a validação falhar
+      />
+
       {/* Notifications */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
         {notifications.map(n => (
@@ -698,7 +971,7 @@ function App() {
         fixed lg:static inset-y-0 left-0 z-30 w-72 bg-[#050510] border-r border-white/5 transform transition-transform duration-300 ease-out flex flex-col justify-between
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
             <div className="flex items-center gap-4 mb-10 px-2">
                 <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-primary/30">
                     <Activity size={22} fill="currentColor" />
@@ -721,6 +994,7 @@ function App() {
                     return (
                         <button
                             key={item.id}
+                            id={`nav-${item.id}`} // ID para o Tour
                             onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
                             className={`
                                 w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 group relative
@@ -751,6 +1025,64 @@ function App() {
                     >
                         {isDemoMode ? <EyeOff size={14} /> : <Eye size={14} />}
                         {isDemoMode ? 'Sair da Demo' : 'Modo Demo'}
+                    </button>
+                </div>
+            )}
+            
+            {/* ONBOARDING WIDGET */}
+            {showOnboarding && !isDemoMode && (
+                <div className="mt-8 px-2 animate-fade-in">
+                    <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 rounded-xl border border-white/10 overflow-hidden">
+                        <div className="p-3 bg-white/5 border-b border-white/5 flex items-center justify-between cursor-pointer" onClick={() => setOnboardingOpen(!onboardingOpen)}>
+                            <div className="flex items-center gap-2">
+                                <ListTodo size={14} className="text-indigo-400" />
+                                <span className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest">Primeiros Passos</span>
+                            </div>
+                            {onboardingOpen ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                        </div>
+                        
+                        {onboardingOpen && (
+                            <div className="p-3 space-y-3">
+                                <div className="space-y-2">
+                                    {[
+                                        { id: 'configName', label: '1. Configure seu Nome', done: onboardingSteps.configName, view: 'configuracoes' },
+                                        { id: 'generatedPlan', label: '2. Gere um Plano IA', done: onboardingSteps.generatedPlan, view: 'planejamento' },
+                                        { id: 'sentLot', label: '3. Envie o 1º Lote', done: onboardingSteps.sentLot, view: 'planejamento' },
+                                        { id: 'addedExpense', label: '4. Reg. uma Despesa', done: onboardingSteps.addedExpense, view: 'despesas' },
+                                    ].map((step) => (
+                                        <div 
+                                            key={step.id} 
+                                            className={`flex items-center gap-2 text-xs p-2 rounded cursor-pointer transition-colors ${step.done ? 'text-gray-500 line-through bg-black/20' : 'text-gray-300 hover:bg-white/5'}`}
+                                            onClick={() => !step.done && setActiveView(step.view as ViewType)}
+                                        >
+                                            {step.done 
+                                                ? <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" /> 
+                                                : <div className="w-3 h-3 rounded-full border border-gray-500 flex-shrink-0"></div>
+                                            }
+                                            <span className="opacity-50">{step.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="pt-2 border-t border-white/5">
+                                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+                                    </div>
+                                    <p className="text-[9px] text-right text-gray-500 mt-1">{progressPercent.toFixed(0)}% Concluído</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+            
+            {/* BUTTON TO RESTART TOUR */}
+            {!tourOpen && (
+                <div className="mt-4 px-2">
+                    <button 
+                        onClick={() => { setTourStepIndex(0); setTourOpen(true); }}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-[10px] text-gray-600 hover:text-white transition-colors"
+                    >
+                        <HelpCircle size={10} /> Replay Tutorial
                     </button>
                 </div>
             )}

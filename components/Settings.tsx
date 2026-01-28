@@ -103,7 +103,7 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                         </h3>
                     </div>
                     <div className="p-6 space-y-6">
-                        <div>
+                        <div id="tour-settings-name">
                             <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Nome do Operador</label>
                             <div className="relative group">
                                 <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors"><User size={16} /></span>
@@ -111,7 +111,7 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" />
                             </div>
                         </div>
-                        <div>
+                        <div id="tour-settings-bonus">
                             <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Valor do Bônus CPA (R$)</label>
                             <div className="relative group">
                                 <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors">R$</span>
@@ -119,7 +119,7 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" />
                             </div>
                         </div>
-                        <div>
+                        <div id="tour-settings-tax">
                             <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Taxa de Imposto (%)</label>
                             <div className="relative group">
                                 <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors">%</span>

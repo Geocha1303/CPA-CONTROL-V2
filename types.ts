@@ -85,6 +85,16 @@ export interface GeneratedPlayer {
   deps: DepositItem[];
 }
 
+export interface OnboardingState {
+  steps: {
+    configName: boolean;
+    generatedPlan: boolean;
+    sentLot: boolean;
+    addedExpense: boolean;
+  };
+  dismissed: boolean;
+}
+
 export interface AppState {
   dailyRecords: Record<string, DayRecord>;
   generalExpenses: GeneralExpense[];
@@ -92,6 +102,7 @@ export interface AppState {
   dreamGoals: DreamGoal[];
   config: Config;
   generator: GeneratorState;
+  onboarding?: OnboardingState; // Novo campo opcional
 }
 
 export interface Notification {

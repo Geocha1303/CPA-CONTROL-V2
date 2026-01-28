@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -228,9 +228,16 @@ const Admin: React.FC<Props> = ({ notify }) => {
   );
 
   // Filtros de Monitoramento
-  const realUsers = onlineUsers.filter(u => u.device_id !== 'ADMIN-CONSOLE');
-  const freeUsersOnline = realUsers.filter(u => u.key === 'TROPA-FREE');
-  const paidUsersOnline = realUsers.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
+  const realUsers = onlineUsers.filter(u => u.device_id !== 'ADMIN-CONSOLE'); // Remove o próprio monitor da contagem geral se quiser, mas mantemos para debug
+  // Na verdade, queremos mostrar todos, mas classificados.
+  
+  // Vamos filtrar apenas conexões "reais" para os cards (excluindo este console se preferir, ou mantendo)
+  // Vou manter o ADMIN-CONSOLE na contagem de admins para vc ver que VOCÊ está online.
+  const allConnections = onlineUsers;
+  
+  const freeUsersOnline = allConnections.filter(u => u.key === 'TROPA-FREE');
+  const paidUsersOnline = allConnections.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
+  const adminsOnline = allConnections.filter(u => u.is_admin);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -295,8 +302,8 @@ const Admin: React.FC<Props> = ({ notify }) => {
                     className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'monitor' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                 >
                     <Activity size={16} /> Radar Ao Vivo
-                    {realUsers.length > 0 && (
-                        <span className="bg-black/30 px-1.5 py-0.5 rounded text-[10px] ml-1 text-emerald-300">{realUsers.length}</span>
+                    {allConnections.length > 0 && (
+                        <span className="bg-black/30 px-1.5 py-0.5 rounded text-[10px] ml-1 text-emerald-300">{allConnections.length}</span>
                     )}
                 </button>
             </div>
@@ -307,27 +314,40 @@ const Admin: React.FC<Props> = ({ notify }) => {
             <div className="space-y-6 animate-fade-in">
                 
                 {/* Métricas Rápidas */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* TOTAL */}
                     <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Radio size={80} /></div>
                         <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total Conectado</h4>
-                        <div className="text-5xl font-black text-white">{realUsers.length}</div>
+                        <div className="text-5xl font-black text-white">{allConnections.length}</div>
                         <div className="flex items-center gap-2 mt-2">
-                             <div className={`h-1.5 w-1.5 rounded-full ${realUsers.length > 0 ? 'bg-emerald-500 shadow-[0_0_5px_#10b981]' : 'bg-gray-600'}`}></div>
-                             <span className="text-xs text-gray-500 font-bold uppercase">Dispositivos Ativos</span>
+                             <div className={`h-1.5 w-1.5 rounded-full ${allConnections.length > 0 ? 'bg-emerald-500 shadow-[0_0_5px_#10b981]' : 'bg-gray-600'}`}></div>
+                             <span className="text-xs text-gray-500 font-bold uppercase">Sessões Ativas</span>
                         </div>
                     </div>
-                    <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><User size={80} /></div>
-                         <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Visitantes (Free)</h4>
-                        <div className="text-5xl font-black text-white">{freeUsersOnline.length}</div>
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chave: TROPA-FREE</p>
+
+                    {/* ADMINS */}
+                    <div className="glass-card p-6 rounded-2xl border border-amber-500/10 bg-amber-500/5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Crown size={80} /></div>
+                        <h4 className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">Admins Online</h4>
+                        <div className="text-5xl font-black text-white">{adminsOnline.length}</div>
+                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Gestores Ativos</p>
                     </div>
+
+                    {/* LICENCIADOS */}
                     <div className="glass-card p-6 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Zap size={80} /></div>
                          <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-1">Licenciados (VIP)</h4>
                         <div className="text-5xl font-black text-white">{paidUsersOnline.length}</div>
                         <p className="text-[10px] text-gray-500 mt-1 font-mono">Chaves Pagas</p>
+                    </div>
+
+                    {/* FREE */}
+                    <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><User size={80} /></div>
+                         <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Visitantes (Free)</h4>
+                        <div className="text-5xl font-black text-white">{freeUsersOnline.length}</div>
+                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chave: TROPA-FREE</p>
                     </div>
                 </div>
 
@@ -340,7 +360,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                          {connectionStatus === 'CONNECTED' && <span className="text-[9px] text-emerald-500/50 uppercase font-bold tracking-widest animate-pulse">Atualizando...</span>}
                     </div>
                     
-                    {connectionStatus === 'ERROR' && realUsers.length === 0 ? (
+                    {connectionStatus === 'ERROR' && allConnections.length === 0 ? (
                          <div className="flex flex-col items-center justify-center py-20 text-gray-600 opacity-60">
                             <WifiOff size={48} className="mb-4 text-red-400/50" />
                             <p className="text-lg font-bold">Conexão Realtime Indisponível</p>
@@ -349,7 +369,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                         </div>
                     ) : (
                         <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
-                            {realUsers.length === 0 ? (
+                            {allConnections.length === 0 ? (
                                 <div className="text-center py-20 text-gray-600">
                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <Radio size={32} className="opacity-40" />
@@ -358,17 +378,19 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                     <p className="text-xs">Nenhum usuário online no momento.</p>
                                 </div>
                             ) : (
-                                realUsers.map((user, idx) => (
+                                allConnections.map((user, idx) => (
                                     <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:bg-white/[0.02] group ${
+                                        user.is_admin ? 'bg-amber-500/[0.05] border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.05)]' :
                                         user.key === 'TROPA-FREE' 
                                         ? 'bg-emerald-500/[0.02] border-emerald-500/10' 
-                                        : user.is_admin ? 'bg-amber-500/[0.02] border-amber-500/10' : 'bg-indigo-500/[0.02] border-indigo-500/10'
+                                        : 'bg-indigo-500/[0.02] border-indigo-500/10'
                                     }`}>
                                         <div className="flex items-center gap-4">
                                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                user.is_admin ? 'bg-amber-500/20 text-amber-400' :
                                                 user.key === 'TROPA-FREE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400'
                                             }`}>
-                                                {user.is_admin ? <ShieldCheck size={20} className="text-amber-400" /> : <User size={20} />}
+                                                {user.is_admin ? <Crown size={20} /> : <User size={20} />}
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2">
@@ -388,7 +410,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         </div>
                                         
                                         <div className="text-right">
-                                            <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981] animate-pulse"></span>
+                                            <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${user.is_admin ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`}></span>
                                         </div>
                                     </div>
                                 ))

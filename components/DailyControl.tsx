@@ -1,7 +1,7 @@
 import React from 'react';
 import { AppState, Account } from '../types';
 import { formatarBRL } from '../utils';
-import { Plus, Trash2, Calendar, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Calendar, TrendingUp, TrendingDown, DollarSign, ArrowLeft } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -116,7 +116,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
       </div>
 
       {/* Inputs de Despesas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="tour-daily-costs">
          <div className="gateway-card p-4 rounded-xl flex items-center justify-between">
             <span className="text-sm text-gray-300 font-bold font-mono">CUSTO PROXY</span>
             <div className="relative w-40">
@@ -138,7 +138,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
       </div>
 
       {/* Tabela Principal */}
-      <div className="gateway-card rounded-xl overflow-hidden min-h-[500px] flex flex-col">
+      <div className="gateway-card rounded-xl overflow-hidden min-h-[500px] flex flex-col" id="tour-daily-table">
         <div className="flex justify-between items-center p-5 border-b border-white/5">
             <h3 className="text-lg font-bold text-white flex items-center gap-3 font-mono">
                 LIVRO CAIXA
@@ -167,8 +167,16 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                 <tbody className="divide-y divide-white/5">
                     {dayRecord.accounts.length === 0 ? (
                         <tr>
-                            <td colSpan={6} className="text-center py-20 text-gray-500 font-mono">
-                                SEM DADOS NO MOMENTO
+                            <td colSpan={6} className="text-center py-20">
+                                <div className="flex flex-col items-center justify-center opacity-50">
+                                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                                         <TrendingUp size={32} />
+                                     </div>
+                                     <h4 className="text-white font-bold mb-2">Caixa Diário Vazio</h4>
+                                     <p className="text-gray-400 text-sm max-w-sm mb-6">
+                                         Você ainda não enviou nenhum lote para hoje. Vá até o Planejamento para gerar e enviar contas.
+                                     </p>
+                                </div>
                             </td>
                         </tr>
                     ) : (

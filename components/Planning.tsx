@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppState, GeneratedPlayer, HistoryItem, Account } from '../types';
 import { formatarBRL, generatePlan, getHojeISO, getManualAvoidanceValues, generateConstrainedSum, regeneratePlayerValues } from '../utils';
-import { Play, RotateCw, Send, Sliders, Trash2, BrainCircuit, Target, BarChart2, User, Layers, Info, AlertTriangle, ChevronRight, Settings2, Users, Rocket, CheckCircle2, RefreshCw, Cpu, Database, ArrowRight } from 'lucide-react';
+import { Play, RotateCw, Send, Sliders, Trash2, BrainCircuit, Target, BarChart2, User, Layers, Info, AlertTriangle, ChevronRight, Settings2, Users, Rocket, CheckCircle2, RefreshCw, Cpu, Database, ArrowRight, HelpCircle } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -323,6 +323,14 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
   };
 
   // --- RENDERS ---
+  const InfoTooltip = ({ text }: { text: string }) => (
+      <div className="group relative ml-1 inline-flex z-50">
+          <HelpCircle size={10} className="text-gray-500 hover:text-white cursor-help" />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 border border-white/10 p-2 rounded-lg text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-[60] text-center shadow-xl">
+              {text}
+          </div>
+      </div>
+  );
 
   const renderKPIs = () => {
       const plan = state.generator.plan;
@@ -485,6 +493,9 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         const lotNumber = lotIndex;
         const currentLotIdx = lotIndex;
         
+        // ADICIONADO ID NO BOTAO ENVIAR DO PRIMEIRO LOTE PARA O TUTORIAL
+        const sendButtonId = lotIndex === 1 ? 'tour-lot-send-1' : undefined;
+
         lots.push(
             <div key={lotIndex} className="glass-card rounded-2xl overflow-hidden animate-slide-up mb-6 shadow-xl border border-white/5">
                 {/* Header do Lote */}
@@ -521,6 +532,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                         </button>
                         <button 
                             type="button"
+                            id={sendButtonId} // ID HERE
                             onClick={() => {
                                 const lotChunk = plan.slice(chunkStartIndex, chunkStartIndex + size);
                                 const today = getHojeISO();
@@ -721,7 +733,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
             </div>
             
             <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
+                <div id="tour-plan-agents">
                      <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Nº de Agentes</label>
                      <input 
                         type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-violet-500 outline-none transition-colors" 
@@ -729,7 +741,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                         onChange={e => handleTotalAgentesChange(parseInt(e.target.value)||1)}
                      />
                 </div>
-                <div>
+                <div id="tour-plan-lot">
                      <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Tamanho Lote</label>
                      <input 
                         type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-violet-500 outline-none transition-colors" 
@@ -743,7 +755,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                 </div>
             </div>
 
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-black/20 rounded-xl p-2 border border-white/5">
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-black/20 rounded-xl p-2 border border-white/5" id="tour-plan-dist">
                 {Array.from({length: totalAgentes}, (_, i) => i + 1).map(id => (
                     <div key={id} className="flex items-center justify-between group p-2 rounded hover:bg-white/5 transition-colors">
                         <label className="text-sm font-medium text-gray-400 group-hover:text-white transition-colors">Agente {id}</label>
@@ -763,7 +775,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* 2. Perfis */}
-        <div className="glass-card rounded-2xl p-6">
+        <div className="glass-card rounded-2xl p-6" id="tour-plan-profiles">
             <div className="flex justify-between items-center mb-6">
                 <h4 className="text-sm font-bold text-violet-400 uppercase tracking-widest flex items-center gap-2">
                     <BrainCircuit size={16} /> Perfis (%)
@@ -778,13 +790,21 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
             </div>
             <div className="grid grid-cols-2 gap-4">
                  {[
-                     {id:'testador', label:'Testador', color:'border-white/10 focus:border-gray-500'},
-                     {id:'cetico', label:'Cético', color:'border-amber-800 focus:border-amber-500'},
-                     {id:'ambicioso', label:'Ambicioso', color:'border-emerald-800 focus:border-emerald-500'},
-                     {id:'viciado', label:'Viciado', color:'border-rose-800 focus:border-rose-500'}
+                     {id:'testador', label:'Testador', color:'border-white/10 focus:border-gray-500', hint: 'Faz 1 depósito pequeno.'},
+                     {id:'cetico', label:'Cético', color:'border-amber-800 focus:border-amber-500', hint: 'Faz 2 depósitos pequenos.'},
+                     {id:'ambicioso', label:'Ambicioso', color:'border-emerald-800 focus:border-emerald-500', hint: 'Busca o valor alvo com até 2 depósitos.'},
+                     {id:'viciado', label:'Viciado', color:'border-rose-800 focus:border-rose-500', hint: 'Faz depósitos altos e re-depósitos.'}
                  ].map(p => (
                      <div key={p.id} className="relative group">
-                         <label className="text-[10px] text-gray-500 uppercase font-bold absolute top-2 left-3 pointer-events-none group-hover:text-gray-300 transition-colors">{p.label}</label>
+                         <label className="text-[10px] text-gray-500 uppercase font-bold absolute top-2 left-3 pointer-events-none group-hover:text-gray-300 transition-colors flex items-center gap-1">
+                             {p.label}
+                             <div className="group/tooltip relative z-50">
+                                 <HelpCircle size={8} className="cursor-help" />
+                                 <div className="absolute bottom-full left-0 mb-1 w-32 bg-gray-900 border border-white/10 p-1.5 rounded text-[9px] text-gray-300 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity">
+                                     {p.hint}
+                                 </div>
+                             </div>
+                         </label>
                          <input 
                             type="number" className={`w-full bg-black/40 border ${p.color} rounded-xl pt-7 pb-2 px-3 text-white text-lg font-bold text-center outline-none transition-all`}
                             value={(params as any)[p.id]}
@@ -796,7 +816,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* 3. Lógica Numérica */}
-        <div className="glass-card rounded-2xl p-6">
+        <div className="glass-card rounded-2xl p-6" id="tour-plan-logic">
              <h4 className="text-sm font-bold text-violet-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                  <Sliders size={16} /> Lógica de Valores
              </h4>
@@ -824,6 +844,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
 
         {/* Action Button */}
         <button 
+            id="tour-plan-generate"
             onClick={handleGenerate}
             className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-5 rounded-xl shadow-lg shadow-violet-900/40 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group text-lg"
         >
@@ -927,12 +948,29 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 relative">
             {!state.generator.plan.length ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-60">
-                    <div className="bg-white/5 p-8 rounded-full mb-6 border border-white/5">
-                        <Layers size={80} className="stroke-1 text-gray-700" />
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-100">
+                    <div className="bg-gradient-to-b from-violet-900/20 to-transparent p-10 rounded-full mb-6 border border-violet-500/20 animate-pulse-slow">
+                        <Cpu size={80} className="stroke-1 text-violet-400" />
                     </div>
-                    <p className="text-2xl font-bold text-gray-500 mb-2">Nenhum plano gerado</p>
-                    <p className="text-base">Configure os parâmetros à esquerda e clique em <span className="text-violet-500 font-bold">GERAR PLANO</span>.</p>
+                    <h3 className="text-2xl font-bold text-white mb-3">Laboratório de Planejamento</h3>
+                    <p className="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
+                        Aqui é onde a mágica acontece. Defina quantos jogadores você quer, os perfis e a IA criará uma estratégia de valores única para o seu dia.
+                    </p>
+                    
+                    <div className="flex flex-col gap-2 items-center text-sm text-gray-500">
+                         <div className="flex items-center gap-2">
+                             <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">1</span>
+                             <span>Configure os Agentes à esquerda</span>
+                         </div>
+                         <div className="flex items-center gap-2">
+                             <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">2</span>
+                             <span>Ajuste as porcentagens de perfil</span>
+                         </div>
+                         <div className="flex items-center gap-2">
+                             <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">3</span>
+                             <span>Clique em <strong className="text-violet-400">GERAR PLANO</strong></span>
+                         </div>
+                    </div>
                 </div>
             ) : (
                 <>
