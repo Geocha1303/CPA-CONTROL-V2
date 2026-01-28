@@ -30,9 +30,10 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  HelpCircle
+  HelpCircle,
+  SkipForward // Adicionado
 } from 'lucide-react';
-import { AppState, ViewType, Notification } from './types';
+import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState } from './utils';
 import { supabase } from './supabaseClient';
 
@@ -276,6 +277,7 @@ function App() {
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [canProceed, setCanProceed] = useState(true); // Controle de bloqueio do Next
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false); // Modal de confirmação do Skip
 
   // --- TOUR STEPS DEFINITION (Roteiro com Interação Obrigatória) ---
   const tourSteps: TourStep[] = [
@@ -466,6 +468,18 @@ function App() {
 
       notify("Dados limpos! O sistema está pronto para uso real.", "success");
       setActiveView('dashboard');
+  };
+
+  // --- LOGICA DE PULAR TUTORIAL (COM CONFIRMAÇÃO VISUAL) ---
+  const handleTourSkipRequest = () => {
+      setShowSkipConfirm(true);
+  };
+
+  const handleConfirmSkip = () => {
+      setTourOpen(false);
+      setShowSkipConfirm(false);
+      localStorage.setItem('cpa_tour_completed', 'true');
+      notify("Tutorial pulado.", "info");
   };
 
   // Check initial tour status
@@ -706,7 +720,7 @@ function App() {
 
       // Check Sent Lot (Se tem algum registro diário com contas)
       if (!newSteps.sentLot) {
-          const hasAccounts = Object.values(state.dailyRecords).some(day => day.accounts && day.accounts.length > 0);
+          const hasAccounts = Object.values(state.dailyRecords).some((day: DayRecord) => day.accounts && day.accounts.length > 0);
           if (hasAccounts) {
               newSteps.sentLot = true;
               hasChanges = true;
@@ -936,10 +950,51 @@ function App() {
         isOpen={tourOpen}
         onClose={() => setTourOpen(false)}
         onComplete={handleTourComplete}
+        onSkip={handleTourSkipRequest} // Passando a nova função
         currentStepIndex={tourStepIndex}
         setCurrentStepIndex={setTourStepIndex}
         disableNext={!canProceed} // Bloqueia se a validação falhar
       />
+
+      {/* --- CONFIRMAÇÃO DE SKIP DO TUTORIAL --- */}
+      {showSkipConfirm && (
+        <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-fade-in">
+            <div className="bg-[#0f0a1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative">
+                <button 
+                    onClick={() => setShowSkipConfirm(false)}
+                    className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                >
+                    <X size={16} />
+                </button>
+                
+                <div className="flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                        <SkipForward size={24} className="text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-2">Pular Tutorial?</h3>
+                    <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+                        Se você já conhece o sistema, pode pular. 
+                        O tutorial será marcado como concluído e não aparecerá novamente.
+                    </p>
+                    
+                    <div className="flex gap-3 w-full">
+                        <button 
+                            onClick={() => setShowSkipConfirm(false)}
+                            className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm font-bold transition-colors"
+                        >
+                            Voltar
+                        </button>
+                        <button 
+                            onClick={handleConfirmSkip}
+                            className="flex-1 px-4 py-2 bg-white text-black hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors"
+                        >
+                            Sim, Pular
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Notifications */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
@@ -1012,22 +1067,20 @@ function App() {
                 })}
             </nav>
             
-            {/* ADMIN DEMO BUTTON */}
-            {isAdmin && (
-                <div className="mt-4 px-2">
-                    <button 
-                        onClick={toggleDemoMode}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all uppercase tracking-wider border ${
-                            isDemoMode 
-                            ? 'bg-purple-900/50 text-purple-200 border-purple-500/30 animate-pulse' 
-                            : 'bg-white/5 text-gray-500 border-transparent hover:text-white hover:bg-white/10'
-                        }`}
-                    >
-                        {isDemoMode ? <EyeOff size={14} /> : <Eye size={14} />}
-                        {isDemoMode ? 'Sair da Demo' : 'Modo Demo'}
-                    </button>
-                </div>
-            )}
+            {/* DEMO BUTTON (PARA TODOS) */}
+            <div className="mt-4 px-2">
+                <button 
+                    onClick={toggleDemoMode}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all uppercase tracking-wider border ${
+                        isDemoMode 
+                        ? 'bg-purple-900/50 text-purple-200 border-purple-500/30 animate-pulse' 
+                        : 'bg-white/5 text-gray-500 border-transparent hover:text-white hover:bg-white/10'
+                    }`}
+                >
+                    {isDemoMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {isDemoMode ? 'Sair da Demo' : 'Modo Demo'}
+                </button>
+            </div>
             
             {/* ONBOARDING WIDGET */}
             {showOnboarding && !isDemoMode && (
@@ -1091,9 +1144,13 @@ function App() {
 
         <div className="p-6 border-t border-white/5 bg-[#080814]">
             {isDemoMode && (
-                <div className="mb-4 bg-purple-900/20 border border-purple-500/30 p-2 rounded text-center">
-                    <p className="text-[10px] text-purple-300 font-bold uppercase">Modo Demonstração Ativo</p>
-                    <p className="text-[9px] text-gray-400">Dados reais estão seguros e ocultos.</p>
+                <div className="mb-4 bg-purple-900/20 border border-purple-500/30 p-3 rounded text-center shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                    <p className="text-[10px] text-purple-300 font-bold uppercase flex items-center justify-center gap-1.5 mb-1">
+                        <Info size={12} /> MODO DEMONSTRAÇÃO
+                    </p>
+                    <p className="text-[9px] text-gray-300 leading-tight">
+                        Alterações <strong className="text-purple-200">não serão salvas</strong>. Seus dados reais estão seguros e ocultos.
+                    </p>
                 </div>
             )}
             

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useLayoutEffect, useCallback } from 'react';
-import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock, SkipForward } from 'lucide-react';
 
 export interface TourStep {
   targetId: string;
@@ -16,12 +16,13 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
+  onSkip?: () => void; // Nova prop opcional
   currentStepIndex: number;
   setCurrentStepIndex: (i: number) => void;
   disableNext?: boolean;
 }
 
-const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, currentStepIndex, setCurrentStepIndex, disableNext = false }) => {
+const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip, currentStepIndex, setCurrentStepIndex, disableNext = false }) => {
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const step = steps[currentStepIndex];
 
@@ -181,9 +182,22 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, curren
                   </div>
 
                   <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/10">
-                      <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">
-                          Passo {currentStepIndex + 1} de {steps.length}
-                      </span>
+                      
+                      {/* Botão Pular (Esquerda) */}
+                      {onSkip && (
+                          <button 
+                            onClick={onSkip}
+                            className="text-[10px] text-gray-500 hover:text-white uppercase font-bold tracking-widest flex items-center gap-1 transition-colors mr-auto"
+                          >
+                              <SkipForward size={10} /> Pular
+                          </button>
+                      )}
+                      
+                      {!onSkip && (
+                          <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mr-auto">
+                              Passo {currentStepIndex + 1} de {steps.length}
+                          </span>
+                      )}
                       
                       <div className="flex gap-2">
                           <button 
