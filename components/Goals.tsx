@@ -17,8 +17,11 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
   const todayDay = new Date().getDate();
   const currentMonthKey = `${currentYear}-${(currentMonthIndex + 1).toString().padStart(2, '0')}`;
   
+  // ADJUSTED LOGIC FOR MANUAL BONUS
+  const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
+
   // Get aggregates
-  const aggregates = useMemo(() => getMonthlyAggregates(state.dailyRecords, state.config.valorBonus), [state.dailyRecords, state.config.valorBonus]);
+  const aggregates = useMemo(() => getMonthlyAggregates(state.dailyRecords, bonusMultiplier), [state.dailyRecords, bonusMultiplier]);
 
   // --- LOGIC: CURRENT MONTH ---
   const currentMonthStats = useMemo(() => {

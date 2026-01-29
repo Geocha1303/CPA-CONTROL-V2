@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { AppState } from '../types';
 import { mergeDeep } from '../utils'; // Importado de utils
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User } from 'lucide-react';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -17,6 +17,13 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
     updateState({
         config: { ...state.config, [key]: value }
     });
+  };
+
+  const toggleManualMode = () => {
+      const current = state.config.manualBonusMode || false;
+      updateState({
+          config: { ...state.config, manualBonusMode: !current }
+      });
   };
 
   const handleNameChange = (val: string) => {
@@ -49,9 +56,6 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                     const parsedData = JSON.parse(content);
                     if (parsedData.dailyRecords && parsedData.config) {
                         if(confirm('Isso substituirá os dados atuais. Continuar?')) {
-                            // Mescla com estado atual para não perder campos novos em backups antigos
-                            // Mas aqui queremos restaurar, então o mergeDeep deve ser cuidadoso
-                            // A melhor abordagem é usar o estado atual como base e sobrescrever com o backup
                             const newState = mergeDeep(state, parsedData);
                             updateState(newState);
                             notify('Dados restaurados com sucesso!', 'success');
@@ -80,6 +84,15 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
         notify('Sistema resetado com sucesso.', 'info');
     }
   };
+
+  const InfoTooltip = ({ text }: { text: string }) => (
+      <div className="group relative ml-2 inline-flex">
+          <HelpCircle size={14} className="text-gray-500 hover:text-white cursor-help" />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-900 border border-white/10 p-2 rounded-lg text-xs text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 text-center shadow-xl">
+              {text}
+          </div>
+      </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -111,14 +124,44 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" />
                             </div>
                         </div>
+
+                        {/* MODO BÔNUS MANUAL (TOGGLE) */}
+                        <div id="tour-settings-bonus-toggle" className="bg-white/5 p-4 rounded-xl border border-white/5 transition-all hover:bg-white/10">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-bold text-white flex items-center">
+                                    Modo Bônus Manual
+                                    <InfoTooltip text="Ative para digitar o valor exato ganho (Ex: R$ 67,00) em vez de multiplicar ciclos." />
+                                </label>
+                                <button onClick={toggleManualMode} className="text-emerald-400 transition-colors">
+                                    {state.config.manualBonusMode ? <ToggleRight size={32} className="text-emerald-400"/> : <ToggleLeft size={32} className="text-gray-600"/>}
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 leading-relaxed">
+                                {state.config.manualBonusMode 
+                                    ? "ATIVADO: No Controle Diário, você digitará o valor monetário total ganho (ex: 67,00) e o sistema usará esse valor direto."
+                                    : "DESATIVADO: O sistema multiplicará a quantidade de ciclos (telas) pelo valor base configurado abaixo."
+                                }
+                            </p>
+                        </div>
+
                         <div id="tour-settings-bonus">
-                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Valor do Bônus CPA (R$)</label>
+                            <div className="mb-2">
+                                <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                    {state.config.manualBonusMode ? 'Valor de Referência (Apenas Estimativa)' : 'Valor Base (Por Tela/Ciclo)'}
+                                </label>
+                                <p className="text-[10px] text-gray-500 leading-relaxed">
+                                    {state.config.manualBonusMode 
+                                        ? "Como o modo manual está ativo, este valor não afeta o cálculo final, servindo apenas para projeções."
+                                        : "Soma do ganho (Baú + Gerente) para 1 tela. Ex: 10 Baú + 10 Gerente = 20. O sistema multiplicará isso pela quantidade de telas abertas."}
+                                </p>
+                            </div>
                             <div className="relative group">
                                 <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors">R$</span>
                                 <input type="number" value={state.config.valorBonus} onChange={(e) => handleConfigChange('valorBonus', parseFloat(e.target.value) || 0)}
                                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" />
                             </div>
                         </div>
+
                         <div id="tour-settings-tax">
                             <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Taxa de Imposto (%)</label>
                             <div className="relative group">

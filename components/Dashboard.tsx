@@ -32,11 +32,12 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     let totalDepositos = 0;
     let totalRedepositos = 0;
     
-    const safeBonus = (state.config && typeof state.config.valorBonus === 'number') ? state.config.valorBonus : 20;
+    // ADJUSTED LOGIC: If manual mode is on, multiplier is 1 (direct value)
+    const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
 
     // --- PREPARAÇÃO DOS DADOS DO GRÁFICO ---
     let chartData = pastAndPresentDates.map(date => {
-        const m = calculateDayMetrics(state.dailyRecords[date], safeBonus);
+        const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
         const record = state.dailyRecords[date];
 
         // Accumulate specific breakdowns (Total Global não filtra data, mostra tudo que tem no banco)
@@ -77,13 +78,17 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     // Reset e calcula full history para os cards KPI
     totalInv = 0; totalRet = 0; totalLucro = 0; totalDepositos = 0; totalRedepositos = 0; totalCheckoutEvents = 0;
     allDates.forEach(date => {
-        const m = calculateDayMetrics(state.dailyRecords[date], safeBonus);
+        const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
         const record = state.dailyRecords[date];
         if(record && record.accounts) {
             record.accounts.forEach(acc => {
                 totalDepositos += (acc.deposito || 0);
                 totalRedepositos += (acc.redeposito || 0);
-                totalCheckoutEvents += (acc.ciclos || 0);
+                
+                // Count cycles differently if manual? No, conceptually cycle is an event.
+                // But if manual, 'ciclos' holds currency value. 
+                // So tracking 'events' becomes tricky. Let's just track 1 event per account.
+                totalCheckoutEvents += 1; 
             });
         }
         totalInv += (isNaN(m.invest) ? 0 : m.invest);
@@ -120,7 +125,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
         if(dayRecord.accounts){
             dayRecord.accounts.forEach(acc => {
                 const invest = (acc.deposito || 0) + (acc.redeposito || 0);
-                const ret = (acc.saque || 0) + ((acc.ciclos || 0) * safeBonus);
+                const ret = (acc.saque || 0) + ((acc.ciclos || 0) * bonusMultiplier);
                 const profit = ret - invest;
                 allAccounts.push({ ...acc, date, profit, ret });
             });

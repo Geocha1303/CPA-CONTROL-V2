@@ -4,7 +4,7 @@ export interface Account {
   deposito: number;
   redeposito: number;
   saque: number;
-  ciclos: number;
+  ciclos: number; // No modo manual, isso armazena o valor monetário total do bônus
 }
 
 export interface DayExpenses {
@@ -42,6 +42,7 @@ export interface Config {
   valorBonus: number;
   taxaImposto: number;
   userName?: string;
+  manualBonusMode?: boolean; // NOVA FLAG: Se true, o campo 'ciclos' é valor monetário direto
 }
 
 export interface GeneratorParams {

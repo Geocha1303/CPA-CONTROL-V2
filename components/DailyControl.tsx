@@ -1,7 +1,7 @@
 import React from 'react';
 import { AppState, Account } from '../types';
 import { formatarBRL } from '../utils';
-import { Plus, Trash2, Calendar, TrendingUp, TrendingDown, DollarSign, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -12,6 +12,7 @@ interface Props {
 
 const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
+  const isManualMode = state.config.manualBonusMode === true;
   
   // Helper para evitar NaN
   const safeFloat = (val: string) => {
@@ -33,7 +34,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   const handleAddAccount = () => {
-    const newAcc: Account = { id: Date.now(), deposito: 0, redeposito: 0, saque: 0, ciclos: 1 };
+    const newAcc: Account = { id: Date.now(), deposito: 0, redeposito: 0, saque: 0, ciclos: isManualMode ? 0 : 1 };
     updateState({
         dailyRecords: {
             ...state.dailyRecords,
@@ -63,9 +64,11 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
     });
   };
 
-  // Metrics
+  // Metrics Logic
+  const bonusMultiplier = isManualMode ? 1 : (state.config.valorBonus || 20);
+  
   const totalSaques = dayRecord.accounts.reduce((acc, curr) => acc + (curr.saque || 0), 0);
-  const totalBonus = dayRecord.accounts.reduce((acc, curr) => acc + ((curr.ciclos || 0) * (state.config.valorBonus || 20)), 0);
+  const totalBonus = dayRecord.accounts.reduce((acc, curr) => acc + ((curr.ciclos || 0) * bonusMultiplier), 0);
   const totalInvestido = dayRecord.accounts.reduce((acc, curr) => acc + (curr.deposito || 0) + (curr.redeposito || 0), 0);
   const totalDespesas = (dayRecord.expenses.proxy || 0) + (dayRecord.expenses.numeros || 0);
   const totalLucroDia = (totalSaques + totalBonus) - totalInvestido - totalDespesas;
@@ -159,7 +162,31 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         <th className="px-6 py-4 font-bold tracking-widest text-gray-300">DEPÓSITO</th>
                         <th className="px-6 py-4 font-bold tracking-widest text-gray-300">RE-DEP</th>
                         <th className="px-6 py-4 font-bold tracking-widest text-accent-cyan">SAQUE</th>
-                        <th className="px-6 py-4 font-bold tracking-widest text-primary-glow">CICLOS</th>
+                        
+                        {/* COLUNA BÔNUS COM INFO BOX */}
+                        <th className="px-6 py-4 font-bold tracking-widest text-primary-glow">
+                             <div className="flex items-center gap-2">
+                                 {isManualMode ? 'BÔNUS (R$)' : 'CICLOS (TELAS)'}
+                                 <div className="group relative">
+                                     <AlertCircle size={14} className="cursor-help text-primary-glow hover:text-white transition-colors" />
+                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-[0_0_20px_rgba(112,0,255,0.2)] text-left leading-relaxed">
+                                         {isManualMode ? (
+                                             <>
+                                                <strong className="text-primary-glow block mb-1">Modo Manual Ativado</strong>
+                                                Você deve colocar o valor exato que ganhou nesta operação (Baú + Gerente). Se quiser que o sistema calcule automaticamente (Ciclos x Valor), desmarque esta opção em "Sistema".
+                                             </>
+                                         ) : (
+                                             <>
+                                                <strong className="text-primary-glow block mb-1">Modo Automático</strong>
+                                                Digite a quantidade de ciclos (telas). O sistema multiplicará pelo valor configurado em "Sistema".
+                                             </>
+                                         )}
+                                         <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-gray-900 border-b border-r border-primary/30 rotate-45"></div>
+                                     </div>
+                                 </div>
+                             </div>
+                        </th>
+                        
                         <th className="px-6 py-4 font-bold tracking-widest text-right text-gray-300">RESULTADO</th>
                         <th className="px-6 py-4 text-center w-16"></th>
                     </tr>
@@ -181,42 +208,85 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         </tr>
                     ) : (
                         dayRecord.accounts.map((acc, index) => {
-                            const bonus = state.config.valorBonus || 20;
-                            const lucro = ((acc.saque||0) + ((acc.ciclos||0) * bonus)) - ((acc.deposito||0) + (acc.redeposito||0));
+                            const lucro = ((acc.saque||0) + ((acc.ciclos||0) * bonusMultiplier)) - ((acc.deposito||0) + (acc.redeposito||0));
                             return (
                                 <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
+                                    {/* DEPÓSITO */}
                                     <td className="px-6 py-3">
-                                        <input type="number" className="gateway-input w-full py-2 px-3 rounded text-white font-mono font-bold"
-                                            value={acc.deposito === 0 ? '' : acc.deposito} 
-                                            placeholder="0"
-                                            onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} />
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <input type="number" className="gateway-input w-full py-2 px-3 rounded text-white font-mono font-bold"
-                                            value={acc.redeposito === 0 ? '' : acc.redeposito} 
-                                            placeholder="0"
-                                            onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} />
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <input type="number" className="gateway-input w-full py-2 px-3 rounded text-accent-cyan font-mono font-bold border-accent-cyan/30 focus:border-accent-cyan"
-                                            value={acc.saque === 0 ? '' : acc.saque} 
-                                            placeholder="0"
-                                            onChange={(e) => handleAccountChange(acc.id, 'saque', e.target.value)} />
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <input type="number" className="gateway-input w-16 py-2 px-0 text-center rounded text-primary-glow font-mono font-bold border-primary/30 focus:border-primary"
-                                                value={acc.ciclos === 0 ? '' : acc.ciclos} 
+                                        <div className="relative group/input">
+                                            <input type="number" 
+                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
+                                                value={acc.deposito === 0 ? '' : acc.deposito} 
                                                 placeholder="0"
-                                                onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} />
-                                            <span className="text-[10px] text-gray-500 font-mono">x{bonus}</span>
+                                                onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} 
+                                            />
                                         </div>
                                     </td>
-                                    <td className={`px-6 py-3 text-right font-black font-mono text-lg ${lucro >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>
+                                    
+                                    {/* REDEPÓSITO */}
+                                    <td className="px-6 py-3">
+                                        <div className="relative group/input">
+                                            <input type="number" 
+                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
+                                                value={acc.redeposito === 0 ? '' : acc.redeposito} 
+                                                placeholder="0"
+                                                onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} 
+                                            />
+                                        </div>
+                                    </td>
+
+                                    {/* SAQUE */}
+                                    <td className="px-6 py-3">
+                                        <div className="relative group/input">
+                                            <input type="number" 
+                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.02] hover:bg-accent-cyan/[0.05] transition-all"
+                                                value={acc.saque === 0 ? '' : acc.saque} 
+                                                placeholder="0"
+                                                onChange={(e) => handleAccountChange(acc.id, 'saque', e.target.value)} 
+                                            />
+                                        </div>
+                                    </td>
+
+                                    {/* BÔNUS / CICLOS (REMODELADO) */}
+                                    <td className="px-6 py-3">
+                                        {isManualMode ? (
+                                            // ESTILO MODO MANUAL (VALOR R$)
+                                            <div className="relative flex items-center">
+                                                <div className="absolute left-3 text-primary-glow font-bold text-xs pointer-events-none">R$</div>
+                                                <input 
+                                                    type="number" 
+                                                    className="gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all shadow-[0_0_15px_rgba(112,0,255,0.05)]"
+                                                    value={acc.ciclos === 0 ? '' : acc.ciclos} 
+                                                    placeholder="0.00"
+                                                    onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
+                                                />
+                                            </div>
+                                        ) : (
+                                            // ESTILO MODO AUTOMÁTICO (QTD x MULTIPLICADOR)
+                                            <div className="flex items-center bg-black/30 border border-white/10 rounded-lg p-1 w-full max-w-[140px]">
+                                                <input 
+                                                    type="number" 
+                                                    className="w-full bg-transparent text-center text-white font-mono font-bold py-1.5 focus:outline-none"
+                                                    value={acc.ciclos === 0 ? '' : acc.ciclos} 
+                                                    placeholder="0"
+                                                    onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
+                                                />
+                                                <div className="bg-white/5 border-l border-white/10 px-2.5 py-1.5 flex flex-col items-center justify-center min-w-[50px]">
+                                                    <span className="text-[9px] text-gray-500 font-bold uppercase leading-none mb-0.5">Valor</span>
+                                                    <span className="text-[10px] text-primary-glow font-mono font-bold leading-none">x{state.config.valorBonus}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* RESULTADO */}
+                                    <td className={`px-6 py-3 text-right font-black font-mono text-lg tracking-tight ${lucro >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>
                                         {formatarBRL(lucro)}
                                     </td>
+
+                                    {/* DELETE */}
                                     <td className="px-6 py-3 text-center">
-                                        <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded hover:bg-white/10 text-gray-500 hover:text-accent-pink transition-colors">
+                                        <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors">
                                             <Trash2 size={16} />
                                         </button>
                                     </td>

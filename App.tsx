@@ -53,7 +53,7 @@ const initialState: AppState = {
   generalExpenses: [],
   monthlyGoals: {},
   dreamGoals: [], 
-  config: { valorBonus: 20.00, taxaImposto: 0.06, userName: 'OPERADOR' },
+  config: { valorBonus: 20.00, taxaImposto: 0.06, userName: 'OPERADOR', manualBonusMode: false },
   generator: {
     plan: [],
     totalAgentes: 2,
@@ -285,7 +285,14 @@ function App() {
           targetId: 'nav-configuracoes',
           title: 'Configuração Inicial',
           view: 'configuracoes',
-          content: 'Vamos começar ajustando o sistema para você. Clique em "Sistema" no menu para acessar as configurações.',
+          content: (
+              <div>
+                  <p className="mb-3">Vamos começar ajustando o sistema para você. Clique em "Sistema" no menu.</p>
+                  <div className="bg-blue-900/30 border-l-2 border-blue-500 p-2 rounded text-[11px] text-blue-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Configurar corretamente garante que seus cálculos de lucro líquido sejam precisos desde o primeiro dia.
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -293,19 +300,44 @@ function App() {
           targetId: 'tour-settings-name',
           title: 'Quem é você?',
           view: 'configuracoes',
-          content: 'Para continuar, apague "OPERADOR" e digite seu nome ou apelido no campo destacado.',
+          content: (
+              <div>
+                  <p className="mb-3">Para continuar, apague "OPERADOR" e digite seu nome ou apelido.</p>
+                  <div className="bg-indigo-900/30 border-l-2 border-indigo-500 p-2 rounded text-[11px] text-indigo-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Esse nome aparecerá nos relatórios de monitoramento e na saudação do dashboard.
+                  </div>
+              </div>
+          ),
           position: 'bottom',
           requiresInteraction: true 
+      },
+      {
+          targetId: 'tour-settings-bonus-toggle', // MUDANÇA AQUI
+          title: 'Entrada Manual de Bônus',
+          view: 'configuracoes',
+          content: (
+              <div>
+                  <p className="mb-2">Quer digitar o valor exato ganho (Baú + Gerente) em vez de multiplicar ciclos?</p>
+                  <div className="bg-teal-900/30 border-l-2 border-teal-500 p-2 rounded text-[11px] text-teal-200 leading-relaxed">
+                      <strong>💡 Dica do Desenvolvedor:</strong> Se você fez R$ 67,00 em um ciclo, ative esta opção. Assim, no Controle Diário, você digita "67" e o sistema usa o valor exato, sem precisar de calculadora.
+                  </div>
+              </div>
+          ),
+          position: 'bottom',
+          requiresInteraction: false // Não bloqueia
       },
       {
           targetId: 'tour-settings-bonus',
           title: 'Valor do Bônus (CPA)',
           view: 'configuracoes',
           content: (
-              <>
-                  <p>Defina quanto você ganha por ciclo (BAÚ + GERENTE).</p>
-                  <p className="text-xs text-gray-400 mt-2">Ex: Se ganha 15 do gerente e 10 do baú, coloque 25. Digite um valor diferente de 0 para prosseguir.</p>
-              </>
+              <div>
+                  <p className="mb-2">Defina quanto você ganha por ciclo completo (Soma do ganho no Baú + ganho na conta Gerente).</p>
+                  <p className="text-xs text-gray-400 mb-3">Ex: Se ganha 15 do gerente e 10 do baú, coloque 25.</p>
+                  <div className="bg-emerald-900/30 border-l-2 border-emerald-500 p-2 rounded text-[11px] text-emerald-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Se ativar o modo manual, este valor servirá apenas como referência visual, mas você digitará o valor final no diário.
+                  </div>
+              </div>
           ),
           position: 'bottom',
           requiresInteraction: true
@@ -314,7 +346,14 @@ function App() {
           targetId: 'nav-planejamento',
           title: 'Vamos Planejar',
           view: 'planejamento',
-          content: 'Configuração feita! Agora vamos para o "Planejamento IA" criar sua estratégia do dia.',
+          content: (
+              <div>
+                  <p className="mb-3">Configuração feita! Agora vamos para o "Planejamento IA" criar sua estratégia.</p>
+                  <div className="bg-violet-900/30 border-l-2 border-violet-500 p-2 rounded text-[11px] text-violet-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> O Planejamento é seu laboratório. Crie, teste e recrie cenários antes de gastar dinheiro real.
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -322,7 +361,14 @@ function App() {
           targetId: 'tour-plan-agents',
           title: 'Agentes (Mães)',
           view: 'planejamento',
-          content: 'Quantas contas principais ("Mães") você vai usar? Digite um número (Ex: 2 ou 3) para testar.',
+          content: (
+              <div>
+                  <p className="mb-3">Quantas contas principais ("Mães") você vai usar? Digite um número.</p>
+                  <div className="bg-amber-900/30 border-l-2 border-amber-500 p-2 rounded text-[11px] text-amber-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Chamamos de "Agente" a conta que recebe o depósito dos jogadores. Pode ser uma conta MÃE ou LÍDER.
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -330,7 +376,14 @@ function App() {
           targetId: 'tour-plan-lot',
           title: 'Ciclo / Lote',
           view: 'planejamento',
-          content: 'Quantas contas você fará nesta rodada? Defina o tamanho do lote.',
+          content: (
+              <div>
+                  <p className="mb-3">Quantas contas você fará nesta rodada? Defina o tamanho do lote.</p>
+                  <div className="bg-indigo-900/40 border-l-2 border-indigo-500 p-2 rounded text-[11px] text-indigo-200 leading-relaxed">
+                      <strong>💡 Dica de Ouro:</strong> "Lote" é a quantidade de abas/telas que você consegue operar ao mesmo tempo sem se perder. Comece com poucos (Ex: 3 a 5).
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -338,7 +391,14 @@ function App() {
           targetId: 'tour-plan-dist',
           title: 'Distribuição',
           view: 'planejamento',
-          content: 'Agora distribua os jogadores entre os Agentes. Garanta que o "Total" no topo bata com a soma dos agentes.',
+          content: (
+              <div>
+                  <p className="mb-3">Distribua os jogadores entre os Agentes. O "Total" deve bater.</p>
+                  <div className="bg-gray-800 border-l-2 border-gray-500 p-2 rounded text-[11px] text-gray-300 leading-relaxed">
+                      <strong>💡 Dica:</strong> Evite colocar todos os jogadores em um único agente se tiver mais de um. Balancear diminui riscos de bloqueio.
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -347,12 +407,17 @@ function App() {
           title: 'Perfis de Jogador',
           view: 'planejamento',
           content: (
-              <ul className="space-y-2 text-xs">
-                  <li><strong>🛡️ Testador:</strong> Depósito baixo, 1 vez.</li>
-                  <li><strong>🧐 Cético:</strong> Baixo na 1ª, alto na 2ª.</li>
-                  <li><strong>📈 Ambicioso:</strong> Procura o alvo de R$100.</li>
-                  <li><strong>🎰 Viciado:</strong> Deposita 3x alto.</li>
-              </ul>
+              <div className="space-y-3">
+                  <ul className="space-y-2 text-xs">
+                      <li><strong>🛡️ Testador:</strong> Depósito baixo, 1 vez.</li>
+                      <li><strong>🧐 Cético:</strong> Baixo na 1ª, alto na 2ª.</li>
+                      <li><strong>📈 Ambicioso:</strong> Procura o alvo de R$100.</li>
+                      <li><strong>🎰 Viciado:</strong> Deposita 3x alto.</li>
+                  </ul>
+                  <div className="bg-rose-900/30 border-l-2 border-rose-500 p-2 rounded text-[11px] text-rose-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Variar os perfis faz seu tráfego parecer orgânico e humano, confundindo os sistemas anti-fraude da casa.
+                  </div>
+              </div>
           ),
           position: 'left',
           requiresInteraction: false
@@ -361,15 +426,44 @@ function App() {
           targetId: 'tour-plan-generate',
           title: 'A Hora da Mágica',
           view: 'planejamento',
-          content: 'Clique no botão "GERAR PLANO RÍTMICO" para criar a estratégia baseada nos perfis acima. O botão de "Próximo" só vai liberar quando o plano for gerado.',
+          content: (
+              <div>
+                  <p className="mb-3">Clique em "GERAR PLANO RÍTMICO".</p>
+                  <div className="bg-cyan-900/30 border-l-2 border-cyan-500 p-2 rounded text-[11px] text-cyan-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Nossa IA verifica o histórico de depósitos anteriores para não repetir valores idênticos muito próximos, evitando padrões robóticos.
+                  </div>
+              </div>
+          ),
           position: 'top',
           requiresInteraction: true 
       },
       {
-          targetId: 'tour-lot-send-1', // Atualizado para o botão do lote
+          targetId: 'tour-lot-send-1', 
+          title: '💡 Dica de Mestre (Anti-Gerente)',
+          view: 'planejamento',
+          content: (
+              <div className="space-y-3">
+                  <p>Veja os valores gerados na tabela abaixo. Eles são editáveis antes do envio.</p>
+                  <div className="bg-amber-900/40 border-l-2 border-amber-500 p-3 rounded text-[11px] leading-relaxed text-amber-100">
+                      <strong>Estratégia Ambicioso:</strong> "Geralmente eu pego o depósito maior (ex: 130), apago o zero e deixo 13 (mínimo). Isso disfarça o padrão para os gerentes e não prejudica tanto a média."
+                  </div>
+              </div>
+          ),
+          position: 'top',
+          requiresInteraction: false 
+      },
+      {
+          targetId: 'tour-lot-send-1',
           title: 'Enviar para Execução',
           view: 'planejamento',
-          content: 'Ótimo! Plano gerado. Agora clique no botão "Enviar" verde do Lote #1 para mandar esses dados para o Controle Diário.',
+          content: (
+              <div>
+                  <p className="mb-3">Clique no botão "Enviar" do Lote #1 para mandar para o Controle.</p>
+                  <div className="bg-emerald-900/30 border-l-2 border-emerald-500 p-2 rounded text-[11px] text-emerald-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Ao clicar em Enviar, você está dizendo ao sistema: "Estou começando a operar essas contas agora". O registro financeiro é criado.
+                  </div>
+              </div>
+          ),
           position: 'bottom',
           requiresInteraction: true 
       },
@@ -377,7 +471,14 @@ function App() {
           targetId: 'nav-controle',
           title: 'Controle Diário',
           view: 'controle',
-          content: 'Veja como ficou! Seus lotes chegaram aqui. Clique no menu "Controle Diário" para ver.',
+          content: (
+               <div>
+                  <p className="mb-3">Clique no menu "Controle Diário" para ver seus lotes.</p>
+                  <div className="bg-blue-900/30 border-l-2 border-blue-500 p-2 rounded text-[11px] text-blue-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Esta tela é o coração da sua gestão. Mantenha ela aberta enquanto opera para registrar saques em tempo real.
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
@@ -385,7 +486,14 @@ function App() {
           targetId: 'tour-daily-table',
           title: 'Registrando o Real',
           view: 'controle',
-          content: 'Aqui estão as contas. Na prática, quando você finalizar um ciclo, você virá aqui e digitará o valor do SAQUE e confirmará os depósitos.',
+          content: (
+              <div>
+                  <p className="mb-3">Aqui estão as contas enviadas. Digite o SAQUE e confirme os depósitos.</p>
+                  <div className="bg-purple-900/30 border-l-2 border-purple-500 p-2 rounded text-[11px] text-purple-200 leading-relaxed">
+                      <strong>💡 Dica:</strong> Se o valor real diferir do planejado, edite aqui. O sistema calcula o lucro líquido descontando custos de proxy e SMS automaticamente.
+                  </div>
+              </div>
+          ),
           position: 'top',
           requiresInteraction: false
       },
@@ -393,7 +501,14 @@ function App() {
           targetId: 'nav-metas',
           title: 'Finalizando',
           view: 'metas',
-          content: 'Pronto! Você aprendeu o fluxo básico: Configurar -> Planejar -> Executar -> Controlar. Vamos concluir para limpar esses dados de teste e começar "A Vera"!',
+          content: (
+               <div>
+                  <p className="mb-3">Pronto! Você aprendeu o fluxo básico.</p>
+                  <div className="bg-emerald-900/30 border-l-2 border-emerald-500 p-2 rounded text-[11px] text-emerald-200 leading-relaxed">
+                      <strong>💡 Dica Final:</strong> Use a tela de "Metas e Sonhos" para visualizar seu progresso financeiro. Ver o quanto falta para seu objetivo ajuda na disciplina!
+                  </div>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       }
