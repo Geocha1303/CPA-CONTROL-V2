@@ -47,15 +47,27 @@ const Admin: React.FC<Props> = ({ notify }) => {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou o DEVICE_ID do usuário
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  
+  // CORREÇÃO: Mantém o canal de envio sempre aberto
+  const broadcastChannelRef = useRef<any>(null);
 
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
       const timer = setTimeout(() => connectRealtime(), 500);
 
+      // --- CORREÇÃO: INICIALIZA CANAL DE BROADCAST PERSISTENTE ---
+      const bcChannel = supabase.channel('system_global_alerts');
+      bcChannel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+              broadcastChannelRef.current = bcChannel;
+          }
+      });
+
       return () => {
           clearTimeout(timer);
           if (channelRef.current) supabase.removeChannel(channelRef.current);
+          if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current);
       };
   }, []);
 
@@ -123,32 +135,47 @@ const Admin: React.FC<Props> = ({ notify }) => {
 
       setIsSendingBroadcast(true);
       try {
-          const alertChannel = supabase.channel('system_global_alerts');
+          // CORREÇÃO: Usa o canal persistente. Se não estiver pronto, tenta reconectar na hora.
+          let channel = broadcastChannelRef.current;
           
-          await alertChannel.subscribe(async (status) => {
-              if (status === 'SUBSCRIBED') {
-                  await alertChannel.send({
-                      type: 'broadcast',
-                      event: 'sys_alert',
-                      payload: { 
-                          title: broadcastTitle, 
-                          message: broadcastMsg,
-                          target: broadcastTarget, // Envia o DEVICE_ID ou 'ALL'
-                          timestamp: Date.now()
+          if (!channel || channel.state !== 'joined') {
+              channel = supabase.channel('system_global_alerts');
+              await new Promise((resolve, reject) => {
+                  channel.subscribe((status: string) => {
+                      if (status === 'SUBSCRIBED') {
+                          broadcastChannelRef.current = channel;
+                          resolve(true);
                       }
+                      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject('Erro de conexão ao enviar.');
                   });
-                  notify('Mensagem enviada com sucesso!', 'success');
-                  setBroadcastMsg('');
-                  setBroadcastTitle('');
-                  
-                  setTimeout(() => supabase.removeChannel(alertChannel), 2000);
+              });
+          }
+
+          const response = await channel.send({
+              type: 'broadcast',
+              event: 'sys_alert',
+              payload: { 
+                  title: broadcastTitle, 
+                  message: broadcastMsg,
+                  target: broadcastTarget, // Envia o DEVICE_ID ou 'ALL'
+                  timestamp: Date.now()
               }
           });
 
-      } catch (e) {
-          notify('Erro ao enviar broadcast.', 'error');
+          if (response === 'ok') {
+              notify('Mensagem enviada com sucesso!', 'success');
+              setBroadcastMsg('');
+              setBroadcastTitle('');
+          } else {
+              throw new Error('O servidor não confirmou o envio.');
+          }
+
+      } catch (e: any) {
+          console.error(e);
+          notify(`Erro: ${e.message || 'Falha no envio'}`, 'error');
       } finally {
           setIsSendingBroadcast(false);
+          // IMPORTANTE: NÃO fechamos o canal aqui (removemos o setTimeout antigo)
       }
   };
 
