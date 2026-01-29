@@ -31,7 +31,8 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
-  SkipForward // Adicionado
+  SkipForward, // Adicionado
+  Megaphone // Adicionado
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState } from './utils';
@@ -278,6 +279,45 @@ function App() {
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [canProceed, setCanProceed] = useState(true); // Controle de bloqueio do Next
   const [showSkipConfirm, setShowSkipConfirm] = useState(false); // Modal de confirmação do Skip
+
+  // --- SYSTEM BROADCAST ALERT ---
+  const [systemAlert, setSystemAlert] = useState<{title: string, message: string} | null>(null);
+
+  // --- LISTENER GLOBAL DE ALERTAS ---
+  useEffect(() => {
+      // Escuta mensagens do Admin em tempo real
+      const alertChannel = supabase.channel('system_global_alerts');
+      
+      alertChannel
+        .on('broadcast', { event: 'sys_alert' }, (payload) => {
+            const data = payload.payload;
+            
+            // FILTRAGEM: Verifica se a mensagem é para mim
+            // Se target for undefined ou 'ALL', mostra.
+            // Se target for diferente da minha chave, ignora.
+            if (data.target && data.target !== 'ALL' && data.target !== currentUserKey) {
+                return;
+            }
+
+            if (data) {
+                // Play notification sound if desired
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.5;
+                audio.play().catch(() => {});
+                
+                setSystemAlert({
+                    title: data.title,
+                    message: data.message
+                });
+            }
+        })
+        .subscribe();
+
+      return () => {
+          supabase.removeChannel(alertChannel);
+      };
+  }, [currentUserKey]); // Adicionado dependência da chave para o filtro funcionar corretamente
+
 
   // --- TOUR STEPS DEFINITION (Roteiro com Interação Obrigatória) ---
   const tourSteps: TourStep[] = [
@@ -1059,6 +1099,44 @@ function App() {
   return (
     <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white relative">
       
+      {/* --- SYSTEM ALERT MODAL (BROADCAST LISTENER) --- */}
+      {systemAlert && (
+          <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center animate-fade-in p-4">
+              <div className="bg-[#0f0a1e] border-2 border-indigo-500 rounded-3xl p-8 max-w-md w-full shadow-[0_0_100px_rgba(99,102,241,0.4)] relative overflow-hidden text-center">
+                  <div className="absolute top-0 right-0 p-6 opacity-10">
+                      <Megaphone size={150} />
+                  </div>
+                  
+                  <div className="relative z-10 flex flex-col items-center">
+                      <div className="w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/50 animate-bounce">
+                          <Megaphone size={32} className="text-white" />
+                      </div>
+                      
+                      <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-tight">{systemAlert.title}</h3>
+                      
+                      <p className="text-base text-gray-300 mb-8 leading-relaxed font-medium">
+                          {systemAlert.message}
+                      </p>
+                      
+                      <div className="flex flex-col w-full gap-3">
+                          <button 
+                              onClick={() => window.location.reload()}
+                              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                          >
+                              <RefreshCw size={20} /> ATUALIZAR AGORA
+                          </button>
+                          <button 
+                              onClick={() => setSystemAlert(null)}
+                              className="text-gray-500 hover:text-white text-xs font-bold py-2 transition-colors uppercase tracking-widest"
+                          >
+                              Fechar (Não recomendado)
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* --- TOUR INTERATIVO --- */}
       <TourGuide 
         steps={tourSteps}
@@ -1071,7 +1149,7 @@ function App() {
         disableNext={!canProceed} // Bloqueia se a validação falhar
       />
 
-      {/* --- CONFIRMAÇÃO DE SKIP DO TUTORIAL --- */}
+      {/* ... rest of the App ... */}
       {showSkipConfirm && (
         <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-fade-in">
             <div className="bg-[#0f0a1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative">

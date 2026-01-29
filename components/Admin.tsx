@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -42,10 +42,15 @@ const Admin: React.FC<Props> = ({ notify }) => {
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'ERROR'>('CONNECTING');
   const channelRef = useRef<any>(null);
 
+  // States do Broadcast
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou a KEY do usuário
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
-      // Tenta conectar ao montar, mas de forma "preguiçosa" para não travar a UI
       const timer = setTimeout(() => connectRealtime(), 500);
 
       return () => {
@@ -70,6 +75,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
         Object.values(newState).forEach((presences: any) => {
             presences.forEach((p: any) => users.push(p as OnlineUser));
         });
+        // Remove duplicatas baseadas no device_id para não mostrar o mesmo user 2x se a conexão oscilar
         const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id, item])).values());
         setOnlineUsers(uniqueUsers);
       };
@@ -92,6 +98,50 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 setConnectionStatus('ERROR');
             }
         });
+  };
+
+  // --- FUNÇÕES DE BROADCAST ---
+  const handleSendBroadcast = async () => {
+      if (!broadcastTitle || !broadcastMsg) {
+          notify('Preencha título e mensagem.', 'error');
+          return;
+      }
+      
+      const targetName = broadcastTarget === 'ALL' 
+        ? `TODOS (${onlineUsers.length} usuários)` 
+        : onlineUsers.find(u => u.key === broadcastTarget)?.user || 'Usuário Específico';
+
+      if(!confirm(`ENVIAR ALERTA?\n\nDestino: ${targetName}\n\nIsso aparecerá imediatamente na tela do(s) usuário(s).`)) return;
+
+      setIsSendingBroadcast(true);
+      try {
+          const alertChannel = supabase.channel('system_global_alerts');
+          
+          await alertChannel.subscribe(async (status) => {
+              if (status === 'SUBSCRIBED') {
+                  await alertChannel.send({
+                      type: 'broadcast',
+                      event: 'sys_alert',
+                      payload: { 
+                          title: broadcastTitle, 
+                          message: broadcastMsg,
+                          target: broadcastTarget, // AQUI ESTÁ O SEGREDO: Envia quem deve receber
+                          timestamp: Date.now()
+                      }
+                  });
+                  notify('Mensagem enviada com sucesso!', 'success');
+                  setBroadcastMsg('');
+                  setBroadcastTitle('');
+                  
+                  setTimeout(() => supabase.removeChannel(alertChannel), 2000);
+              }
+          });
+
+      } catch (e) {
+          notify('Erro ao enviar broadcast.', 'error');
+      } finally {
+          setIsSendingBroadcast(false);
+      }
   };
 
   // --- FUNÇÕES DO SUPABASE (CRUD) ---
@@ -227,14 +277,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
       (k.key || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filtros de Monitoramento
-  const realUsers = onlineUsers.filter(u => u.device_id !== 'ADMIN-CONSOLE'); // Remove o próprio monitor da contagem geral se quiser, mas mantemos para debug
-  // Na verdade, queremos mostrar todos, mas classificados.
-  
-  // Vamos filtrar apenas conexões "reais" para os cards (excluindo este console se preferir, ou mantendo)
-  // Vou manter o ADMIN-CONSOLE na contagem de admins para vc ver que VOCÊ está online.
   const allConnections = onlineUsers;
-  
   const freeUsersOnline = allConnections.filter(u => u.key === 'TROPA-FREE');
   const paidUsersOnline = allConnections.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
   const adminsOnline = allConnections.filter(u => u.is_admin);
@@ -254,7 +297,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 </div>
             </div>
 
-            {/* STATUS DO RADAR (SEXY & DISCRETO) */}
+            {/* STATUS DO RADAR */}
             {activeTab === 'monitor' && (
                 <div className={`
                     flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all
@@ -313,7 +356,77 @@ const Admin: React.FC<Props> = ({ notify }) => {
             // --- ABA DE MONITORAMENTO EM TEMPO REAL ---
             <div className="space-y-6 animate-fade-in">
                 
-                {/* Métricas Rápidas */}
+                {/* --- ÁREA DE BROADCAST --- */}
+                <div className="glass-card p-6 rounded-2xl border border-indigo-500/30 bg-indigo-900/10 relative overflow-hidden">
+                    <div className="flex items-start gap-6 relative z-10">
+                        <div className="p-4 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/30">
+                            <Megaphone size={32} className="text-white animate-pulse-slow" />
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white mb-1">Centro de Transmissão</h3>
+                                    <p className="text-sm text-indigo-300 mb-4">Envie alertas em tempo real. Ideal para avisar sobre atualizações.</p>
+                                </div>
+                                
+                                {/* SELETOR DE DESTINO */}
+                                <div className="flex flex-col items-end">
+                                    <label className="text-[10px] font-bold text-indigo-300 uppercase mb-1">Destinatário</label>
+                                    <div className="relative">
+                                        <select 
+                                            className="appearance-none bg-black/40 border border-indigo-500/30 rounded-lg py-2 pl-3 pr-8 text-xs font-bold text-white focus:outline-none focus:border-indigo-400 cursor-pointer min-w-[200px]"
+                                            value={broadcastTarget}
+                                            onChange={(e) => setBroadcastTarget(e.target.value)}
+                                        >
+                                            <option value="ALL">📢 TODOS OS USUÁRIOS</option>
+                                            {onlineUsers.filter(u => u.key !== 'ADMIN-PANEL').map((u, idx) => (
+                                                <option key={idx} value={u.key}>
+                                                    👤 {u.user} ({u.key === 'TROPA-FREE' ? 'Free' : 'Licenciado'})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-300">
+                                            {broadcastTarget === 'ALL' ? <Globe size={12}/> : <Lock size={12}/>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                <div className="md:col-span-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Título (Ex: Atualização Importante)" 
+                                        className="w-full bg-black/40 border border-indigo-500/30 rounded-lg px-4 py-3 text-white focus:border-indigo-400 outline-none"
+                                        value={broadcastTitle}
+                                        onChange={e => setBroadcastTitle(e.target.value)}
+                                    />
+                                </div>
+                                <div className="md:col-span-6">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Mensagem (Ex: Corrigimos o erro X, atualize a página!)" 
+                                        className="w-full bg-black/40 border border-indigo-500/30 rounded-lg px-4 py-3 text-white focus:border-indigo-400 outline-none"
+                                        value={broadcastMsg}
+                                        onChange={e => setBroadcastMsg(e.target.value)}
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <button 
+                                        onClick={handleSendBroadcast}
+                                        disabled={isSendingBroadcast}
+                                        className={`w-full h-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-900/20 ${isSendingBroadcast ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isSendingBroadcast ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />} 
+                                        ENVIAR
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Métricas e Lista de Usuários (Mantido igual) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* TOTAL */}
                     <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
@@ -409,8 +522,20 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                             </div>
                                         </div>
                                         
-                                        <div className="text-right">
-                                            <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${user.is_admin ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`}></span>
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={() => {
+                                                    setBroadcastTarget(user.key);
+                                                    setBroadcastTitle('Mensagem Privada do Admin');
+                                                    document.querySelector('input')?.focus(); // Foca no input de título
+                                                }}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold text-gray-300 border border-white/10"
+                                            >
+                                                Mandar MSG
+                                            </button>
+                                            <div className="text-right">
+                                                <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${user.is_admin ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`}></span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))
@@ -420,9 +545,9 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 </div>
             </div>
         ) : (
-            // --- ABA DE GESTÃO DE CHAVES (ORIGINAL) ---
+            // --- ABA DE GESTÃO DE CHAVES ---
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-                
+                {/* (Conteúdo da Gestão de Chaves mantido igual...) */}
                 {/* Coluna 1: GERADOR */}
                 <div className="space-y-8">
                     <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5 shadow-2xl shadow-amber-900/10">
