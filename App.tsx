@@ -1106,44 +1106,6 @@ function App() {
   return (
     <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white relative">
       
-      {/* --- SYSTEM ALERT MODAL (BROADCAST LISTENER) --- */}
-      {systemAlert && (
-          <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center animate-fade-in p-4">
-              <div className="bg-[#0f0a1e] border-2 border-indigo-500 rounded-3xl p-8 max-w-md w-full shadow-[0_0_100px_rgba(99,102,241,0.4)] relative overflow-hidden text-center">
-                  <div className="absolute top-0 right-0 p-6 opacity-10">
-                      <Megaphone size={150} />
-                  </div>
-                  
-                  <div className="relative z-10 flex flex-col items-center">
-                      <div className="w-16 h-16 bg-indigo-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/50 animate-bounce">
-                          <Megaphone size={32} className="text-white" />
-                      </div>
-                      
-                      <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-tight">{systemAlert.title}</h3>
-                      
-                      <p className="text-base text-gray-300 mb-8 leading-relaxed font-medium">
-                          {systemAlert.message}
-                      </p>
-                      
-                      <div className="flex flex-col w-full gap-3">
-                          <button 
-                              onClick={() => window.location.reload()}
-                              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                          >
-                              <RefreshCw size={20} /> ATUALIZAR AGORA
-                          </button>
-                          <button 
-                              onClick={() => setSystemAlert(null)}
-                              className="text-gray-500 hover:text-white text-xs font-bold py-2 transition-colors uppercase tracking-widest"
-                          >
-                              Fechar (Não recomendado)
-                          </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* --- TOUR INTERATIVO --- */}
       <TourGuide 
         steps={tourSteps}
@@ -1196,8 +1158,40 @@ function App() {
         </div>
       )}
 
-      {/* Notifications */}
-      <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+      {/* --- NOTIFICATIONS STACK (INCLUINDO BROADCAST) --- */}
+      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none max-w-sm w-full">
+        
+        {/* 1. SYSTEM BROADCAST (Persistent until closed) */}
+        {systemAlert && (
+            <div className="pointer-events-auto animate-slide-in-right w-full">
+                <div className="bg-[#0f0a1e]/95 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(99,102,241,0.3)] relative overflow-hidden group">
+                     {/* Decorative BG */}
+                     <div className="absolute -right-6 -top-6 text-indigo-500/10 rotate-12 group-hover:rotate-0 transition-transform duration-700">
+                        <Megaphone size={120} />
+                     </div>
+                     
+                     <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                                <span className="relative flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                                </span>
+                                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Comunicado Admin</span>
+                            </div>
+                            <button onClick={() => setSystemAlert(null)} className="text-gray-500 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-1 rounded-md">
+                                <X size={14} />
+                            </button>
+                        </div>
+
+                        <h4 className="text-white font-bold text-base mb-1 pr-6 leading-tight">{systemAlert.title}</h4>
+                        <p className="text-gray-400 text-xs leading-relaxed">{systemAlert.message}</p>
+                     </div>
+                </div>
+            </div>
+        )}
+
+        {/* 2. STANDARD NOTIFICATIONS (Transient) */}
         {notifications.map(n => (
           <div key={n.id} className={`
             pointer-events-auto flex items-center gap-4 px-5 py-4 rounded-lg shadow-2xl border backdrop-blur-md animate-slide-in-right min-w-[320px]
