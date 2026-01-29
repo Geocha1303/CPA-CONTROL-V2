@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -45,7 +45,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
   // States do Broadcast
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou a KEY do usuário
+  const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou o DEVICE_ID do usuário
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   // --- EFEITOS ---
@@ -107,11 +107,19 @@ const Admin: React.FC<Props> = ({ notify }) => {
           return;
       }
       
-      const targetName = broadcastTarget === 'ALL' 
-        ? `TODOS (${onlineUsers.length} usuários)` 
-        : onlineUsers.find(u => u.key === broadcastTarget)?.user || 'Usuário Específico';
+      // Procura o usuário pelo DEVICE ID agora, que é único
+      const targetUser = onlineUsers.find(u => u.device_id === broadcastTarget);
+      
+      // Monta o nome para confirmação
+      let targetName = 'Destino Desconhecido';
+      
+      if (broadcastTarget === 'ALL') {
+          targetName = `TODOS (${onlineUsers.length} conexões)`;
+      } else if (targetUser) {
+          targetName = `${targetUser.user}`;
+      }
 
-      if(!confirm(`ENVIAR ALERTA?\n\nDestino: ${targetName}\n\nIsso aparecerá imediatamente na tela do(s) usuário(s).`)) return;
+      if(!confirm(`ENVIAR ALERTA?\n\nDestino: ${targetName}\n\nIsso aparecerá na tela deste usuário.`)) return;
 
       setIsSendingBroadcast(true);
       try {
@@ -125,7 +133,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                       payload: { 
                           title: broadcastTitle, 
                           message: broadcastMsg,
-                          target: broadcastTarget, // AQUI ESTÁ O SEGREDO: Envia quem deve receber
+                          target: broadcastTarget, // Envia o DEVICE_ID ou 'ALL'
                           timestamp: Date.now()
                       }
                   });
@@ -378,12 +386,22 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                             value={broadcastTarget}
                                             onChange={(e) => setBroadcastTarget(e.target.value)}
                                         >
-                                            <option value="ALL">📢 TODOS OS USUÁRIOS</option>
-                                            {onlineUsers.filter(u => u.key !== 'ADMIN-PANEL').map((u, idx) => (
-                                                <option key={idx} value={u.key}>
-                                                    👤 {u.user} ({u.key === 'TROPA-FREE' ? 'Free' : 'Licenciado'})
-                                                </option>
-                                            ))}
+                                            <option value="ALL">📢 TODOS OS USUÁRIOS ({allConnections.length})</option>
+                                            
+                                            {/* MAPEA TODOS OS USUÁRIOS SEM LÓGICA DE SESSÃO */}
+                                            {onlineUsers
+                                                .filter(u => u.key !== 'ADMIN-PANEL')
+                                                .sort((a,b) => a.user.localeCompare(b.user)) // Ordena por nome
+                                                .map((u) => {
+                                                    const type = u.key === 'TROPA-FREE' ? ' [Free]' : ' [Licenciado]';
+                                                    
+                                                    return (
+                                                        <option key={u.device_id} value={u.device_id}>
+                                                            👤 {u.user}{type}
+                                                        </option>
+                                                    );
+                                                })
+                                            }
                                         </select>
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-300">
                                             {broadcastTarget === 'ALL' ? <Globe size={12}/> : <Lock size={12}/>}
@@ -426,7 +444,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                     </div>
                 </div>
 
-                {/* Métricas e Lista de Usuários (Mantido igual) */}
+                {/* Métricas e Lista de Usuários */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* TOTAL */}
                     <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
@@ -525,9 +543,9 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         <div className="flex items-center gap-4">
                                             <button 
                                                 onClick={() => {
-                                                    setBroadcastTarget(user.key);
+                                                    setBroadcastTarget(user.device_id); // Alvo agora é o DEVICE ID específico
                                                     setBroadcastTitle('Mensagem Privada do Admin');
-                                                    document.querySelector('input')?.focus(); // Foca no input de título
+                                                    document.querySelector('input')?.focus();
                                                 }}
                                                 className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold text-gray-300 border border-white/10"
                                             >

@@ -285,6 +285,9 @@ function App() {
 
   // --- LISTENER GLOBAL DE ALERTAS ---
   useEffect(() => {
+      // Pega o Device ID para comparar com o alvo
+      const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+
       // Escuta mensagens do Admin em tempo real
       const alertChannel = supabase.channel('system_global_alerts');
       
@@ -292,12 +295,16 @@ function App() {
         .on('broadcast', { event: 'sys_alert' }, (payload) => {
             const data = payload.payload;
             
-            // FILTRAGEM: Verifica se a mensagem é para mim
-            // Se target for undefined ou 'ALL', mostra.
-            // Se target for diferente da minha chave, ignora.
-            if (data.target && data.target !== 'ALL' && data.target !== currentUserKey) {
-                return;
-            }
+            // FILTRAGEM PRECISA:
+            // 1. Se target for 'ALL', todos recebem.
+            // 2. Se target for igual a Minha Chave, recebo (Compatibilidade legado).
+            // 3. Se target for igual ao Meu Device ID, recebo (Novo sistema preciso).
+            const isForMe = 
+                data.target === 'ALL' || 
+                data.target === currentUserKey || 
+                data.target === deviceId;
+
+            if (!isForMe) return;
 
             if (data) {
                 // Play notification sound if desired
@@ -316,7 +323,7 @@ function App() {
       return () => {
           supabase.removeChannel(alertChannel);
       };
-  }, [currentUserKey]); // Adicionado dependência da chave para o filtro funcionar corretamente
+  }, [currentUserKey]);
 
 
   // --- TOUR STEPS DEFINITION (Roteiro com Interação Obrigatória) ---
