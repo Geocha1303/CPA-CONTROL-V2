@@ -48,26 +48,16 @@ const Admin: React.FC<Props> = ({ notify }) => {
   const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou o DEVICE_ID do usuário
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   
-  // CORREÇÃO: Mantém o canal de envio sempre aberto
-  const broadcastChannelRef = useRef<any>(null);
-
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
       const timer = setTimeout(() => connectRealtime(), 500);
 
-      // --- CORREÇÃO: INICIALIZA CANAL DE BROADCAST PERSISTENTE ---
-      const bcChannel = supabase.channel('system_global_alerts');
-      bcChannel.subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-              broadcastChannelRef.current = bcChannel;
-          }
-      });
-
       return () => {
           clearTimeout(timer);
           if (channelRef.current) supabase.removeChannel(channelRef.current);
-          if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current);
+          // IMPORTANTE: Não removemos o canal 'system_global_alerts' aqui.
+          // O App.tsx precisa dele ativo para ESCUTAR. Se removermos aqui, matamos a escuta do próprio admin se ele estiver testando na mesma aba.
       };
   }, []);
 
@@ -119,10 +109,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
           return;
       }
       
-      // Procura o usuário pelo DEVICE ID agora, que é único
       const targetUser = onlineUsers.find(u => u.device_id === broadcastTarget);
-      
-      // Monta o nome para confirmação
       let targetName = 'Destino Desconhecido';
       
       if (broadcastTarget === 'ALL') {
@@ -134,48 +121,55 @@ const Admin: React.FC<Props> = ({ notify }) => {
       if(!confirm(`ENVIAR ALERTA?\n\nDestino: ${targetName}\n\nIsso aparecerá na tela deste usuário.`)) return;
 
       setIsSendingBroadcast(true);
-      try {
-          // CORREÇÃO: Usa o canal persistente. Se não estiver pronto, tenta reconectar na hora.
-          let channel = broadcastChannelRef.current;
-          
-          if (!channel || channel.state !== 'joined') {
-              channel = supabase.channel('system_global_alerts');
-              await new Promise((resolve, reject) => {
-                  channel.subscribe((status: string) => {
-                      if (status === 'SUBSCRIBED') {
-                          broadcastChannelRef.current = channel;
-                          resolve(true);
-                      }
-                      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject('Erro de conexão ao enviar.');
-                  });
-              });
-          }
+      
+      // TIMEOUT DE SEGURANÇA (5 SEGUNDOS)
+      // Se a rede falhar, o botão destrava sozinho.
+      const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão.')), 5000)
+      );
 
-          const response = await channel.send({
+      try {
+          // Obtém o canal global (Singleton do Supabase)
+          const channel = supabase.channel('system_global_alerts');
+          
+          // Garante que está conectado antes de enviar
+          const connectionPromise = new Promise((resolve, reject) => {
+              if (channel.state === 'joined') {
+                  resolve(true);
+              } else {
+                  channel.subscribe((status) => {
+                      if (status === 'SUBSCRIBED') resolve(true);
+                      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject(new Error('Falha na conexão do canal.'));
+                  });
+              }
+          });
+
+          // Aguarda conexão (ou timeout)
+          await Promise.race([connectionPromise, timeoutPromise]);
+
+          // Envia a mensagem (com timeout também)
+          const sendPromise = channel.send({
               type: 'broadcast',
               event: 'sys_alert',
               payload: { 
                   title: broadcastTitle, 
                   message: broadcastMsg,
-                  target: broadcastTarget, // Envia o DEVICE_ID ou 'ALL'
+                  target: broadcastTarget,
                   timestamp: Date.now()
               }
           });
 
-          if (response === 'ok') {
-              notify('Mensagem enviada com sucesso!', 'success');
-              setBroadcastMsg('');
-              setBroadcastTitle('');
-          } else {
-              throw new Error('O servidor não confirmou o envio.');
-          }
+          await Promise.race([sendPromise, timeoutPromise]);
+
+          notify('Mensagem enviada com sucesso!', 'success');
+          setBroadcastMsg('');
+          setBroadcastTitle('');
 
       } catch (e: any) {
           console.error(e);
           notify(`Erro: ${e.message || 'Falha no envio'}`, 'error');
       } finally {
           setIsSendingBroadcast(false);
-          // IMPORTANTE: NÃO fechamos o canal aqui (removemos o setTimeout antigo)
       }
   };
 
