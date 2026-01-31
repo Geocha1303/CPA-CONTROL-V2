@@ -10,17 +10,21 @@ interface Props {
   navigateToDaily: (date: string) => void;
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
   readOnly?: boolean;
+  privacyMode?: boolean; // Nova prop
 }
 
 type TabType = 'kpis' | 'agents' | 'lots';
 
-const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify, readOnly }) => {
+const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify, readOnly, privacyMode }) => {
   // Use state.generator as initial but keep local state for inputs to allow smooth typing
   const [params, setParams] = useState(state.generator.params);
   const [dist, setDist] = useState(state.generator.distribuicaoAgentes);
   const [totalAgentes, setTotalAgentes] = useState(state.generator.totalAgentes);
   const [jogadoresPorCiclo, setJogadoresPorCiclo] = useState(state.generator.jogadoresPorCiclo);
   
+  // Helper Privacy
+  const formatVal = (val: number) => privacyMode ? '****' : formatarBRL(val);
+
   // --- ESTADO DE PROCESSAMENTO VISUAL ---
   const [processingState, setProcessingState] = useState({
       isActive: false,
@@ -359,8 +363,8 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       return (
           <div className="space-y-6 animate-fade-in">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <Card title="Volume Total" val={formatarBRL(totalDep)} color="text-emerald-400" icon={Target} sub={`${totalPlayers} jogadores no plano`} />
-                  <Card title="Ticket Médio" val={formatarBRL(avg)} color="text-cyan-400" icon={BarChart2} sub="Média por jogador" />
+                  <Card title="Volume Total" val={formatVal(totalDep)} color="text-emerald-400" icon={Target} sub={`${totalPlayers} jogadores no plano`} />
+                  <Card title="Ticket Médio" val={formatVal(avg)} color="text-cyan-400" icon={BarChart2} sub="Média por jogador" />
               </div>
               {/* Stats Grid */}
               <div className="glass-card border-white/5 rounded-2xl p-6">
@@ -428,7 +432,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                 <p className="text-sm text-gray-400 font-medium">{stats.count} jogadores</p>
                             </div>
                             <div className="text-right">
-                                <p className="text-2xl font-bold text-emerald-400">{formatarBRL(stats.total)}</p>
+                                <p className="text-2xl font-bold text-emerald-400">{formatVal(stats.total)}</p>
                                 <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Total Gerado</p>
                             </div>
                         </div>
@@ -479,7 +483,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                     Jogadores {chunkStartIndex + 1}-{chunkStartIndex + chunk.length}
                                 </span>
                                 <span className="text-emerald-400 font-mono font-bold text-sm bg-emerald-900/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                    {formatarBRL(lotDep)}
+                                    {formatVal(lotDep)}
                                 </span>
                             </div>
                         </div>
@@ -561,13 +565,13 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-5 py-4"><span className="px-2 py-1 rounded-md text-xs font-bold bg-white/5 border border-white/10 text-gray-300">{p.perfil}</span></td>
                                         <td className="px-5 py-4 text-gray-300 font-mono font-bold text-base">A{p.agent}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-white text-base">R$ {p.total.toFixed(2)}</td>
+                                        <td className="px-5 py-4 text-right font-bold text-white text-base">{privacyMode ? 'R$ ****' : `R$ ${p.total.toFixed(2)}`}</td>
                                         <td className="px-5 py-4 flex gap-2 items-center flex-wrap">
                                             {p.deps.map((d, depIdx) => (
                                                 <input 
                                                     key={depIdx} type="number"
                                                     disabled={readOnly}
-                                                    className={`w-20 px-2 py-1.5 text-center text-sm rounded-md border bg-black/40 font-bold focus:outline-none transition-all ${d.type === 'deposito' ? 'border-white/10 text-cyan-400' : 'border-amber-900/50 text-amber-400'} ${readOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    className={`w-20 px-2 py-1.5 text-center text-sm rounded-md border bg-black/40 font-bold focus:outline-none transition-all ${d.type === 'deposito' ? 'border-white/10 text-cyan-400' : 'border-amber-900/50 text-amber-400'} ${readOnly ? 'opacity-50 cursor-not-allowed' : ''} ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                     value={d.val}
                                                     onChange={(e) => {
                                                         const val = parseFloat(e.target.value) || 0;

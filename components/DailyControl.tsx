@@ -11,13 +11,17 @@ interface Props {
   setCurrentDate: (d: string) => void;
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
   readOnly?: boolean;
+  privacyMode?: boolean; // Nova prop
 }
 
-const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly }) => {
+const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly, privacyMode }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   const isManualMode = state.config.manualBonusMode === true;
   const [sendingId, setSendingId] = useState<number | null>(null);
   
+  // Helper para Privacy
+  const formatVal = (val: number) => privacyMode ? '****' : formatarBRL(val);
+
   // Helper para evitar NaN
   const safeFloat = (val: string) => {
       if (val === '') return 0;
@@ -161,25 +165,25 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                 <div className="gateway-card p-4 rounded-xl border-l-2 border-l-primary">
                     <span className="text-[10px] text-gray-400 uppercase font-bold font-mono block mb-1">ENTRADAS (TOTAL)</span>
                     <span className="text-xl font-bold text-white font-mono">
-                        {formatarBRL(totalSaques + totalBonus)}
+                        {formatVal(totalSaques + totalBonus)}
                     </span>
                 </div>
                 <div className="gateway-card p-4 rounded-xl border-l-2 border-l-accent-pink">
                     <span className="text-[10px] text-gray-400 uppercase font-bold font-mono block mb-1">SAÍDAS (TOTAL)</span>
                     <span className="text-xl font-bold text-white font-mono">
-                        {formatarBRL(totalInvestido)}
+                        {formatVal(totalInvestido)}
                     </span>
                 </div>
                  <div className="gateway-card p-4 rounded-xl border-l-2 border-l-gray-600">
                     <span className="text-[10px] text-gray-400 uppercase font-bold font-mono block mb-1">CUSTOS OP.</span>
                     <span className="text-xl font-bold text-white font-mono">
-                        {formatarBRL(totalDespesas)}
+                        {formatVal(totalDespesas)}
                     </span>
                 </div>
                 <div className={`gateway-card p-4 rounded-xl border-l-2 ${totalLucroDia >= 0 ? 'border-l-accent-cyan bg-accent-cyan/5' : 'border-l-accent-pink bg-accent-pink/5'}`}>
                     <span className="text-[10px] text-gray-300 uppercase font-bold font-mono block mb-1">LUCRO LÍQUIDO</span>
                     <span className={`text-2xl font-black font-mono ${totalLucroDia >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>
-                         {formatarBRL(totalLucroDia)}
+                         {formatVal(totalLucroDia)}
                     </span>
                 </div>
           </div>
@@ -192,7 +196,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
             <div className="relative w-40">
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
                     value={dayRecord.expenses.proxy === 0 ? '' : dayRecord.expenses.proxy} 
-                    placeholder="0"
+                    placeholder={privacyMode ? '****' : "0"}
                     disabled={readOnly}
                     onChange={(e) => handleExpenseChange('proxy', e.target.value)} />
             </div>
@@ -202,7 +206,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
             <div className="relative w-40">
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
                     value={dayRecord.expenses.numeros === 0 ? '' : dayRecord.expenses.numeros} 
-                    placeholder="0"
+                    placeholder={privacyMode ? '****' : "0"}
                     disabled={readOnly}
                     onChange={(e) => handleExpenseChange('numeros', e.target.value)} />
             </div>
@@ -289,9 +293,9 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                     <td className="px-6 py-3">
                                         <div className="relative group/input">
                                             <input type="number" 
-                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
+                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.deposito === 0 ? '' : acc.deposito} 
-                                                placeholder="0"
+                                                placeholder={privacyMode ? '****' : "0"}
                                                 disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} 
                                             />
@@ -302,9 +306,9 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                     <td className="px-6 py-3">
                                         <div className="relative group/input">
                                             <input type="number" 
-                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
+                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.redeposito === 0 ? '' : acc.redeposito} 
-                                                placeholder="0"
+                                                placeholder={privacyMode ? '****' : "0"}
                                                 disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} 
                                             />
@@ -315,9 +319,9 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                     <td className="px-6 py-3">
                                         <div className="relative group/input">
                                             <input type="number" 
-                                                className="gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.02] hover:bg-accent-cyan/[0.05] transition-all"
+                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.02] hover:bg-accent-cyan/[0.05] transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.saque === 0 ? '' : acc.saque} 
-                                                placeholder="0"
+                                                placeholder={privacyMode ? '****' : "0"}
                                                 disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'saque', e.target.value)} 
                                             />
@@ -332,9 +336,9 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                 <div className="absolute left-3 text-primary-glow font-bold text-xs pointer-events-none">R$</div>
                                                 <input 
                                                     type="number" 
-                                                    className="gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all shadow-[0_0_15px_rgba(112,0,255,0.05)]"
+                                                    className={`gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all shadow-[0_0_15px_rgba(112,0,255,0.05)] ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                     value={acc.ciclos === 0 ? '' : acc.ciclos} 
-                                                    placeholder="0.00"
+                                                    placeholder={privacyMode ? '****' : "0.00"}
                                                     disabled={readOnly}
                                                     onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
                                                 />
@@ -360,7 +364,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
 
                                     {/* RESULTADO */}
                                     <td className={`px-6 py-3 text-right font-black font-mono text-lg tracking-tight ${lucro >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>
-                                        {formatarBRL(lucro)}
+                                        {formatVal(lucro)}
                                     </td>
 
                                     {/* AÇÕES (DELETE + SEND) */}

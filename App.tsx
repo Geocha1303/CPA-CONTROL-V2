@@ -324,6 +324,9 @@ function App() {
   
   const [state, setState] = useState<AppState>(initialState);
   
+  // --- PRIVACY MODE (BOSS KEY) ---
+  const [privacyMode, setPrivacyMode] = useState(false);
+
   // --- SQUAD & SPECTATOR MODE ---
   const [spectatingData, setSpectatingData] = useState<{data: AppState, name: string} | null>(null);
   
@@ -356,6 +359,17 @@ function App() {
 
   // --- SYSTEM BROADCAST ALERT ---
   const [systemAlert, setSystemAlert] = useState<{title: string, message: string} | null>(null);
+
+  // --- PRIVACY MODE LISTENER ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'F9') {
+            setPrivacyMode(prev => !prev);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // --- ENSURE TAG EXISTENCE ---
   useEffect(() => {
@@ -796,7 +810,8 @@ function App() {
         state: activeState, 
         updateState, 
         notify, 
-        readOnly: isReadOnly // Prop passada para todos componentes
+        readOnly: isReadOnly, // Prop passada para todos componentes
+        privacyMode: privacyMode // NOVO: Prop passada para ocultar valores
     };
 
     switch (activeView) {
@@ -953,6 +968,19 @@ function App() {
         </div>
         
         <div className="p-6 border-t border-white/5 bg-[#080814]">
+             {/* --- BOTÃO DE PRIVACIDADE --- */}
+             <button 
+                onClick={() => setPrivacyMode(prev => !prev)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border mb-3 text-xs font-bold uppercase tracking-wider transition-all ${privacyMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-white/5 border-white/5 text-gray-400 hover:text-white'}`}
+                title="Modo Privacidade (F9)"
+             >
+                <div className="flex items-center gap-2">
+                    {privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {privacyMode ? 'Privacidade ON' : 'Visível'}
+                </div>
+                <span className="text-[9px] opacity-50 bg-black/20 px-1 rounded">F9</span>
+             </button>
+
              {/* ... (Bottom Sidebar - Reset/Backup - Mantidos) ... */}
              <div className="flex gap-2 mb-3">
                 <button onClick={handleManualDownload} disabled={isReadOnly} className={`flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5 py-2.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>

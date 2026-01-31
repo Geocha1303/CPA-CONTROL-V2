@@ -7,15 +7,19 @@ interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
   readOnly?: boolean;
+  privacyMode?: boolean; // Nova prop
 }
 
-const Expenses: React.FC<Props> = ({ state, updateState, readOnly }) => {
+const Expenses: React.FC<Props> = ({ state, updateState, readOnly, privacyMode }) => {
   const [newExpense, setNewExpense] = useState<{desc: string, val: string, date: string, rec: boolean}>({
     desc: '',
     val: '',
     date: getHojeISO(),
     rec: false
   });
+
+  // Helper Privacy
+  const formatVal = (val: number) => privacyMode ? '****' : formatarBRL(val);
 
   const handleAdd = () => {
     if (readOnly) return;
@@ -65,7 +69,7 @@ const Expenses: React.FC<Props> = ({ state, updateState, readOnly }) => {
 
             <div className="relative z-10 flex flex-col items-end">
                 <span className="text-xs text-gray-400 uppercase font-bold tracking-widest mb-1">Total Acumulado</span>
-                <span className="text-4xl font-black text-rose-400 text-glow">{formatarBRL(totalDespesas)}</span>
+                <span className="text-4xl font-black text-rose-400 text-glow">{formatVal(totalDespesas)}</span>
             </div>
         </div>
 
@@ -108,7 +112,7 @@ const Expenses: React.FC<Props> = ({ state, updateState, readOnly }) => {
                     <input 
                         type="number" 
                         disabled={readOnly}
-                        placeholder="0.00"
+                        placeholder={privacyMode ? '****' : "0.00"}
                         className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-bold placeholder:text-gray-600 disabled:opacity-50"
                         value={newExpense.val}
                         onChange={e => setNewExpense({...newExpense, val: e.target.value})}
@@ -154,7 +158,7 @@ const Expenses: React.FC<Props> = ({ state, updateState, readOnly }) => {
                             <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
                                 <td className="px-6 py-4 font-mono text-gray-400">{new Date(item.date).toLocaleDateString('pt-BR')}</td>
                                 <td className="px-6 py-4 text-white font-medium">{item.description}</td>
-                                <td className="px-6 py-4 text-right font-bold text-rose-400 text-base">{formatarBRL(item.valor)}</td>
+                                <td className="px-6 py-4 text-right font-bold text-rose-400 text-base">{formatVal(item.valor)}</td>
                                 <td className="px-6 py-4 text-center">
                                     {!readOnly && (
                                         <button 

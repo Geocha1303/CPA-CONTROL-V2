@@ -6,12 +6,16 @@ import { Target, TrendingUp, Calendar, Crown, Crosshair, HelpCircle, Plus, Trash
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
+  privacyMode?: boolean; // Nova prop
 }
 
-const Goals: React.FC<Props> = ({ state, updateState }) => {
+const Goals: React.FC<Props> = ({ state, updateState, privacyMode }) => {
   const [newDream, setNewDream] = useState({ name: '', val: '', manualUrl: '' });
   const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
   
+  // Helper Privacy
+  const formatVal = (val: number) => privacyMode ? '****' : formatarBRL(val);
+
   const currentYear = new Date().getFullYear();
   const currentMonthIndex = new Date().getMonth();
   const todayDay = new Date().getDate();
@@ -134,7 +138,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                              <span className="text-gray-400 font-mono text-sm uppercase">{currentMonthStats.monthName} {currentYear}</span>
                         </div>
                         <h3 className="text-4xl font-black text-white font-mono tracking-tight">
-                            {formatarBRL(currentMonthStats.netProfit)}
+                            {formatVal(currentMonthStats.netProfit)}
                         </h3>
                         <p className="text-gray-400 text-sm font-medium mt-1">Lucro Líquido Realizado (YTD)</p>
                     </div>
@@ -145,8 +149,9 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                              <span className="text-gray-500 font-bold">R$</span>
                              <input 
                                 type="number" 
-                                className="bg-black/30 border border-white/10 rounded-lg py-1 px-3 w-32 text-right text-white font-bold font-mono outline-none focus:border-primary transition-colors"
+                                className={`bg-black/30 border border-white/10 rounded-lg py-1 px-3 w-32 text-right text-white font-bold font-mono outline-none focus:border-primary transition-colors ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                 value={currentMonthStats.goal}
+                                placeholder={privacyMode ? '****' : "0"}
                                 onChange={e => handleGoalChange(parseFloat(e.target.value)||0)}
                              />
                          </div>
@@ -157,7 +162,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                 <div className="relative z-10 mb-8">
                      <div className="flex justify-between text-xs font-bold mb-2">
                          <span className="text-primary-glow">{currentMonthStats.percent.toFixed(1)}% Concluído</span>
-                         <span className="text-gray-500">Alvo: {formatarBRL(currentMonthStats.goal)}</span>
+                         <span className="text-gray-500">Alvo: {formatVal(currentMonthStats.goal)}</span>
                      </div>
                      <div className="h-4 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
                          <div 
@@ -174,7 +179,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                     <div className="bg-black/40 rounded-xl p-4 border border-white/5">
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Ritmo Atual (Dia)</p>
                         <p className={`text-xl font-black font-mono ${currentMonthStats.currentDailyAvg < 0 ? 'text-rose-400' : 'text-white'}`}>
-                            {formatarBRL(currentMonthStats.currentDailyAvg)}
+                            {formatVal(currentMonthStats.currentDailyAvg)}
                         </p>
                         <p className="text-[10px] text-gray-500 mt-1">Média diária realizada</p>
                     </div>
@@ -182,7 +187,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                     <div className="bg-black/40 rounded-xl p-4 border border-white/5">
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Projeção Final</p>
                         <p className={`text-xl font-black font-mono ${currentMonthStats.projection >= currentMonthStats.goal ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {formatarBRL(currentMonthStats.projection)}
+                            {formatVal(currentMonthStats.projection)}
                         </p>
                          <p className="text-[10px] text-gray-500 mt-1">Se mantiver o ritmo atual</p>
                     </div>
@@ -198,10 +203,10 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                         {currentMonthStats.gap > 0 ? (
                             <>
                                 <p className="text-xl font-black font-mono text-rose-400">
-                                    {formatarBRL(currentMonthStats.gap)}
+                                    {formatVal(currentMonthStats.gap)}
                                 </p>
                                 <p className="text-[10px] text-rose-300/70 mt-1 font-bold">
-                                    Necessário: {formatarBRL(currentMonthStats.requiredDaily)} / dia
+                                    Necessário: {formatVal(currentMonthStats.requiredDaily)} / dia
                                 </p>
                             </>
                         ) : (
@@ -231,9 +236,9 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                         <TrendingUp className="text-accent-cyan" size={20} /> Aceleração
                     </h4>
                     <p className="text-sm text-gray-400 leading-relaxed">
-                        Sua média diária atual é {formatarBRL(currentMonthStats.currentDailyAvg)}. 
+                        Sua média diária atual é {formatVal(currentMonthStats.currentDailyAvg)}. 
                         {currentMonthStats.gap > 0 && (
-                            <> Para bater a meta, você precisa aumentar seu ritmo para <span className="text-accent-cyan font-bold">{formatarBRL(currentMonthStats.requiredDaily)}</span> por dia nos dias restantes.</>
+                            <> Para bater a meta, você precisa aumentar seu ritmo para <span className="text-accent-cyan font-bold">{formatVal(currentMonthStats.requiredDaily)}</span> por dia nos dias restantes.</>
                         )}
                     </p>
                 </div>
@@ -248,7 +253,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                         <Crown className="text-amber-400" /> Quadro dos Sonhos
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Use seu <span className="text-emerald-400 font-bold">Lucro Líquido Total ({formatarBRL(totalLifetimeNetProfit)})</span> para conquistar objetivos.
+                        Use seu <span className="text-emerald-400 font-bold">Lucro Líquido Total ({formatVal(totalLifetimeNetProfit)})</span> para conquistar objetivos.
                     </p>
                 </div>
 
@@ -402,7 +407,7 @@ const Goals: React.FC<Props> = ({ state, updateState }) => {
                                          <h4 className={`font-bold text-xl leading-tight drop-shadow-lg line-clamp-1 ${isWaiting ? 'text-gray-500' : 'text-white'}`}>{goal.name}</h4>
                                          <div className="flex items-center gap-2 mt-1">
                                             <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-300 uppercase font-bold tracking-wider backdrop-blur-sm border border-white/5">
-                                                Custo: {formatarBRL(goal.targetValue)}
+                                                Custo: {formatVal(goal.targetValue)}
                                             </span>
                                          </div>
                                     </div>

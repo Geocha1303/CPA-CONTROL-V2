@@ -8,14 +8,16 @@ import {
 import { 
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
-  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown
+  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown,
+  Calendar, Flame, Sparkles // Novos ícones
 } from 'lucide-react';
 
 interface Props {
   state: AppState;
+  privacyMode?: boolean; // Nova prop
 }
 
-const Dashboard: React.FC<Props> = ({ state }) => {
+const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   const metrics = useMemo(() => {
     // 1. Filtragem de Datas
     const hojeISO = getHojeISO();
@@ -145,9 +147,60 @@ const Dashboard: React.FC<Props> = ({ state }) => {
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
+  // --- HEATMAP & SEASONALITY LOGIC ---
+  const intelligenceData = useMemo(() => {
+      const dayStats: Record<number, { profit: number; count: number }> = { 0: {profit:0, count:0}, 1: {profit:0, count:0}, 2: {profit:0, count:0}, 3: {profit:0, count:0}, 4: {profit:0, count:0}, 5: {profit:0, count:0}, 6: {profit:0, count:0} };
+      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      
+      const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
+
+      // Populate Stats
+      Object.keys(state.dailyRecords).forEach(date => {
+          const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
+          const dayIndex = new Date(date).getDay(); // 0-6
+          if(m.lucro !== 0) {
+              dayStats[dayIndex].profit += m.lucro;
+              dayStats[dayIndex].count += 1;
+          }
+      });
+
+      // Heatmap Data (Day of Week)
+      let maxProfit = 0;
+      const heatmapData = Object.keys(dayStats).map(key => {
+          const k = parseInt(key);
+          const total = dayStats[k].profit;
+          if (total > maxProfit) maxProfit = total;
+          return { day: dayNames[k], profit: total, index: k };
+      });
+
+      // Best Day Analysis
+      let bestDay = { name: '---', profit: -Infinity };
+      heatmapData.forEach(d => {
+          if(d.profit > bestDay.profit) bestDay = { name: d.day, profit: d.profit };
+      });
+
+      // Calendar Alert (Example Logic)
+      const today = new Date();
+      const currentDay = today.getDate();
+      let alertMsg = "";
+      if (currentDay === 5 || currentDay === 20) {
+          alertMsg = "🔥 Dia de Pagamento no Brasil! Volume alto esperado.";
+      } else if (currentDay >= 28) {
+          alertMsg = "⚠️ Fim de mês: Plataformas tendem a recolher.";
+      } else {
+          alertMsg = "✅ Operação em período normal.";
+      }
+
+      return { heatmapData, maxProfit, bestDay, alertMsg };
+  }, [state.dailyRecords, state.config]);
+
+  // Helper para Privacy Mode
+  const formatVal = (val: number) => privacyMode ? 'R$ ****' : formatarBRL(val);
+
   // Tooltip customizado com efeito "Glass" e design melhorado
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      if (privacyMode) return null; // Não mostra tooltip se privado
       return (
         <div className="bg-[#050510]/95 border border-white/10 p-4 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] backdrop-blur-md min-w-[200px]">
           <p className="text-gray-400 text-[10px] font-bold uppercase mb-3 tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
@@ -162,7 +215,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                     </span>
                 </div>
                 <span className={`font-bold font-mono text-sm ${entry.dataKey === 'lucro' ? 'text-emerald-400' : 'text-white'}`}>
-                    {formatarBRL(entry.value)}
+                    {formatVal(entry.value)}
                 </span>
             </div>
           ))}
@@ -189,6 +242,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           <div>
             <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
                Dashboard
+               {privacyMode && <span className="bg-amber-500/20 text-amber-500 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 uppercase tracking-widest">Modo Privacidade</span>}
             </h1>
             <p className="text-gray-400 text-xs font-medium mt-1 pl-1">
                 Visão consolidada de performance financeira.
@@ -213,6 +267,78 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           </div>
         </div>
 
+        {/* --- INTELLIGENCE WIDGETS (NOVO) --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
+            
+            {/* 1. HEATMAP SEMANAL */}
+            <div className="gateway-card p-4 rounded-xl border border-white/5 bg-gradient-to-br from-[#0a0614] to-transparent">
+                 <div className="flex justify-between items-start mb-4">
+                     <div>
+                        <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                            <Flame size={14} className="text-orange-400" /> Intensidade Semanal
+                        </h3>
+                        <p className="text-[10px] text-gray-500">Seus dias mais lucrativos baseados no histórico.</p>
+                     </div>
+                     <div className="text-right">
+                         <span className="text-[9px] text-gray-500 uppercase font-bold block">Melhor Dia</span>
+                         <span className="text-emerald-400 font-bold">{intelligenceData.bestDay.name}</span>
+                     </div>
+                 </div>
+                 
+                 <div className="grid grid-cols-7 gap-2">
+                     {intelligenceData.heatmapData.map((d) => {
+                         // Calcula intensidade de 0.1 a 1.0
+                         const intensity = intelligenceData.maxProfit > 0 ? (d.profit / intelligenceData.maxProfit) : 0;
+                         const isZero = d.profit <= 0;
+                         
+                         return (
+                             <div key={d.day} className="flex flex-col items-center gap-1 group relative">
+                                 <div 
+                                    className={`w-full h-12 rounded-lg transition-all border ${
+                                        isZero ? 'bg-white/5 border-white/5' : 'bg-emerald-500 border-emerald-400'
+                                    }`}
+                                    style={{ opacity: isZero ? 1 : Math.max(0.2, intensity) }}
+                                 ></div>
+                                 <span className="text-[9px] text-gray-500 font-bold uppercase">{d.day}</span>
+                                 
+                                 {/* Tooltip Local */}
+                                 <div className="absolute bottom-full mb-2 bg-black/90 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                                     {formatVal(d.profit)}
+                                 </div>
+                             </div>
+                         );
+                     })}
+                 </div>
+            </div>
+
+            {/* 2. RADAR SAZONAL */}
+            <div className="gateway-card p-4 rounded-xl border border-white/5 bg-gradient-to-br from-[#0a0614] to-transparent relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Calendar size={80} /></div>
+                
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                     <div>
+                        <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                            <Sparkles size={14} className="text-purple-400" /> Radar de Oportunidades
+                        </h3>
+                        <p className="text-[10px] text-gray-500">Análise de calendário e tendências.</p>
+                     </div>
+                 </div>
+
+                 <div className="relative z-10 flex flex-col justify-center h-full pb-2">
+                     <div className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-center gap-3">
+                         <div className="p-2 bg-purple-500/20 rounded-full text-purple-400">
+                             <Calendar size={18} />
+                         </div>
+                         <div>
+                             <p className="text-white font-bold text-xs">{intelligenceData.alertMsg}</p>
+                             <p className="text-[10px] text-gray-500 mt-0.5">Baseado no dia {new Date().getDate()} do mês.</p>
+                         </div>
+                     </div>
+                 </div>
+            </div>
+        </div>
+
+
         {/* --- KPI SUMMARY CARDS (ATUALIZADO) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* CARD 1: LUCRO (NEON EMERALD) */}
@@ -228,7 +354,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                         <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Resultado Líquido</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-                        {formatarBRL(metrics.lucroLiquido)}
+                        {formatVal(metrics.lucroLiquido)}
                     </div>
                 </div>
             </div>
@@ -246,7 +372,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                         <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Entradas (Volume)</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(99,102,241,0.3)]">
-                        {formatarBRL(metrics.totalRet)}
+                        {formatVal(metrics.totalRet)}
                     </div>
                 </div>
             </div>
@@ -264,7 +390,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                         <span className="text-xs font-bold text-rose-400 uppercase tracking-widest">Saídas Totais</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">
-                        {formatarBRL(metrics.totalInv)}
+                        {formatVal(metrics.totalInv)}
                     </div>
                 </div>
             </div>
@@ -345,6 +471,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                     tick={{fill: '#6366f1', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
                                     tickFormatter={(val) => `R$${val/1000}k`}
                                     width={40}
+                                    hide={privacyMode} // Esconde eixo Y se privado
                                 />
                                 <YAxis 
                                     yAxisId="right"
@@ -353,6 +480,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                     tick={{fill: '#10b981', fontSize: 10, fontWeight: 600, opacity: 0.5}} 
                                     tickFormatter={(val) => `R$${val/1000}k`}
                                     width={40}
+                                    hide={privacyMode}
                                 />
                                 
                                 <Tooltip 
@@ -418,7 +546,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                 </Pie>
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#050510e6', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '12px', backdropFilter: 'blur(10px)' }}
-                                    formatter={(value: number) => formatarBRL(value)}
+                                    formatter={(value: number) => formatVal(value)}
                                     itemStyle={{ color: '#fff' }}
                                 />
                                 <Legend 
@@ -432,7 +560,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                         </ResponsiveContainer>
                         
                         <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
-                             <span className="text-lg font-bold text-white">{formatarBRL(metrics.totalInv)}</span>
+                             <span className="text-lg font-bold text-white">{formatVal(metrics.totalInv)}</span>
                              <span className="text-[7px] text-gray-500 font-bold uppercase tracking-widest">Saídas</span>
                         </div>
                     </div>
@@ -448,7 +576,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                          <div>
                              <div className="flex justify-between text-[10px] font-bold uppercase text-gray-500 mb-2">
                                  <span>Entrada</span>
-                                 <span className="text-gray-300">{formatarBRL(metrics.totalInv)}</span>
+                                 <span className="text-gray-300">{formatVal(metrics.totalInv)}</span>
                              </div>
                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                                  <div className={`h-full rounded-full w-full transition-all duration-1000 ${metrics.totalInv > 0 ? 'bg-gray-400' : 'bg-gray-700 opacity-30'}`}></div>
@@ -537,7 +665,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                                         )}
                                     </td>
                                     <td className={`px-6 py-3 text-right font-mono font-bold text-sm ${item.profit >= 0 ? 'text-white' : 'text-gray-500'}`}>
-                                        {formatarBRL(item.profit)}
+                                        {formatVal(item.profit)}
                                     </td>
                                     <td className="px-6 py-3 text-center">
                                         <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">

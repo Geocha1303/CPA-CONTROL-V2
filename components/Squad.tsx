@@ -8,6 +8,7 @@ interface Props {
   currentUserKey: string;
   onSpectate: (data: AppState, memberName: string) => void;
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
+  privacyMode?: boolean; // Nova prop
 }
 
 interface FeedMessage {
@@ -23,12 +24,15 @@ interface MemberMetrics {
     volume: number;
 }
 
-const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
+const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify, privacyMode }) => {
   const [members, setMembers] = useState<(SquadMember & { metrics?: MemberMetrics })[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
   const [loadingDataId, setLoadingDataId] = useState<string | null>(null);
   
+  // Helper Privacy
+  const formatVal = (val: number) => privacyMode ? '****' : formatarBRL(val);
+
   // States para Vincular Líder
   const [myLeaderKey, setMyLeaderKey] = useState<string>('');
   const [inputLeaderKey, setInputLeaderKey] = useState('');
@@ -416,7 +420,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                           </span>
                           <div className="flex items-center gap-3">
                               <div className="text-2xl md:text-4xl font-black text-white font-mono tracking-wider drop-shadow-lg text-center md:text-right bg-black/30 px-4 py-2 rounded-lg border border-white/10">
-                                  {currentUserKey}
+                                  {privacyMode ? '****-****' : currentUserKey}
                               </div>
                               <button 
                                 onClick={() => copyToClipboard(currentUserKey)}
@@ -476,8 +480,8 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                             </div>
                             
                             <div className="flex items-end gap-2 mb-2">
-                                <span className="text-4xl font-black text-white font-mono">{formatarBRL(teamTotalProfit)}</span>
-                                <span className="text-sm text-gray-400 font-bold mb-1">/ {formatarBRL(squadGoal)}</span>
+                                <span className="text-4xl font-black text-white font-mono">{formatVal(teamTotalProfit)}</span>
+                                <span className="text-sm text-gray-400 font-bold mb-1">/ {formatVal(squadGoal)}</span>
                             </div>
 
                             <div className="w-full bg-black/40 h-4 rounded-full overflow-hidden border border-white/5">
@@ -495,7 +499,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                             <h3 className="text-gray-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-2">
                                 <DollarSign size={14} className="text-indigo-400" /> Volume de Vendas Total
                             </h3>
-                            <div className="text-3xl font-black text-white font-mono">{formatarBRL(teamTotalVolume)}</div>
+                            <div className="text-3xl font-black text-white font-mono">{formatVal(teamTotalVolume)}</div>
                             <p className="text-xs text-indigo-300 mt-1">Acumulado da equipe hoje</p>
                         </div>
                     </div>
@@ -551,7 +555,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                             <div className="text-right hidden sm:block">
                                                 <p className="text-[9px] text-gray-500 uppercase font-bold">Lucro Hoje</p>
                                                 <p className={`font-mono font-bold ${member.metrics && member.metrics.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    {formatarBRL(member.metrics?.profit)}
+                                                    {formatVal(member.metrics?.profit)}
                                                 </p>
                                             </div>
                                             
@@ -662,7 +666,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                             </p>
                             
                             <div className="bg-black/60 px-6 py-4 rounded-xl inline-block font-mono text-emerald-300 font-bold text-xl tracking-wider mb-8 border border-emerald-500/30 shadow-inner">
-                                {myLeaderKey}
+                                {privacyMode ? '****-****-****' : myLeaderKey}
                             </div>
                             
                             <div className="flex justify-center">
