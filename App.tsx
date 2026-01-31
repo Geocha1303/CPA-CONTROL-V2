@@ -33,7 +33,8 @@ import {
   HelpCircle,
   SkipForward, 
   Megaphone,
-  Users // Squad Icon
+  Users, // Squad Icon
+  Heart // Icone para Apoiador
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag } from './utils';
@@ -92,6 +93,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [deviceId, setDeviceId] = useState('');
+    const [showVipInput, setShowVipInput] = useState(false); // Toggle para mostrar input VIP
 
     useEffect(() => {
         let storedId = localStorage.getItem(DEVICE_ID_KEY);
@@ -198,89 +200,118 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden font-sans select-none">
+            {/* Background Effects */}
             <div className="absolute inset-0 z-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
                 <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow" style={{animationDelay: '2s'}}></div>
             </div>
 
             <div className="relative z-10 w-full max-w-md p-6">
-                <div className="gateway-card p-10 rounded-3xl shadow-2xl border border-white/10 backdrop-blur-xl">
-                    <div className="text-center mb-10">
-                        <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-lg shadow-primary/30 mb-6 transform hover:scale-105 transition-transform duration-500">
-                            <Activity size={40} className="text-white" />
+                <div className="gateway-card p-8 rounded-3xl shadow-2xl border border-white/10 backdrop-blur-xl">
+                    
+                    {/* Header Logo */}
+                    <div className="text-center mb-8">
+                        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-lg shadow-primary/30 mb-4 transform hover:scale-105 transition-transform duration-500">
+                            <Activity size={32} className="text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold text-white tracking-tight mb-2">CPA Gateway</h1>
-                        <p className="text-sm text-gray-400 font-medium">Painel de Controle Profissional</p>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">CPA Gateway</h1>
+                        <p className="text-xs text-gray-400 font-medium mt-1">Plataforma de Gestão Profissional</p>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Chave de Licença</label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-primary transition-colors" size={18} />
-                                <input 
-                                    type="text" 
-                                    value={inputKey}
-                                    onChange={(e) => setInputKey(e.target.value.toUpperCase())}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white font-mono text-lg placeholder:text-gray-600 focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none transition-all uppercase"
-                                    placeholder="XXXX-XXXX-XXXX"
-                                    autoFocus
-                                />
-                            </div>
+                    {/* --- MAIN ACTION: FREE ACCESS --- */}
+                    <div className="mb-8 text-center space-y-4">
+                        <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/20">
+                             <p className="text-sm text-gray-300 mb-4 leading-relaxed">
+                                Este sistema é <strong>gratuito para todos</strong>. Comece a organizar suas operações agora mesmo sem custos.
+                            </p>
+                            <button 
+                                onClick={handleFreeAccess}
+                                disabled={loading}
+                                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 group"
+                            >
+                                {loading && !inputKey ? <RefreshCw className="animate-spin" size={20} /> : <Unlock size={20} className="group-hover:rotate-12 transition-transform"/>} 
+                                ACESSAR VERSÃO GRATUITA
+                            </button>
                         </div>
+                    </div>
 
-                        {error && (
-                            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 text-red-400 text-xs font-bold animate-fade-in">
-                                <AlertCircle size={16} className="flex-shrink-0" /> 
-                                <span>{error}</span>
-                            </div>
-                        )}
-
-                        <button 
-                            type="submit"
-                            disabled={loading}
-                            className={`
-                                w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-glow hover:to-primary text-white font-bold py-4 rounded-xl text-sm uppercase tracking-wider shadow-lg shadow-primary/25 transition-all transform hover:-translate-y-0.5
-                                ${loading ? 'opacity-70 cursor-wait' : ''}
-                            `}
-                        >
-                            {loading && inputKey ? (
-                                <span className="flex items-center justify-center gap-2">
-                                    <RefreshCw className="animate-spin" size={16} /> Verificando...
-                                </span>
-                            ) : (
-                                'Acessar Sistema'
-                            )}
-                        </button>
-                    </form>
-
-                    <div className="relative my-8">
+                    {/* --- SECONDARY ACTION: SUPPORTER/VIP --- */}
+                    <div className="relative mb-6">
                         <div className="absolute inset-0 flex items-center">
                             <div className="w-full border-t border-white/10"></div>
                         </div>
                         <div className="relative flex justify-center">
-                            <span className="bg-[#0c061d] px-2 text-[10px] text-gray-500 uppercase tracking-widest">Ou acesse como</span>
+                            <span className="bg-[#0c061d] px-3 text-[10px] text-gray-500 uppercase tracking-widest font-bold flex items-center gap-1">
+                                <Heart size={10} className="text-rose-500" /> Área do Apoiador
+                            </span>
                         </div>
                     </div>
 
-                    <button 
-                        onClick={handleFreeAccess}
-                        disabled={loading}
-                        className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-3 rounded-xl text-sm uppercase tracking-wider transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10"
-                    >
-                         {loading && !inputKey ? <RefreshCw className="animate-spin" size={16} /> : <Unlock size={16} />} 
-                         ACESSO LIBERADO GRATUITO
-                    </button>
+                    {!showVipInput ? (
+                        <button 
+                            onClick={() => setShowVipInput(true)}
+                            className="w-full bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                        >
+                            <Crown size={14} className="text-amber-500" /> JÁ SOU APOIADOR VIP
+                        </button>
+                    ) : (
+                        <div className="animate-fade-in bg-black/20 p-4 rounded-2xl border border-amber-500/20">
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] text-amber-500/80 font-bold uppercase tracking-wider mb-2 block flex items-center gap-1">
+                                        <Crown size={10} /> Chave de Acesso VIP
+                                    </label>
+                                    <div className="relative group">
+                                        <Lock className="absolute left-4 top-3.5 text-gray-600 group-focus-within:text-amber-500 transition-colors" size={16} />
+                                        <input 
+                                            type="text" 
+                                            value={inputKey}
+                                            onChange={(e) => setInputKey(e.target.value.toUpperCase())}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-12 pr-4 text-white font-mono text-base placeholder:text-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 outline-none transition-all uppercase"
+                                            placeholder="CPA-XXXX-YYYY"
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
 
-                    <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                                {error && (
+                                    <div className="text-rose-400 text-xs font-bold flex items-center gap-1 bg-rose-500/10 p-2 rounded-lg">
+                                        <AlertCircle size={12} /> {error}
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowVipInput(false)}
+                                        className="px-4 py-2 bg-transparent hover:bg-white/5 text-gray-500 text-xs font-bold rounded-xl transition-colors"
+                                    >
+                                        VOLTAR
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        disabled={loading}
+                                        className="flex-1 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-amber-900/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {loading && inputKey ? <RefreshCw className="animate-spin" size={14} /> : "ENTRAR COMO VIP"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+                    
+                    {/* Footer Info */}
+                    <div className="mt-8 pt-4 border-t border-white/5 text-center">
+                        <p className="text-[9px] text-gray-600 leading-relaxed max-w-xs mx-auto">
+                            O CPA Gateway é mantido por doações. Chaves pagas são opcionais e servem para apoiar o desenvolvimento do projeto.
+                        </p>
+                    </div>
+
+                    <div className="mt-4 flex justify-between items-center text-[10px] text-gray-700 font-mono">
                          <span className="flex items-center gap-1.5"><ShieldCheck size={10} /> Conexão Segura</span>
-                         <span>v2.1.0 Stable</span>
+                         <span>ID: {deviceId.substring(0, 8)}...</span>
                     </div>
                 </div>
-                
-                <p className="text-center text-[10px] text-gray-600 mt-6 font-mono">
-                    ID: {deviceId.substring(0, 12)}...
-                </p>
             </div>
         </div>
     );
@@ -434,7 +465,7 @@ function App() {
           title: 'Executar Lote',
           view: 'planejamento',
           content: 'Ao enviar um lote, os valores vão automaticamente para o seu Controle Diário (Livro Caixa). Clique em "Enviar" no Lote #1.',
-          position: 'top',
+          position: 'bottom', // CORREÇÃO: Posicionado abaixo para não cobrir o botão
           requiresInteraction: true
       },
       {
