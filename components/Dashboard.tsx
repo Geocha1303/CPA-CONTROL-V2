@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL, getHojeISO } from '../utils';
 import { 
@@ -9,8 +9,9 @@ import {
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
   MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown,
-  Calendar, Flame, Sparkles // Novos ícones
+  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock // Novos ícones
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface Props {
   state: AppState;
@@ -18,6 +19,82 @@ interface Props {
 }
 
 const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
+  // --- GLOBAL INTELLIGENCE STATE ---
+  const [analysisMode, setAnalysisMode] = useState<'local' | 'global'>('local');
+  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
+  const [globalAggregatedData, setGlobalAggregatedData] = useState<Record<string, DayRecord>>({});
+  const [globalUserCount, setGlobalUserCount] = useState(0);
+
+  // --- FETCH GLOBAL DATA ---
+  const handleToggleMode = async () => {
+      if (analysisMode === 'global') {
+          setAnalysisMode('local');
+          return;
+      }
+
+      setIsLoadingGlobal(true);
+      try {
+          // Busca dados de todos os usuários (limitado pelas políticas RLS do Supabase)
+          // Se o RLS estiver ativo e restrito, retornará apenas os dados do próprio usuário ou do squad.
+          const { data, error } = await supabase
+              .from('user_data')
+              .select('raw_json');
+
+          if (error) throw error;
+
+          if (data) {
+              const aggregated: Record<string, DayRecord> = {};
+              let userCount = 0;
+
+              data.forEach((row: any) => {
+                  const userData = row.raw_json as AppState;
+                  if (!userData || !userData.dailyRecords) return;
+                  
+                  userCount++;
+                  const bonusVal = userData.config?.valorBonus || 20; // Usa o config de CADA usuário
+
+                  Object.entries(userData.dailyRecords).forEach(([date, record]) => {
+                      if (!aggregated[date]) {
+                          aggregated[date] = { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
+                      }
+                      
+                      // Para evitar conflito de IDs de contas, recriamos métricas simplificadas ou apenas acumulamos
+                      // Aqui, vamos fundir os arrays de contas para o cálculo funcionar nativamente
+                      // Ajustando o 'ciclos' se necessário para normalizar valor monetário seria complexo,
+                      // então vamos assumir a estrutura padrão.
+                      
+                      // Clonar contas para não mutar
+                      const accountsClone = record.accounts.map(acc => ({
+                          ...acc,
+                          // Truque: Se o usuário usa modo manual, o valor já está em 'ciclos'.
+                          // Se usa modo auto, 'ciclos' é qtd. O calculateMetrics lida com isso se passarmos o bonus certo.
+                          // Como estamos agregando num "Super Record", precisamos normalizar o LUCRO JÁ CALCULADO.
+                          // Mas calculateDayMetrics pede um record. 
+                          // Abordagem: Vamos apenas somar tudo num "Mega DayRecord" mantendo a estrutura.
+                          // Porém, o multiplier varia por user.
+                          // SOLUÇÃO: Converter tudo para "Modo Manual" (Valor Monetário) no agregado.
+                          ciclos: (userData.config.manualBonusMode ? acc.ciclos : (acc.ciclos * bonusVal)),
+                          id: Math.random() // Random ID para não dar key conflict no React se fossemos renderizar lista
+                      }));
+
+                      aggregated[date].accounts.push(...accountsClone);
+                      aggregated[date].expenses.proxy += record.expenses.proxy;
+                      aggregated[date].expenses.numeros += record.expenses.numeros;
+                  });
+              });
+
+              setGlobalAggregatedData(aggregated);
+              setGlobalUserCount(userCount);
+              setAnalysisMode('global');
+          }
+      } catch (err) {
+          console.error("Erro ao buscar dados globais:", err);
+          alert("Não foi possível acessar a inteligência global no momento (Verifique permissões ou conexão).");
+      } finally {
+          setIsLoadingGlobal(false);
+      }
+  };
+
   const metrics = useMemo(() => {
     // 1. Filtragem de Datas
     const hojeISO = getHojeISO();
@@ -147,16 +224,22 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
-  // --- HEATMAP & SEASONALITY LOGIC ---
+  // --- HEATMAP & SEASONALITY LOGIC (LOCAL OR GLOBAL) ---
   const intelligenceData = useMemo(() => {
       const dayStats: Record<number, { profit: number; count: number }> = { 0: {profit:0, count:0}, 1: {profit:0, count:0}, 2: {profit:0, count:0}, 3: {profit:0, count:0}, 4: {profit:0, count:0}, 5: {profit:0, count:0}, 6: {profit:0, count:0} };
       const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
       
-      const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
+      // SELECIONA A FONTE DE DADOS
+      const activeRecords = analysisMode === 'global' ? globalAggregatedData : state.dailyRecords;
+      
+      // Se for Local, usa o config do state. Se for Global, assumimos que já normalizamos para ManualMode (multiplier = 1) no fetch.
+      const bonusMultiplier = analysisMode === 'global' 
+        ? 1 
+        : (state.config.manualBonusMode ? 1 : (state.config.valorBonus || 20));
 
       // Populate Stats
-      Object.keys(state.dailyRecords).forEach(date => {
-          const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
+      Object.keys(activeRecords).forEach(date => {
+          const m = calculateDayMetrics(activeRecords[date], bonusMultiplier);
           const dayIndex = new Date(date).getDay(); // 0-6
           if(m.lucro !== 0) {
               dayStats[dayIndex].profit += m.lucro;
@@ -192,7 +275,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
       }
 
       return { heatmapData, maxProfit, bestDay, alertMsg };
-  }, [state.dailyRecords, state.config]);
+  }, [state.dailyRecords, state.config, analysisMode, globalAggregatedData]);
 
   // Helper para Privacy Mode
   const formatVal = (val: number) => privacyMode ? 'R$ ****' : formatarBRL(val);
@@ -271,20 +354,36 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
             
             {/* 1. HEATMAP SEMANAL */}
-            <div className="gateway-card p-4 rounded-xl border border-white/5 bg-gradient-to-br from-[#0a0614] to-transparent">
+            <div className="gateway-card p-4 rounded-xl border border-white/5 bg-gradient-to-br from-[#0a0614] to-transparent relative">
                  <div className="flex justify-between items-start mb-4">
                      <div>
                         <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                            <Flame size={14} className="text-orange-400" /> Intensidade Semanal
+                            <Flame size={14} className={analysisMode === 'global' ? 'text-blue-400' : 'text-orange-400'} /> 
+                            {analysisMode === 'global' ? 'Inteligência Global' : 'Inteligência Pessoal'}
                         </h3>
-                        <p className="text-[10px] text-gray-500">Seus dias mais lucrativos baseados no histórico.</p>
+                        <p className="text-[10px] text-gray-500">
+                            {analysisMode === 'global' 
+                                ? `Analisando ${globalUserCount} operadores da comunidade.` 
+                                : 'Seus dias mais lucrativos baseados no histórico.'}
+                        </p>
                      </div>
-                     <div className="text-right">
-                         <span className="text-[9px] text-gray-500 uppercase font-bold block">Melhor Dia</span>
-                         <span className="text-emerald-400 font-bold">{intelligenceData.bestDay.name}</span>
-                     </div>
+                     
+                     {/* GLOBAL TOGGLE */}
+                     <button 
+                        onClick={handleToggleMode}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                            analysisMode === 'global' 
+                            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30' 
+                            : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                        }`}
+                        title="Alternar entre Seus Dados e Dados da Comunidade"
+                     >
+                        {isLoadingGlobal ? <RefreshCw className="animate-spin" size={12} /> : (analysisMode === 'global' ? <Globe size={12} /> : <User size={12} />)}
+                        {analysisMode === 'global' ? 'Mundo' : 'Local'}
+                     </button>
                  </div>
                  
+                 {/* HEATMAP VISUALIZATION */}
                  <div className="grid grid-cols-7 gap-2">
                      {intelligenceData.heatmapData.map((d) => {
                          // Calcula intensidade de 0.1 a 1.0
@@ -295,20 +394,31 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                              <div key={d.day} className="flex flex-col items-center gap-1 group relative">
                                  <div 
                                     className={`w-full h-12 rounded-lg transition-all border ${
-                                        isZero ? 'bg-white/5 border-white/5' : 'bg-emerald-500 border-emerald-400'
+                                        isZero 
+                                            ? 'bg-white/5 border-white/5' 
+                                            : analysisMode === 'global' 
+                                                ? 'bg-blue-500 border-blue-400' // Blue for Global
+                                                : 'bg-emerald-500 border-emerald-400' // Emerald for Local
                                     }`}
                                     style={{ opacity: isZero ? 1 : Math.max(0.2, intensity) }}
                                  ></div>
                                  <span className="text-[9px] text-gray-500 font-bold uppercase">{d.day}</span>
                                  
                                  {/* Tooltip Local */}
-                                 <div className="absolute bottom-full mb-2 bg-black/90 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                                     {formatVal(d.profit)}
+                                 <div className="absolute bottom-full mb-2 bg-black/90 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                                     {analysisMode === 'global' && privacyMode ? 'Dados Ocultos' : formatVal(d.profit)}
                                  </div>
                              </div>
                          );
                      })}
                  </div>
+                 
+                 {analysisMode === 'global' && (
+                     <div className="mt-3 pt-3 border-t border-white/5 flex justify-between items-center text-[9px] text-gray-500 font-bold uppercase">
+                         <span>Melhor dia da Comunidade: <span className="text-blue-400">{intelligenceData.bestDay.name}</span></span>
+                         <span className="flex items-center gap-1"><Lock size={8}/> Dados Anônimos</span>
+                     </div>
+                 )}
             </div>
 
             {/* 2. RADAR SAZONAL */}
