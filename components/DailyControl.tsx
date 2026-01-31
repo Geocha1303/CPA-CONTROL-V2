@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppState, Account } from '../types';
 import { formatarBRL } from '../utils';
-import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle, Lock } from 'lucide-react';
+import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle, Lock, Send, Check } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
   currentDate: string;
   setCurrentDate: (d: string) => void;
-  readOnly?: boolean; // Nova prop
+  notify: (msg: string, type: 'success' | 'error' | 'info') => void;
+  readOnly?: boolean;
 }
 
-const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, readOnly }) => {
+const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   const isManualMode = state.config.manualBonusMode === true;
+  const [sendingId, setSendingId] = useState<number | null>(null);
   
   // Helper para evitar NaN
   const safeFloat = (val: string) => {
@@ -67,6 +70,65 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
             [currentDate]: { ...dayRecord, accounts: dayRecord.accounts.filter(a => a.id !== id) }
         }
     });
+  };
+
+  // --- REPORT TO LEADER LOGIC ---
+  const handleReportRow = async (acc: Account) => {
+      const myKey = localStorage.getItem('cpa_auth_session_v3_master');
+      if (!myKey) return;
+      
+      setSendingId(acc.id);
+
+      try {
+          // 1. Calcular Valores
+          const bonusMultiplier = isManualMode ? 1 : (state.config.valorBonus || 20);
+          const investimento = (acc.deposito || 0) + (acc.redeposito || 0);
+          const retorno = (acc.saque || 0) + ((acc.ciclos || 0) * bonusMultiplier);
+          const lucro = retorno - investimento;
+
+          // 2. Buscar Líder
+          const { data } = await supabase
+            .from('access_keys')
+            .select('leader_key, owner_name')
+            .eq('key', myKey)
+            .single();
+
+          if (data && data.leader_key) {
+              const channel = supabase.channel(`squad-room-${data.leader_key}`);
+              
+              const status = await new Promise((resolve) => {
+                  channel.subscribe((status) => {
+                      if(status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR') resolve(status);
+                  });
+              });
+
+              if (status === 'SUBSCRIBED') {
+                  let type: 'success' | 'alert' | 'info' = 'info';
+                  if (lucro > 0) type = 'success';
+                  if (lucro < 0) type = 'alert';
+
+                  await channel.send({
+                      type: 'broadcast',
+                      event: 'squad_msg',
+                      payload: {
+                          from: data.owner_name,
+                          message: `Registro Manual: Investiu ${formatarBRL(investimento)} e obteve ${formatarBRL(lucro)} de resultado.`,
+                          type: type,
+                          timestamp: Date.now()
+                      }
+                  });
+                  supabase.removeChannel(channel);
+                  notify("Registro enviado para o Líder!", "success");
+              }
+          } else {
+              notify("Você não tem um líder vinculado para reportar.", "info");
+          }
+      } catch (e) {
+          console.error(e);
+          notify("Erro ao enviar reporte.", "error");
+      } finally {
+          setTimeout(() => setSendingId(null), 1000);
+      }
   };
 
   // Metrics Logic
@@ -200,7 +262,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         </th>
                         
                         <th className="px-6 py-4 font-bold tracking-widest text-right text-gray-300">RESULTADO</th>
-                        <th className="px-6 py-4 text-center w-16"></th>
+                        <th className="px-6 py-4 text-center w-28">AÇÕES</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -301,13 +363,25 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                         {formatarBRL(lucro)}
                                     </td>
 
-                                    {/* DELETE */}
-                                    <td className="px-6 py-3 text-center">
-                                        {!readOnly && (
-                                            <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        )}
+                                    {/* AÇÕES (DELETE + SEND) */}
+                                    <td className="px-6 py-3">
+                                        <div className="flex items-center justify-center gap-2">
+                                            {!readOnly && (
+                                                <>
+                                                    <button 
+                                                        onClick={() => handleReportRow(acc)}
+                                                        className={`p-2 rounded-lg transition-all border ${sendingId === acc.id ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/40'}`}
+                                                        title="Enviar registro para o Líder"
+                                                        disabled={sendingId === acc.id}
+                                                    >
+                                                        {sendingId === acc.id ? <Check size={16} /> : <Send size={16} />}
+                                                    </button>
+                                                    <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors border border-transparent hover:border-rose-500/20">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );
