@@ -34,7 +34,9 @@ import {
   SkipForward, 
   Megaphone,
   Users, // Squad Icon
-  Heart // Icone para Apoiador
+  Heart, // Icone para Apoiador
+  ArrowRight,
+  Globe
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag } from './utils';
@@ -87,13 +89,13 @@ const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master';
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
 
-// --- LOGIN COMPONENT ---
+// --- LOGIN COMPONENT (PROFESSIONAL UPDATE) ---
 const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void }) => {
     const [inputKey, setInputKey] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [deviceId, setDeviceId] = useState('');
-    const [showVipInput, setShowVipInput] = useState(false); // Toggle para mostrar input VIP
+    const [loginMode, setLoginMode] = useState<'free' | 'vip'>('free'); // 'free' is default view
 
     useEffect(() => {
         let storedId = localStorage.getItem(DEVICE_ID_KEY);
@@ -121,23 +123,23 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
 
             if (error || !data) {
                 await new Promise(resolve => setTimeout(resolve, 1000)); 
-                throw new Error('Chave de acesso inválida.');
+                throw new Error('Chave de acesso inválida ou inexistente.');
             }
 
             if (data.active === false) {
-                 throw new Error('Acesso suspenso pelo administrador.');
+                 throw new Error('Acesso suspenso administrativamente.');
             }
 
             if (!isMasterKey) {
                 if (data.hwid && data.hwid !== deviceId) {
-                    throw new Error('Esta chave já está vinculada a outro dispositivo. Entre em contato com o suporte para resetar.');
+                    throw new Error('Chave vinculada a outro dispositivo. Solicite reset ao suporte.');
                 }
                 if (!data.hwid) {
                     const { error: updateError } = await supabase
                         .from('access_keys')
                         .update({ hwid: deviceId })
                         .eq('id', data.id);
-                    if (updateError) throw new Error('Erro ao vincular dispositivo. Tente novamente.');
+                    if (updateError) throw new Error('Erro de vínculo de segurança.');
                 }
             }
 
@@ -149,19 +151,15 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message || 'Erro de conexão.');
+            setError(err.message || 'Falha de conexão.');
             setLoading(false);
         }
     };
 
     const handleFreeAccess = async () => {
         setLoading(true);
-        
         try {
-            // Lógica de Identidade Persistente
             let existingFreeKey = localStorage.getItem(FREE_KEY_STORAGE);
-            
-            // Se não tiver (ou se for a antiga genérica), gera uma nova
             if (!existingFreeKey || existingFreeKey === 'TROPA-FREE') {
                 const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
                 const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -169,8 +167,6 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 localStorage.setItem(FREE_KEY_STORAGE, existingFreeKey);
             }
 
-            // --- AUTO REGISTRO NO SUPABASE ---
-            // Tenta registrar. Se falhar por RLS, loga o erro mas deixa entrar.
             try {
                 await supabase
                     .from('access_keys')
@@ -181,137 +177,137 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                         is_admin: false
                     }, { onConflict: 'key' });
             } catch (innerError) {
-                console.warn("Falha no Auto-Registro (provavelmente RLS):", innerError);
+                console.warn("Offline fallback:", innerError);
             }
 
-            // Salva na sessão atual para logar
             localStorage.setItem(AUTH_STORAGE_KEY, existingFreeKey);
-            
-            // Pequeno delay visual
             setTimeout(() => {
                 onLogin(existingFreeKey, false, 'Visitante Gratuito');
             }, 500);
 
         } catch (err) {
-            console.error("Erro inesperado no login Free:", err);
+            console.error("Critical error:", err);
             setLoading(false);
         }
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-background relative overflow-hidden font-sans select-none">
-            {/* Background Effects */}
-            <div className="absolute inset-0 z-0">
-                <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
-                <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-accent-cyan/10 rounded-full blur-[120px] animate-pulse-slow" style={{animationDelay: '2s'}}></div>
+        <div className="flex items-center justify-center min-h-screen bg-[#050505] font-sans selection:bg-white/20 relative overflow-hidden">
+            {/* Professional Background Grid */}
+            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none" 
+                 style={{ 
+                     backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)', 
+                     backgroundSize: '40px 40px' 
+                 }}>
             </div>
+            
+            {/* Subtle Ambient Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-            <div className="relative z-10 w-full max-w-md p-6">
-                <div className="gateway-card p-8 rounded-3xl shadow-2xl border border-white/10 backdrop-blur-xl">
+            <div className="relative z-10 w-full max-w-[400px] p-6 animate-fade-in">
+                
+                {/* Header Section */}
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/5 border border-white/10 mb-4 shadow-2xl">
+                        <Activity className="text-white" size={24} />
+                    </div>
+                    <h1 className="text-3xl font-bold text-white tracking-tight mb-2">CPA Gateway <span className="text-primary text-sm align-top">PRO</span></h1>
+                    <p className="text-gray-500 text-xs uppercase tracking-widest font-medium">Sistema de Gestão Financeira v3.7</p>
+                </div>
+
+                {/* Main Card */}
+                <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
                     
-                    {/* Header Logo */}
-                    <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-primary to-primary-dark shadow-lg shadow-primary/30 mb-4 transform hover:scale-105 transition-transform duration-500">
-                            <Activity size={32} className="text-white" />
-                        </div>
-                        <h1 className="text-2xl font-bold text-white tracking-tight">CPA Gateway</h1>
-                        <p className="text-xs text-gray-400 font-medium mt-1">Plataforma de Gestão Profissional</p>
-                    </div>
+                    <div className="p-8">
+                        {loginMode === 'free' ? (
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <h3 className="text-white font-bold text-lg">Acesso Gratuito</h3>
+                                    <p className="text-gray-400 text-sm leading-relaxed">
+                                        Versão completa disponível para uso imediato. Sem cadastro, sem cartão.
+                                    </p>
+                                </div>
 
-                    {/* --- MAIN ACTION: FREE ACCESS --- */}
-                    <div className="mb-8 text-center space-y-4">
-                        <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/20">
-                             <p className="text-sm text-gray-300 mb-4 leading-relaxed">
-                                Este sistema é <strong>gratuito para todos</strong>. Comece a organizar suas operações agora mesmo sem custos.
-                            </p>
-                            <button 
-                                onClick={handleFreeAccess}
-                                disabled={loading}
-                                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 group"
-                            >
-                                {loading && !inputKey ? <RefreshCw className="animate-spin" size={20} /> : <Unlock size={20} className="group-hover:rotate-12 transition-transform"/>} 
-                                ACESSAR VERSÃO GRATUITA
-                            </button>
-                        </div>
-                    </div>
+                                <button 
+                                    onClick={handleFreeAccess}
+                                    disabled={loading}
+                                    className="w-full group relative overflow-hidden bg-white text-black font-bold py-4 rounded-xl transition-all hover:bg-gray-100 active:scale-[0.98] flex items-center justify-center gap-3"
+                                >
+                                    {loading ? <RefreshCw className="animate-spin" size={20} /> : <Unlock size={20} />}
+                                    <span>INICIAR SESSÃO</span>
+                                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                </button>
+                                
+                                <div className="flex justify-center pt-2">
+                                    <button 
+                                        onClick={() => setLoginMode('vip')}
+                                        className="text-xs text-gray-500 hover:text-white transition-colors flex items-center gap-1.5 font-medium"
+                                    >
+                                        <Crown size={12} className="text-amber-500" />
+                                        Possui uma chave VIP?
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleLogin} className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                        <Lock size={16} className="text-amber-500"/> Acesso VIP
+                                    </h3>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setLoginMode('free')}
+                                        className="text-[10px] text-gray-500 hover:text-white uppercase font-bold tracking-wider"
+                                    >
+                                        Voltar
+                                    </button>
+                                </div>
 
-                    {/* --- SECONDARY ACTION: SUPPORTER/VIP --- */}
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/10"></div>
-                        </div>
-                        <div className="relative flex justify-center">
-                            <span className="bg-[#0c061d] px-3 text-[10px] text-gray-500 uppercase tracking-widest font-bold flex items-center gap-1">
-                                <Heart size={10} className="text-rose-500" /> Área do Apoiador
-                            </span>
-                        </div>
-                    </div>
-
-                    {!showVipInput ? (
-                        <button 
-                            onClick={() => setShowVipInput(true)}
-                            className="w-full bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                        >
-                            <Crown size={14} className="text-amber-500" /> JÁ SOU APOIADOR VIP
-                        </button>
-                    ) : (
-                        <div className="animate-fade-in bg-black/20 p-4 rounded-2xl border border-amber-500/20">
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label className="text-[10px] text-amber-500/80 font-bold uppercase tracking-wider mb-2 block flex items-center gap-1">
-                                        <Crown size={10} /> Chave de Acesso VIP
-                                    </label>
-                                    <div className="relative group">
-                                        <Lock className="absolute left-4 top-3.5 text-gray-600 group-focus-within:text-amber-500 transition-colors" size={16} />
-                                        <input 
-                                            type="text" 
-                                            value={inputKey}
-                                            onChange={(e) => setInputKey(e.target.value.toUpperCase())}
-                                            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-12 pr-4 text-white font-mono text-base placeholder:text-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 outline-none transition-all uppercase"
-                                            placeholder="CPA-XXXX-YYYY"
-                                            autoFocus
-                                        />
-                                    </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Chave de Licença</label>
+                                    <input 
+                                        type="text" 
+                                        value={inputKey}
+                                        onChange={(e) => setInputKey(e.target.value.toUpperCase())}
+                                        className="w-full bg-[#151515] border border-white/10 rounded-xl px-4 py-3.5 text-white font-mono text-center tracking-widest text-lg focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none transition-all placeholder:text-gray-700 uppercase"
+                                        placeholder="CPA-XXXX-YYYY"
+                                        autoFocus
+                                    />
                                 </div>
 
                                 {error && (
-                                    <div className="text-rose-400 text-xs font-bold flex items-center gap-1 bg-rose-500/10 p-2 rounded-lg">
-                                        <AlertCircle size={12} /> {error}
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-2">
+                                        <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-red-400 font-medium leading-tight">{error}</p>
                                     </div>
                                 )}
 
-                                <div className="flex gap-2">
-                                    <button 
-                                        type="button"
-                                        onClick={() => setShowVipInput(false)}
-                                        className="px-4 py-2 bg-transparent hover:bg-white/5 text-gray-500 text-xs font-bold rounded-xl transition-colors"
-                                    >
-                                        VOLTAR
-                                    </button>
-                                    <button 
-                                        type="submit"
-                                        disabled={loading}
-                                        className="flex-1 bg-amber-600 hover:bg-amber-500 text-black font-bold py-2 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-amber-900/20 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        {loading && inputKey ? <RefreshCw className="animate-spin" size={14} /> : "ENTRAR COMO VIP"}
-                                    </button>
-                                </div>
+                                <button 
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
+                                >
+                                    {loading ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle2 size={20} />}
+                                    <span>VALIDAR ACESSO</span>
+                                </button>
                             </form>
-                        </div>
-                    )}
-                    
-                    {/* Footer Info */}
-                    <div className="mt-8 pt-4 border-t border-white/5 text-center">
-                        <p className="text-[9px] text-gray-600 leading-relaxed max-w-xs mx-auto">
-                            O CPA Gateway é mantido por doações. Chaves pagas são opcionais e servem para apoiar o desenvolvimento do projeto.
-                        </p>
+                        )}
                     </div>
 
-                    <div className="mt-4 flex justify-between items-center text-[10px] text-gray-700 font-mono">
-                         <span className="flex items-center gap-1.5"><ShieldCheck size={10} /> Conexão Segura</span>
-                         <span>ID: {deviceId.substring(0, 8)}...</span>
+                    {/* Footer Status Bar */}
+                    <div className="bg-[#050505] px-6 py-3 border-t border-white/5 flex justify-between items-center text-[10px] font-mono text-gray-600">
+                         <span className="flex items-center gap-1.5">
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                             System Operational
+                         </span>
+                         <span className="opacity-50">ID: {deviceId.substring(0, 8)}</span>
                     </div>
                 </div>
+                
+                <p className="text-center text-[10px] text-gray-600 mt-8">
+                    &copy; 2024 CPA Control. Secure Environment.
+                </p>
             </div>
         </div>
     );
@@ -393,8 +389,6 @@ function App() {
               }, { onConflict: 'access_key' });
           
           if (error) {
-              // Silently ignore RLS errors on frequent syncs to avoid console spam
-              // Only real errors matter here
               if(error.code !== '42501') console.error("Cloud Sync Warning:", error.message);
           }
       } catch (e) {
@@ -420,6 +414,39 @@ function App() {
       return () => { supabase.removeChannel(alertChannel); };
   }, [currentUserKey]);
 
+  // --- NOTIFICAÇÕES AUTOMÁTICAS E AVISOS DO ADM ---
+  useEffect(() => {
+      if (isAuthenticated && isLoaded && !isDemoMode) {
+          
+          // 1. Notificação sobre a Inteligência Global (Discreta) - Sempre aparece
+          const timer = setTimeout(() => {
+              notify("🚀 NOVIDADE: Inteligência Global disponível no Dashboard! Compare seus resultados.", "success");
+          }, 2500);
+
+          // 2. CHECK DE NOME (MENSAGEM DO ADM AUTOMÁTICA)
+          // Lógica ajustada: SÓ VERIFICA se o TOUR NÃO ESTIVER ABERTO.
+          // Isso evita sobreposição no primeiro login. 
+          // Usuários antigos (com tour dismissed) receberão o alerta imediatamente se o nome estiver errado.
+          
+          if (!tourOpen) {
+              const currentName = state.config.userName || '';
+              const isDefaultName = currentName === 'OPERADOR' || currentName === 'Visitante Gratuito';
+
+              if (isDefaultName) {
+                  const alertTimer = setTimeout(() => {
+                      setSystemAlert({
+                          title: "📢 MENSAGEM DO ADMINISTRADOR",
+                          message: `Detectamos que seu perfil ainda está com o nome padrão '${currentName}'. Para garantir sua identificação no Squad e evitar remoção por inatividade, acesse a aba SISTEMA e atualize seu nome agora mesmo.`
+                      });
+                  }, 4000);
+                  return () => clearTimeout(alertTimer);
+              }
+          }
+
+          return () => clearTimeout(timer);
+      }
+  }, [isAuthenticated, isLoaded, isDemoMode, tourOpen, state.config.userName]);
+
 
   // --- TOUR STEPS DEFINITION (CORRIGIDO E RESTAURADO) ---
   const tourSteps: TourStep[] = [
@@ -429,7 +456,7 @@ function App() {
           view: 'configuracoes',
           content: (
               <div>
-                  <p className="mb-3">Vamos começar ajustando o sistema para você. Clique em "Sistema" no menu.</p>
+                  <p className="mb-3">Vamos começar ajustando o sistema para você. O sistema te levou para a aba Configurações.</p>
                   <div className="bg-blue-900/30 border-l-2 border-blue-500 p-2 rounded text-[11px] text-blue-200 leading-relaxed">
                       <strong>💡 Dica:</strong> Configurar corretamente garante que seus cálculos de lucro líquido sejam precisos desde o primeiro dia.
                   </div>
@@ -519,501 +546,391 @@ function App() {
 
   // --- TOUR LOGIC ---
   useEffect(() => {
-      if(tourOpen) {
+    if (!isLoaded || !state.onboarding) return;
+    
+    // Check if tour should start (only if not dismissed)
+    if (!state.onboarding.dismissed && !tourOpen) {
+        // Only start if name is NOT set (fresh start)
+        // OR if specific flags are missing
+        if (!state.onboarding.steps.configName) {
+            setTourOpen(true);
+        }
+    }
+  }, [isLoaded, state.onboarding?.dismissed]);
+
+  // --- AUTO NAVIGATE TOUR STEPS ---
+  useEffect(() => {
+      if (tourOpen) {
           const step = tourSteps[tourStepIndex];
-          if(step && step.view !== activeView) {
+          if (step && step.view && activeView !== step.view) {
               setActiveView(step.view as ViewType);
           }
       }
-  }, [tourStepIndex, tourOpen]);
+  }, [tourOpen, tourStepIndex, activeView]);
 
-  useEffect(() => {
-      if (!tourOpen) return;
-      const currentStep = tourSteps[tourStepIndex];
-      if (!currentStep?.requiresInteraction) {
-          setCanProceed(true);
-          return;
-      }
-      
-      let valid = false;
-      const today = getHojeISO();
-
-      if (currentStep.title === 'Quem é você?') {
-           valid = state.config.userName !== 'OPERADOR' && (state.config.userName || '').trim() !== '';
-      } else if (currentStep.title === 'Gerar Estratégia') {
-           valid = state.generator.plan.length > 0;
-      } else if (currentStep.title === 'Executar Lote') {
-           const hasAccountsToday = (state.dailyRecords[today]?.accounts || []).length > 0;
-           valid = hasAccountsToday;
-      } else {
-           valid = true;
-      }
-      setCanProceed(valid);
-  }, [state, tourStepIndex, tourOpen, activeView]); // Adicionado activeView para garantir re-render na troca
-
-  const handleTourComplete = async () => {
+  const handleTourComplete = () => {
       setTourOpen(false);
-      notify("Tutorial Concluído! Limpando dados de teste...", "info");
-      alert("🎉 TUTORIAL CONCLUÍDO!\n\nOs dados de teste inseridos agora serão apagados.\n\nBoa sorte, Operador!");
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const freshState: AppState = {
-          ...initialState,
-          config: { ...state.config }, 
-          onboarding: { ...initialState.onboarding!, dismissed: true }
-      };
-      setState(freshState);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(freshState));
-      localStorage.setItem('cpa_tour_completed', 'true');
-      notify("Dados limpos! O sistema está pronto para uso real.", "success");
-      setActiveView('dashboard');
+      updateState({ onboarding: { ...state.onboarding, dismissed: true } as any });
+      notify("Tour concluído! Bom trabalho.", "success");
   };
 
-  const handleTourSkipRequest = () => setShowSkipConfirm(true);
-  const handleConfirmSkip = () => {
-      setTourOpen(false);
+  const handleSkipTour = () => {
+      setShowSkipConfirm(true);
+  };
+
+  const confirmSkip = () => {
       setShowSkipConfirm(false);
-      localStorage.setItem('cpa_tour_completed', 'true');
-      notify("Tutorial pulado.", "info");
+      setTourOpen(false);
+      updateState({ onboarding: { ...state.onboarding, dismissed: true } as any });
+      notify("Tour pulado.", "info");
   };
 
-  useEffect(() => {
-      if (isLoaded && isAuthenticated) {
-          const tourDone = localStorage.getItem('cpa_tour_completed');
-          if (!tourDone && !isDemoMode) {
-              setTimeout(() => setTourOpen(true), 1000); 
-          }
-      }
-  }, [isLoaded, isAuthenticated, isDemoMode]);
-
-  // --- PRESENCE & HEARTBEAT ---
-  // (Mantidos do código original, suprimidos para brevidade se não houve alteração lógica, mas incluídos para segurança)
-  const presenceChannelRef = useRef<any>(null); 
-  const retryTimeoutRef = useRef<any>(null);
-  const sessionStartTimeRef = useRef<string>(''); 
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    if (!sessionStartTimeRef.current) sessionStartTimeRef.current = new Date().toISOString();
-    const connectPresence = () => {
-        const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
-        const userName = state.config.userName || 'Desconhecido';
-        if (presenceChannelRef.current) supabase.removeChannel(presenceChannelRef.current);
-        const channel = supabase.channel('online_users', { config: { presence: { key: deviceId } } });
-        presenceChannelRef.current = channel;
-        channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await channel.track({
-                    user: userName, key: currentUserKey, online_at: sessionStartTimeRef.current, is_admin: isAdmin, device_id: deviceId
-                });
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-                retryTimeoutRef.current = setTimeout(connectPresence, 5000);
-            }
-        });
-    };
-    connectPresence();
-    const heartbeatInterval = setInterval(async () => {
-         if(presenceChannelRef.current) {
-            const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown_device';
-            const userName = state.config.userName || 'Desconhecido';
-             await presenceChannelRef.current.track({
-                user: userName, key: currentUserKey, online_at: sessionStartTimeRef.current, is_admin: isAdmin, device_id: deviceId
-            }).catch(() => {});
-         }
-    }, 30000);
-    return () => {
-        clearInterval(heartbeatInterval);
-        if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-        if (presenceChannelRef.current) supabase.removeChannel(presenceChannelRef.current);
-    };
-  }, [isAuthenticated]); 
-
-  // --- INIT & PERSISTENCE & AUTO-MIGRATION ---
-  useEffect(() => {
-      try { if (window.self !== window.top) setIsIframe(true); } catch (e) { setIsIframe(true); }
-      if (!('showOpenFilePicker' in window)) setHasFileSystemSupport(false);
-      
-      // AUTO-MIGRAÇÃO DE CHAVE GENÉRICA PARA ÚNICA
-      // Se detectar que a chave salva é 'TROPA-FREE', troca para uma única
-      // para consertar o Squad automaticamente.
-      let savedKey = localStorage.getItem(AUTH_STORAGE_KEY);
-      
-      if (savedKey === 'TROPA-FREE') {
-          // Verifica se já temos uma chave única salva, senão cria uma
-          let uniqueFreeKey = localStorage.getItem(FREE_KEY_STORAGE);
-          if (!uniqueFreeKey) {
-                const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
-                const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
-                uniqueFreeKey = `FREE-${p1}-${p2}`;
-                localStorage.setItem(FREE_KEY_STORAGE, uniqueFreeKey);
-          }
-
-          // ** CORREÇÃO AUTOMÁTICA DE REGISTRO **
-          // Insere a chave no Supabase para garantir que o Squad funcione
-          supabase.from('access_keys').upsert({
-              key: uniqueFreeKey,
-              owner_name: 'Visitante Migrado',
-              active: true,
-              is_admin: false
-          }, { onConflict: 'key' }).then(({ error }) => {
-              if (error) console.error("Falha ao registrar chave migrada:", error);
-          });
-          
-          // Atualiza a sessão atual para a chave correta
-          localStorage.setItem(AUTH_STORAGE_KEY, uniqueFreeKey);
-          savedKey = uniqueFreeKey;
-          console.log("Sistema: Migração de chave Free realizada com sucesso.");
-      }
-
-      if (savedKey) {
-          setIsAuthenticated(true);
-          setCurrentUserKey(savedKey);
-          const savedIsAdmin = localStorage.getItem('cpa_is_admin') === 'true';
-          setIsAdmin(savedIsAdmin);
-      }
+    try {
+        const isSupported = 'showOpenFilePicker' in window;
+        setHasFileSystemSupport(isSupported);
+        setIsIframe(window.self !== window.top);
+    } catch (e) {
+        setHasFileSystemSupport(false);
+    }
   }, []);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-        try {
-            const parsed = JSON.parse(saved);
-            if (parsed && typeof parsed === 'object') {
-                setState(prev => mergeDeep(initialState, parsed));
-            }
-        } catch (e) {
-            notify("Erro ao recuperar sessão.", "error");
-        }
-    }
-    setIsLoaded(true);
-  }, []);
+  // Login Handler
+  const handleLogin = (key: string, adminStatus: boolean, ownerName: string) => {
+      setCurrentUserKey(key);
+      setIsAdmin(adminStatus);
+      setIsAuthenticated(true);
+      
+      // Load Data
+      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedData) {
+          try {
+              const parsed = JSON.parse(savedData);
+              const merged = mergeDeep(initialState, parsed);
+              // Force owner name from key if provided and not set locally
+              if (ownerName && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
+                  merged.config.userName = ownerName;
+              }
+              setState(merged);
+          } catch (e) {
+              console.error("Erro ao carregar dados locais", e);
+          }
+      }
+      setIsLoaded(true);
+  };
 
-  useEffect(() => {
-    const handleBeforeUnload = () => { 
-        if (state && !isDemoMode) localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state)); 
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [state, isDemoMode]);
+  // Logout
+  const handleLogout = () => {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      setIsAuthenticated(false);
+      setCurrentUserKey('');
+      setIsAdmin(false);
+      setState(initialState);
+      setIsLoaded(false);
+  };
 
-  // --- AUTO-SAVE LOCAL & CLOUD ---
-  useEffect(() => {
-    if (!isLoaded || isDemoMode) {
-        if(isDemoMode) setSaveStatus('saved');
-        return;
-    }
-
-    setSaveStatus('saving');
-    
-    // Local Storage Save
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = window.setTimeout(async () => {
-        const jsonString = JSON.stringify(state, null, 2);
-        try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, jsonString);
-            if (fileHandle) {
-                try {
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(jsonString);
-                    await writable.close();
-                } catch (writeErr) {
-                    setFileHandle(null);
-                    notify("Conexão de arquivo perdida.", "error");
-                }
-            }
-            setLastSaved(new Date());
-            setTimeout(() => setSaveStatus('saved'), 600);
-        } catch (e) {
-            setSaveStatus('error');
-        }
-    }, 500);
-
-    // Cloud Sync (Throttle 3s)
-    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    syncTimeoutRef.current = window.setTimeout(() => {
-        syncToCloud(state);
-    }, 3000);
-
-    return () => { 
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); 
-        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    };
-  }, [state, fileHandle, isLoaded, isDemoMode]);
-
+  // Demo Mode Toggle
   const toggleDemoMode = () => {
       if (isDemoMode) {
-          if (realStateRef.current) {
-              setState(realStateRef.current);
-              realStateRef.current = null;
-          }
+          // Revert to real state
+          if (realStateRef.current) setState(realStateRef.current);
           setIsDemoMode(false);
-          notify("Modo Demonstração ENCERRADO.", "info");
+          notify("Modo Demonstração encerrado.", "info");
       } else {
+          // Save real state and generate demo
           realStateRef.current = state;
-          const demoData = generateDemoState(state.config);
-          setState(demoData);
+          const demoState = generateDemoState(state.config);
+          setState(demoState);
           setIsDemoMode(true);
-          notify("Modo Demonstração ATIVADO.", "success");
+          notify("Modo Demonstração ativado! Dados fictícios.", "success");
       }
   };
 
-  const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 4000);
+  // Spectator Mode
+  const handleSpectate = (data: AppState, memberName: string) => {
+      // Save my current state to ref just in case, though spectate is readonly usually
+      if (!isDemoMode && !spectatingData) {
+          realStateRef.current = state;
+      }
+      setSpectatingData({ data, name: memberName });
   };
 
-  const updateState = (newState: Partial<AppState>) => {
-    // Bloqueia edições se estiver no modo espectador
-    if (spectatingData) {
-        notify("Modo Espectador: Você não pode editar dados de outro operador.", "error");
-        return;
-    }
-    setState(prev => ({ ...prev, ...newState }));
-  };
-
-  const handleLogout = (force: boolean = false) => {
-      if(force || confirm('Encerrar sessão?')) {
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-          localStorage.removeItem('cpa_is_admin');
-          sessionStartTimeRef.current = ''; 
-          setIsAuthenticated(false);
-          setIsAdmin(false);
-          setCurrentUserKey('');
-          setSpectatingData(null);
+  const exitSpectator = () => {
+      setSpectatingData(null);
+      if (realStateRef.current) {
+          setState(realStateRef.current);
+          realStateRef.current = null;
       }
   };
 
-  const handleManualDownload = () => {
-    if (spectatingData) {
-        notify('Ação bloqueada no modo espectador', 'error');
-        return;
-    }
-    const dataStr = JSON.stringify(state, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `CPA_PRO_Backup_${new Date().toISOString().slice(0,10)}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    notify('Download iniciado.', 'success');
+  // State Update Wrapper
+  const updateState = (updates: Partial<AppState>) => {
+      if (spectatingData) return; // Read only in spectate
+      if (isDemoMode) {
+          // Allow updates in demo mode but don't save to LS
+          setState(prev => mergeDeep(prev, updates));
+          return;
+      }
+
+      setState(prev => {
+          const newState = mergeDeep(prev, updates);
+          
+          // Auto-save logic
+          if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+          if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+          
+          setSaveStatus('saving');
+          
+          saveTimeoutRef.current = window.setTimeout(() => {
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
+              setLastSaved(new Date());
+              setSaveStatus('saved');
+              setTimeout(() => setSaveStatus('idle'), 2000);
+          }, 1000);
+
+          // Cloud Sync (Debounced 5s)
+          syncTimeoutRef.current = window.setTimeout(() => {
+              syncToCloud(newState);
+          }, 5000);
+
+          return newState;
+      });
   };
 
-  // --- RENDER CONTENT COM LÓGICA DE SQUAD ---
+  // Notification Handler
+  const notify = (message: string, type: 'success' | 'error' | 'info') => {
+      const id = Date.now();
+      setNotifications(prev => [...prev, { id, type, message }]);
+      setTimeout(() => {
+          setNotifications(prev => prev.filter(n => n.id !== id));
+      }, 4000);
+  };
+
+  // View active logic (Spectator overrides)
   const activeState = spectatingData ? spectatingData.data : state;
-  const isReadOnly = !!spectatingData;
+  const isReadOnly = !!spectatingData || isDemoMode; 
 
-  const renderContent = () => {
-    const props = { 
-        state: activeState, 
-        updateState, 
-        notify, 
-        readOnly: isReadOnly, // Prop passada para todos componentes
-        privacyMode: privacyMode // NOVO: Prop passada para ocultar valores
-    };
-
-    switch (activeView) {
-        case 'dashboard': return <Dashboard {...props} />;
-        case 'planejamento': return <Planning {...props} navigateToDaily={(d) => { setCurrentDate(d); setActiveView('controle'); }} />;
-        case 'controle': return <DailyControl {...props} currentDate={currentDate} setCurrentDate={setCurrentDate} />;
-        case 'despesas': return <Expenses {...props} />;
-        case 'configuracoes': return <Settings {...props} />;
-        case 'metas': return <Goals {...props} />;
-        case 'squad': return <Squad currentUserKey={currentUserKey} notify={notify} onSpectate={(data, name) => {
-            setSpectatingData({ data, name });
-            setActiveView('dashboard');
-        }} />;
-        case 'admin': return <Admin notify={notify} />;
-        default: return null;
-    }
-  };
-
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'planejamento', label: 'Planejamento IA', icon: Cpu },
-    { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
-    { id: 'despesas', label: 'Despesas', icon: Receipt },
-    { id: 'metas', label: 'Metas e Sonhos', icon: Target },
-    { id: 'squad', label: 'Comando Squad', icon: Users }, // Novo Item
-    { id: 'configuracoes', label: 'Sistema', icon: SettingsIcon },
-  ];
-
-  if (isAdmin) {
-      if (!navItems.find(i => i.id === 'admin')) {
-        navItems.push({ id: 'admin', label: 'Painel Admin', icon: Crown });
-      }
-  }
-
+  // --- RENDER ---
   if (!isAuthenticated) {
-      return <LoginScreen onLogin={(key, admin, owner) => { 
-          setIsAuthenticated(true); 
-          setIsAdmin(admin); 
-          localStorage.setItem('cpa_is_admin', String(admin));
-          setCurrentUserKey(key); 
-          if(owner) setState(prev => ({...prev, config: {...prev.config, userName: owner}}));
-      }} />;
+      return <LoginScreen onLogin={handleLogin} />;
   }
 
-  // Calculate Progress
-  const onboardingSteps = state.onboarding?.steps || { configName: false, generatedPlan: false, sentLot: false, addedExpense: false };
-  const completedCount = Object.values(onboardingSteps).filter(Boolean).length;
-  const progressPercent = (completedCount / 4) * 100;
-  const showOnboarding = state.onboarding && !state.onboarding.dismissed && completedCount < 4;
+  const MenuButton = ({ id, icon: Icon, label, alert }: any) => (
+      <button 
+        id={`nav-${id}`} // CORREÇÃO: ID compatível com o Tour (nav-dashboard, nav-squad, etc)
+        onClick={() => { setActiveView(id); setMobileMenuOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm relative
+            ${activeView === id 
+                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+      >
+          <Icon size={18} />
+          <span>{label}</span>
+          {alert && <span className="absolute right-3 w-2 h-2 bg-accent-pink rounded-full animate-pulse"></span>}
+      </button>
+  );
 
   return (
-    <div className="flex h-screen bg-[#02000f] text-gray-200 overflow-hidden font-sans selection:bg-primary/30 selection:text-white relative">
+    <div className={`flex h-screen bg-background overflow-hidden font-sans selection:bg-primary/30 ${privacyMode ? 'privacy-active' : ''}`}>
       
-      {/* ... (Modals, Tour, Notifications - Mantidos) ... */}
-      <TourGuide 
-        steps={tourSteps}
-        isOpen={tourOpen}
-        onClose={() => setTourOpen(false)}
-        onComplete={handleTourComplete}
-        onSkip={handleTourSkipRequest}
-        currentStepIndex={tourStepIndex}
-        setCurrentStepIndex={setTourStepIndex}
-        disableNext={!canProceed}
-      />
-      {showSkipConfirm && (
-        <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-fade-in">
-            {/* Modal Content */}
-            <div className="bg-[#0f0a1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative">
-                <button onClick={() => setShowSkipConfirm(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={16} /></button>
-                <div className="flex flex-col items-center text-center">
-                    <h3 className="text-lg font-bold text-white mb-2">Pular Tutorial?</h3>
-                    <div className="flex gap-3 w-full mt-4"><button onClick={handleConfirmSkip} className="flex-1 px-4 py-2 bg-white text-black rounded-lg text-sm font-bold">Sim, Pular</button></div>
-                </div>
-            </div>
-        </div>
-      )}
-      
-      {/* --- NOTIFICATIONS STACK --- */}
-      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none max-w-sm w-full">
-         {/* System Alert & Notifications Logic */}
-         {systemAlert && (
-            <div className="pointer-events-auto animate-slide-in-right w-full">
-                <div className="bg-[#0f0a1e]/95 backdrop-blur-xl border border-indigo-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(99,102,241,0.3)] relative overflow-hidden group">
-                     <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Comunicado Admin</span>
-                            <button onClick={() => setSystemAlert(null)}><X size={14} /></button>
-                        </div>
-                        <h4 className="text-white font-bold text-base mb-1 pr-6 leading-tight">{systemAlert.title}</h4>
-                        <p className="text-gray-400 text-xs leading-relaxed">{systemAlert.message}</p>
-                     </div>
-                </div>
-            </div>
-         )}
-         {notifications.map(n => (
-          <div key={n.id} className={`pointer-events-auto flex items-center gap-4 px-5 py-4 rounded-lg shadow-2xl border backdrop-blur-md animate-slide-in-right min-w-[320px] ${n.type === 'success' ? 'bg-emerald-900/90 border-emerald-500/20 text-emerald-400' : n.type === 'error' ? 'bg-rose-900/90 border-rose-500/20 text-rose-400' : 'bg-blue-900/90 border-blue-500/20 text-blue-400'}`}>
-            <span className="text-xs font-bold tracking-wide">{n.message}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* --- SPECTATOR MODE BANNER --- */}
-      {spectatingData && (
-          <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-500 text-black font-bold text-xs uppercase tracking-widest py-2 px-4 flex items-center justify-between shadow-lg shadow-amber-500/20 animate-slide-down">
-              <div className="flex items-center gap-2">
-                  <Eye size={16} />
-                  <span>MODO ESPECTADOR: Visualizando {spectatingData.name}</span>
+      {/* SYSTEM ALERT MODAL (BROADCAST) */}
+      {systemAlert && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-amber-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
+                  <div className="flex gap-4">
+                      <div className="p-3 bg-amber-500/10 rounded-xl h-fit">
+                          <Megaphone className="text-amber-500" size={32} />
+                      </div>
+                      <div>
+                          <h3 className="text-xl font-bold text-white mb-2">{systemAlert.title}</h3>
+                          <p className="text-gray-300 text-sm leading-relaxed">{systemAlert.message}</p>
+                      </div>
+                  </div>
+                  <button 
+                    onClick={() => setSystemAlert(null)}
+                    className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all border border-white/5 uppercase text-xs tracking-wider"
+                  >
+                      Entendido
+                  </button>
               </div>
-              <button 
-                onClick={() => setSpectatingData(null)}
-                className="bg-black/20 hover:bg-black/30 px-3 py-1 rounded transition-colors flex items-center gap-1"
-              >
-                  <X size={14} /> SAIR
-              </button>
           </div>
       )}
 
-      {/* Mobile Overlay */}
-      {mobileMenuOpen && <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-20 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
+      {/* CONFIRM SKIP MODAL */}
+      {showSkipConfirm && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full text-center">
+                  <h3 className="text-lg font-bold text-white mb-2">Pular Introdução?</h3>
+                  <p className="text-gray-400 text-xs mb-6">Você pode reiniciar o tour depois na aba Sistema.</p>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowSkipConfirm(false)} className="flex-1 py-2 rounded-lg bg-white/5 text-gray-400 text-xs font-bold hover:bg-white/10">Cancelar</button>
+                      <button onClick={confirmSkip} className="flex-1 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">Sim, Pular</button>
+                  </div>
+              </div>
+          </div>
+      )}
 
-      {/* SIDEBAR */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-72 bg-[#050510] border-r border-white/5 transform transition-transform duration-300 ease-out flex flex-col justify-between ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-             <div className="flex items-center gap-4 mb-10 px-2 pt-4"> {/* PT-4 added for spacing if banner exists */}
-                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-primary/30">
-                    <Activity size={22} fill="currentColor" />
+      {/* TOUR GUIDE */}
+      <TourGuide 
+          steps={tourSteps}
+          isOpen={tourOpen}
+          onClose={() => handleSkipTour()}
+          onComplete={handleTourComplete}
+          onSkip={handleSkipTour}
+          currentStepIndex={tourStepIndex}
+          setCurrentStepIndex={setTourStepIndex}
+          disableNext={!canProceed && tourSteps[tourStepIndex].requiresInteraction}
+      />
+
+      {/* --- SIDEBAR --- */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-surface/95 backdrop-blur-xl border-r border-white/5 transform transition-transform duration-300 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full p-4">
+            {/* Logo Area */}
+            <div className="flex items-center gap-3 px-2 mb-8 mt-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
+                    <Activity className="text-white" size={24} />
                 </div>
                 <div>
-                    <h1 className="font-bold text-xl leading-none text-white tracking-tight">CPA Gateway</h1>
-                    <div className="flex items-center gap-2 mt-1">
-                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> ONLINE</span>
+                    <h1 className="font-bold text-white text-lg tracking-tight">CPA Gateway</h1>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Online V3.7</span>
                     </div>
                 </div>
             </div>
 
-            <nav className="space-y-1">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activeView === item.id;
-                    return (
-                        <button
-                            key={item.id}
-                            id={`nav-${item.id}`}
-                            onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 group relative ${isActive ? 'bg-primary/10 text-primary shadow-sm' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'}`}
-                        >
-                            <Icon size={18} className={`transition-colors ${isActive ? 'text-primary' : 'group-hover:text-gray-300'}`} />
-                            <span className="tracking-wide">{item.label}</span>
-                            {isActive && <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l-full bg-primary`}></div>}
-                        </button>
-                    );
-                })}
+            {/* User Info Card */}
+            <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Operador</span>
+                    {isAdmin && <span className="bg-amber-500/20 text-amber-500 text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 font-bold">ADMIN</span>}
+                </div>
+                <div className="font-mono text-white font-bold truncate">
+                    {spectatingData ? spectatingData.name : (state.config.userName || 'Anônimo')}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-1 font-mono">
+                    ID: {spectatingData ? 'ESPECTADOR' : (currentUserKey.length > 15 ? currentUserKey.substring(0, 15)+'...' : currentUserKey)}
+                </div>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 space-y-1">
+                <MenuButton id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+                <MenuButton id="planejamento" icon={Cpu} label="Planejamento" />
+                <MenuButton id="controle" icon={CalendarDays} label="Controle Diário" />
+                <MenuButton id="squad" icon={Users} label="Comando Squad" alert={false} />
+                <MenuButton id="despesas" icon={Receipt} label="Despesas" />
+                <MenuButton id="metas" icon={Target} label="Metas & Sonhos" />
+                
+                <div className="pt-4 mt-4 border-t border-white/5">
+                    <MenuButton id="configuracoes" icon={SettingsIcon} label="Sistema" />
+                    {isAdmin && <MenuButton id="admin" icon={Shield} label="Painel Admin" />}
+                </div>
             </nav>
-        </div>
-        
-        <div className="p-6 border-t border-white/5 bg-[#080814]">
-             {/* --- BOTÃO DE PRIVACIDADE --- */}
-             <button 
-                onClick={() => setPrivacyMode(prev => !prev)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border mb-3 text-xs font-bold uppercase tracking-wider transition-all ${privacyMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-white/5 border-white/5 text-gray-400 hover:text-white'}`}
-                title="Modo Privacidade (F9)"
-             >
-                <div className="flex items-center gap-2">
-                    {privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
-                    {privacyMode ? 'Privacidade ON' : 'Visível'}
-                </div>
-                <span className="text-[9px] opacity-50 bg-black/20 px-1 rounded">F9</span>
-             </button>
 
-             {/* ... (Bottom Sidebar - Reset/Backup - Mantidos) ... */}
-             <div className="flex gap-2 mb-3">
-                <button onClick={handleManualDownload} disabled={isReadOnly} className={`flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5 py-2.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    <Download size={14} /> Backup
-                </button>
-                <button onClick={() => handleLogout()} className="w-10 flex items-center justify-center bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-gray-400 border border-white/5 hover:border-red-500/30 py-2.5 rounded-lg transition-all">
-                    <LogOut size={16} />
-                </button>
-            </div>
-             <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-white/5 bg-black/20">
-                <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${spectatingData ? 'bg-amber-500' : saveStatus === 'saving' ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`}></div>
-                    <div className="overflow-hidden">
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
-                        <p className={`text-[10px] font-bold truncate ${spectatingData ? 'text-amber-500' : 'text-gray-300'}`}>
-                            {spectatingData ? 'ESPECTADOR' : saveStatus === 'saving' ? 'Sincronizando...' : 'Nuvem Ativa'}
-                        </p>
-                    </div>
-                </div>
+            {/* Footer Actions */}
+            <div className="mt-auto space-y-2">
+                {spectatingData ? (
+                    <button 
+                        onClick={exitSpectator}
+                        className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 animate-pulse"
+                    >
+                        <EyeOff size={16} /> SAIR DO MODO ESPECTADOR
+                    </button>
+                ) : (
+                    <>
+                        <button 
+                            onClick={toggleDemoMode}
+                            className={`w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${isDemoMode ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10'}`}
+                        >
+                            {isDemoMode ? <Terminal size={16} /> : <Terminal size={16} />} 
+                            {isDemoMode ? 'SAIR DA DEMO' : 'MODO DEMO'}
+                        </button>
+                        
+                        <button 
+                            onClick={handleLogout}
+                            className="w-full bg-white/5 hover:bg-rose-500/10 hover:text-rose-500 text-gray-400 border border-white/5 hover:border-rose-500/20 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                        >
+                            <LogOut size={16} /> DESCONECTAR
+                        </button>
+                    </>
+                )}
             </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative pt-8 lg:pt-0"> 
-        {/* Added padding top for banner on mobile */}
-        <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#0a0a0a] z-10">
-            <span className="font-bold text-lg text-white">CPA Gateway</span>
-            <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-white"><Menu size={24} /></button>
+      {/* --- MAIN CONTENT --- */}
+      <main className={`flex-1 flex flex-col h-full relative transition-all duration-300 lg:ml-64`}>
+        {/* Topbar (Mobile Only mostly) */}
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:hidden bg-surface/80 backdrop-blur-md z-30 sticky top-0">
+             <div className="flex items-center gap-3">
+                <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-white">
+                    <Menu size={24} />
+                </button>
+                <span className="font-bold text-white">CPA Gateway</span>
+             </div>
+             {spectatingData && <div className="text-xs bg-rose-500 text-white px-2 py-1 rounded font-bold animate-pulse">ESPIANDO</div>}
+        </header>
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[#02000f]">
+             {/* Background Gradients */}
+             <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-primary/5 to-transparent pointer-events-none z-0"></div>
+
+             <div className="p-4 lg:p-8 relative z-10 max-w-[1920px] mx-auto min-h-full">
+                 {spectatingData && (
+                     <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl mb-6 flex items-center justify-between animate-fade-in">
+                         <div className="flex items-center gap-2">
+                             <Eye size={20} />
+                             <span className="font-bold text-sm">Você está visualizando o painel de: {spectatingData.name}</span>
+                         </div>
+                         <button onClick={exitSpectator} className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-rose-400 transition-colors">
+                             Voltar ao Meu Painel
+                         </button>
+                     </div>
+                 )}
+
+                 {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
+                 {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(date) => { setCurrentDate(date); setActiveView('controle'); }} notify={notify} readOnly={isReadOnly} privacyMode={privacyMode} />}
+                 {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={isReadOnly} privacyMode={privacyMode} />}
+                 {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={isReadOnly} privacyMode={privacyMode} />}
+                 {activeView === 'configuracoes' && <Settings state={activeState} updateState={updateState} notify={notify} />}
+                 {activeView === 'metas' && <Goals state={activeState} updateState={updateState} privacyMode={privacyMode} />}
+                 {activeView === 'admin' && isAdmin && <Admin notify={notify} />}
+                 {activeView === 'squad' && <Squad currentUserKey={currentUserKey} onSpectate={handleSpectate} notify={notify} privacyMode={privacyMode} />}
+             </div>
         </div>
-        <div className={`flex-1 overflow-auto p-4 lg:p-8 relative z-0 custom-scrollbar ${spectatingData ? 'pt-12' : ''}`}>
-            <div className="max-w-[1920px] mx-auto h-full">
-                {renderContent()}
-            </div>
+
+        {/* Notifications Toast */}
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+            {notifications.map(n => (
+                <div key={n.id} className={`transform transition-all duration-300 animate-slide-in-right min-w-[300px] pointer-events-auto
+                    ${n.type === 'success' ? 'bg-[#0f291e] border-emerald-500/30 text-emerald-400' : 
+                      n.type === 'error' ? 'bg-[#2a1215] border-rose-500/30 text-rose-400' : 
+                      'bg-[#0f172a] border-blue-500/30 text-blue-400'}
+                    border p-4 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-xl
+                `}>
+                    {n.type === 'success' ? <CheckCircle2 size={20} /> : n.type === 'error' ? <AlertCircle size={20} /> : <Info size={20} />}
+                    <p className="text-sm font-medium">{n.message}</p>
+                </div>
+            ))}
+        </div>
+
+        {/* Auto-Save Indicator */}
+        <div className="fixed bottom-6 left-6 lg:left-72 z-40 pointer-events-none">
+            {saveStatus === 'saving' && (
+                <div className="bg-black/40 backdrop-blur-md border border-white/10 text-gray-400 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 animate-pulse">
+                    <RefreshCw size={10} className="animate-spin" /> Salvando...
+                </div>
+            )}
+            {saveStatus === 'saved' && (
+                <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-500 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2">
+                    <CheckCircle2 size={10} /> Salvo
+                </div>
+            )}
         </div>
       </main>
     </div>

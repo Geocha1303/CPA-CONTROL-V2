@@ -44,6 +44,9 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
             y: rect.y - 10,
             toJSON: () => {}
         });
+      } else {
+          // Se não encontrar o elemento, define como null para evitar travar a tela
+          setTargetRect(null);
       }
   }, [step]);
 
@@ -75,6 +78,9 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
   }, [currentStepIndex, isOpen, step, updatePosition]);
 
   if (!isOpen || !step) return null;
+
+  // Se não encontrar o elemento, não renderiza nada (evita tela preta bloqueando tudo)
+  if (!targetRect) return null;
 
   const handleNext = () => {
     if (disableNext) return;
