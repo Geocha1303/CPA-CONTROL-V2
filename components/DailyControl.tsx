@@ -1,16 +1,17 @@
 import React from 'react';
 import { AppState, Account } from '../types';
 import { formatarBRL } from '../utils';
-import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle, Lock } from 'lucide-react';
 
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
   currentDate: string;
   setCurrentDate: (d: string) => void;
+  readOnly?: boolean; // Nova prop
 }
 
-const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate }) => {
+const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, readOnly }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   const isManualMode = state.config.manualBonusMode === true;
   
@@ -22,6 +23,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   const handleExpenseChange = (field: 'proxy' | 'numeros', value: string) => {
+    if (readOnly) return;
     updateState({
         dailyRecords: {
             ...state.dailyRecords,
@@ -34,6 +36,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   const handleAddAccount = () => {
+    if (readOnly) return;
     const newAcc: Account = { id: Date.now(), deposito: 0, redeposito: 0, saque: 0, ciclos: isManualMode ? 0 : 1 };
     updateState({
         dailyRecords: {
@@ -44,6 +47,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   const handleAccountChange = (id: number, field: keyof Account, value: string) => {
+    if (readOnly) return;
     const updatedAccounts = dayRecord.accounts.map(acc => 
         acc.id === id ? { ...acc, [field]: safeFloat(value) } : acc
     );
@@ -56,6 +60,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   };
 
   const handleDeleteAccount = (id: number) => {
+    if (readOnly) return;
     updateState({
         dailyRecords: {
             ...state.dailyRecords,
@@ -74,11 +79,11 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
   const totalLucroDia = (totalSaques + totalBonus) - totalInvestido - totalDespesas;
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto animate-fade-in pb-10">
+    <div className={`space-y-6 max-w-[1600px] mx-auto animate-fade-in pb-10 ${readOnly ? 'pointer-events-none opacity-90' : ''}`}>
       
       {/* Date & Summary Header */}
       <div className="flex flex-col xl:flex-row gap-6">
-          <div className="flex-shrink-0 gateway-card p-6 rounded-xl flex flex-col justify-center min-w-[300px]">
+          <div className="flex-shrink-0 gateway-card p-6 rounded-xl flex flex-col justify-center min-w-[300px] pointer-events-auto">
                 <label className="text-xs text-primary-glow uppercase font-bold font-mono mb-2 flex items-center gap-2">
                     <Calendar size={14} /> DATA DO SISTEMA
                 </label>
@@ -126,6 +131,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
                     value={dayRecord.expenses.proxy === 0 ? '' : dayRecord.expenses.proxy} 
                     placeholder="0"
+                    disabled={readOnly}
                     onChange={(e) => handleExpenseChange('proxy', e.target.value)} />
             </div>
          </div>
@@ -135,6 +141,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                 <input type="number" className="gateway-input w-full pl-3 pr-3 py-2 text-right rounded font-mono font-bold text-sm"
                     value={dayRecord.expenses.numeros === 0 ? '' : dayRecord.expenses.numeros} 
                     placeholder="0"
+                    disabled={readOnly}
                     onChange={(e) => handleExpenseChange('numeros', e.target.value)} />
             </div>
          </div>
@@ -147,12 +154,15 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                 LIVRO CAIXA
                 <span className="bg-primary/20 text-primary-glow text-xs px-2 py-0.5 rounded border border-primary/30">{dayRecord.accounts.length}</span>
             </h3>
-            <button 
-                onClick={handleAddAccount}
-                className="gateway-btn-primary px-4 py-2 rounded text-xs font-bold text-white flex items-center gap-2 font-mono"
-            >
-                <Plus size={14} /> NOVO REGISTRO
-            </button>
+            {!readOnly && (
+                <button 
+                    onClick={handleAddAccount}
+                    className="gateway-btn-primary px-4 py-2 rounded text-xs font-bold text-white flex items-center gap-2 font-mono"
+                >
+                    <Plus size={14} /> NOVO REGISTRO
+                </button>
+            )}
+            {readOnly && <div className="text-xs text-amber-500 font-bold flex items-center gap-1"><Lock size={12}/> MODO LEITURA</div>}
         </div>
         
         <div className="overflow-x-auto flex-1">
@@ -167,23 +177,25 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         <th className="px-6 py-4 font-bold tracking-widest text-primary-glow">
                              <div className="flex items-center gap-2">
                                  {isManualMode ? 'BÔNUS (R$)' : 'CICLOS (TELAS)'}
-                                 <div className="group relative">
-                                     <AlertCircle size={14} className="cursor-help text-primary-glow hover:text-white transition-colors" />
-                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-[0_0_20px_rgba(112,0,255,0.2)] text-left leading-relaxed">
-                                         {isManualMode ? (
-                                             <>
-                                                <strong className="text-primary-glow block mb-1">Modo Manual Ativado</strong>
-                                                Você deve colocar o valor exato que ganhou nesta operação (Baú + Gerente). Se quiser que o sistema calcule automaticamente (Ciclos x Valor), desmarque esta opção em "Sistema".
-                                             </>
-                                         ) : (
-                                             <>
-                                                <strong className="text-primary-glow block mb-1">Modo Automático</strong>
-                                                Digite a quantidade de ciclos (telas). O sistema multiplicará pelo valor configurado em "Sistema".
-                                             </>
-                                         )}
-                                         <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-gray-900 border-b border-r border-primary/30 rotate-45"></div>
+                                 {!readOnly && (
+                                     <div className="group relative">
+                                         <AlertCircle size={14} className="cursor-help text-primary-glow hover:text-white transition-colors" />
+                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-[0_0_20px_rgba(112,0,255,0.2)] text-left leading-relaxed">
+                                             {isManualMode ? (
+                                                 <>
+                                                    <strong className="text-primary-glow block mb-1">Modo Manual Ativado</strong>
+                                                    Você deve colocar o valor exato que ganhou nesta operação (Baú + Gerente). Se quiser que o sistema calcule automaticamente (Ciclos x Valor), desmarque esta opção em "Sistema".
+                                                 </>
+                                             ) : (
+                                                 <>
+                                                    <strong className="text-primary-glow block mb-1">Modo Automático</strong>
+                                                    Digite a quantidade de ciclos (telas). O sistema multiplicará pelo valor configurado em "Sistema".
+                                                 </>
+                                             )}
+                                             <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-gray-900 border-b border-r border-primary/30 rotate-45"></div>
+                                         </div>
                                      </div>
-                                 </div>
+                                 )}
                              </div>
                         </th>
                         
@@ -201,7 +213,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                      </div>
                                      <h4 className="text-white font-bold mb-2">Caixa Diário Vazio</h4>
                                      <p className="text-gray-400 text-sm max-w-sm mb-6">
-                                         Você ainda não enviou nenhum lote para hoje. Vá até o Planejamento para gerar e enviar contas.
+                                         Nenhum registro encontrado para esta data.
                                      </p>
                                 </div>
                             </td>
@@ -218,6 +230,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                 className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
                                                 value={acc.deposito === 0 ? '' : acc.deposito} 
                                                 placeholder="0"
+                                                disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} 
                                             />
                                         </div>
@@ -230,6 +243,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                 className="gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all"
                                                 value={acc.redeposito === 0 ? '' : acc.redeposito} 
                                                 placeholder="0"
+                                                disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} 
                                             />
                                         </div>
@@ -242,6 +256,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                 className="gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.02] hover:bg-accent-cyan/[0.05] transition-all"
                                                 value={acc.saque === 0 ? '' : acc.saque} 
                                                 placeholder="0"
+                                                disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'saque', e.target.value)} 
                                             />
                                         </div>
@@ -258,6 +273,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                     className="gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all shadow-[0_0_15px_rgba(112,0,255,0.05)]"
                                                     value={acc.ciclos === 0 ? '' : acc.ciclos} 
                                                     placeholder="0.00"
+                                                    disabled={readOnly}
                                                     onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
                                                 />
                                             </div>
@@ -269,6 +285,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                     className="w-full bg-transparent text-center text-white font-mono font-bold py-1.5 focus:outline-none"
                                                     value={acc.ciclos === 0 ? '' : acc.ciclos} 
                                                     placeholder="0"
+                                                    disabled={readOnly}
                                                     onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
                                                 />
                                                 <div className="bg-white/5 border-l border-white/10 px-2.5 py-1.5 flex flex-col items-center justify-center min-w-[50px]">
@@ -286,9 +303,11 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
 
                                     {/* DELETE */}
                                     <td className="px-6 py-3 text-center">
-                                        <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors">
-                                            <Trash2 size={16} />
-                                        </button>
+                                        {!readOnly && (
+                                            <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             );

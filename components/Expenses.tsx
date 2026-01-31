@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { AppState, GeneralExpense } from '../types';
 import { formatarBRL, getHojeISO } from '../utils';
-import { Plus, Trash2, Receipt, Calendar, Search } from 'lucide-react';
+import { Plus, Trash2, Receipt, Calendar, Search, Lock } from 'lucide-react';
 
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
+  readOnly?: boolean;
 }
 
-const Expenses: React.FC<Props> = ({ state, updateState }) => {
+const Expenses: React.FC<Props> = ({ state, updateState, readOnly }) => {
   const [newExpense, setNewExpense] = useState<{desc: string, val: string, date: string, rec: boolean}>({
     desc: '',
     val: '',
@@ -17,6 +18,7 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
   });
 
   const handleAdd = () => {
+    if (readOnly) return;
     if (!newExpense.desc || !newExpense.val) return;
     
     const expense: GeneralExpense = {
@@ -35,6 +37,7 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
   };
 
   const handleDelete = (id: number) => {
+    if (readOnly) return;
     updateState({
         generalExpenses: state.generalExpenses.filter(e => e.id !== id)
     });
@@ -43,7 +46,7 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
   const totalDespesas = state.generalExpenses.reduce((acc, curr) => acc + curr.valor, 0);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
+    <div className={`space-y-6 animate-fade-in pb-10 ${readOnly ? 'pointer-events-none opacity-80' : ''}`}>
         {/* Header Card */}
         <div className="glass-card p-8 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
@@ -67,10 +70,14 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
         </div>
 
         {/* Add Form */}
-        <div className="glass-card p-6 rounded-2xl border border-white/5">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Plus size={14} /> Nova Despesa
-            </h3>
+        <div className="glass-card p-6 rounded-2xl border border-white/5 pointer-events-auto">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                    <Plus size={14} /> Nova Despesa
+                </h3>
+                {readOnly && <Lock size={14} className="text-gray-500" />}
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 <div className="md:col-span-2">
                     <label className="text-[10px] text-gray-500 font-bold uppercase mb-1 block">Data</label>
@@ -78,7 +85,8 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
                         <Calendar size={14} className="absolute left-3 top-3.5 text-gray-500 group-focus-within:text-rose-400 transition-colors" />
                         <input 
                             type="date" 
-                            className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-9 pr-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-medium"
+                            disabled={readOnly}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-9 pr-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-medium disabled:opacity-50"
                             value={newExpense.date}
                             onChange={e => setNewExpense({...newExpense, date: e.target.value})}
                         />
@@ -88,8 +96,9 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
                     <label className="text-[10px] text-gray-500 font-bold uppercase mb-1 block">Descrição</label>
                     <input 
                         type="text" 
+                        disabled={readOnly}
                         placeholder="Ex: Servidor VPS, Proxy, Assinatura..."
-                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-medium placeholder:text-gray-600"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-medium placeholder:text-gray-600 disabled:opacity-50"
                         value={newExpense.desc}
                         onChange={e => setNewExpense({...newExpense, desc: e.target.value})}
                     />
@@ -98,8 +107,9 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
                     <label className="text-[10px] text-gray-500 font-bold uppercase mb-1 block">Valor (R$)</label>
                     <input 
                         type="number" 
+                        disabled={readOnly}
                         placeholder="0.00"
-                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-bold placeholder:text-gray-600"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-rose-500 outline-none transition-all shadow-inner font-bold placeholder:text-gray-600 disabled:opacity-50"
                         value={newExpense.val}
                         onChange={e => setNewExpense({...newExpense, val: e.target.value})}
                     />
@@ -107,7 +117,8 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
                 <div className="md:col-span-2">
                     <button 
                         onClick={handleAdd}
-                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                        disabled={readOnly}
+                        className={`w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 ${readOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <Plus size={18} /> Adicionar
                     </button>
@@ -116,7 +127,7 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
         </div>
 
         {/* List */}
-        <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
+        <div className="glass-card rounded-2xl overflow-hidden border border-white/5 pointer-events-auto">
             <table className="w-full text-sm text-left text-gray-400">
                 <thead className="text-xs text-gray-500 uppercase bg-black/40 border-b border-white/5">
                     <tr>
@@ -145,12 +156,14 @@ const Expenses: React.FC<Props> = ({ state, updateState }) => {
                                 <td className="px-6 py-4 text-white font-medium">{item.description}</td>
                                 <td className="px-6 py-4 text-right font-bold text-rose-400 text-base">{formatarBRL(item.valor)}</td>
                                 <td className="px-6 py-4 text-center">
-                                    <button 
-                                        onClick={() => handleDelete(item.id)}
-                                        className="text-gray-600 hover:text-rose-500 transition-colors p-2 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {!readOnly && (
+                                        <button 
+                                            onClick={() => handleDelete(item.id)}
+                                            className="text-gray-600 hover:text-rose-500 transition-colors p-2 hover:bg-rose-500/10 rounded-lg opacity-0 group-hover:opacity-100"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))

@@ -13,6 +13,11 @@ export const mergeDeep = (target: any, source: any): any => {
     return output;
 };
 
+export const generateUserTag = () => {
+    // Gera um número entre 1000 e 9999
+    return Math.floor(1000 + Math.random() * 9000).toString();
+};
+
 export const formatarBRL = (value: number | undefined | null) => {
   // Proteção contra NaN/Infinity/Null
   if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
@@ -471,7 +476,7 @@ export const generateDemoState = (baseConfig: Config): AppState => {
         generalExpenses,
         monthlyGoals,
         dreamGoals,
-        config: baseConfig,
+        config: { ...baseConfig, userTag: '8492' }, // Demo Tag
         generator: {
             plan: demoPlan,
             totalAgentes: 2,

@@ -42,6 +42,7 @@ export interface Config {
   valorBonus: number;
   taxaImposto: number;
   userName?: string;
+  userTag?: string; // NOVA PROPRIEDADE: A Tag estilo #1234
   manualBonusMode?: boolean; // NOVA FLAG: Se true, o campo 'ciclos' é valor monetário direto
 }
 
@@ -112,4 +113,13 @@ export interface Notification {
   message: string;
 }
 
-export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin';
+export interface SquadMember {
+  key: string;
+  owner_name: string;
+  user_tag?: string; // Adicionado para exibição na lista
+  last_update: string;
+  is_online?: boolean;
+}
+
+// Adicionado 'squad'
+export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad';
