@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AppState, GeneratedPlayer, HistoryItem, Account } from '../types';
 import { formatarBRL, generatePlan, getHojeISO, getManualAvoidanceValues, generateConstrainedSum, regeneratePlayerValues } from '../utils';
 import { Play, RotateCw, Send, Sliders, Trash2, BrainCircuit, Target, BarChart2, User, Layers, Info, AlertTriangle, ChevronRight, Settings2, Users, Rocket, CheckCircle2, RefreshCw, Cpu, Database, ArrowRight, HelpCircle, Lock } from 'lucide-react';
+import { supabase } from '../supabaseClient'; // Importado para notificação
 
 interface Props {
   state: AppState;
@@ -152,58 +153,39 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       notify('Valores do lote regenerados (lógica Smart Value).', 'info');
   };
 
-  const handleAdjustment = () => {
-      if(readOnly) return;
-      const agentId = parseInt(adjustmentParams.agentId);
-      if(!agentId || !state.generator.plan.length) {
-          notify("Selecione um agente e certifique-se de ter um plano gerado.", "error");
-          return;
-      }
+  // --- NOTIFICAR LÍDER (SQUAD) ---
+  const notifyLeader = async (message: string, type: 'info' | 'success' | 'alert') => {
+      const myKey = localStorage.getItem('cpa_auth_session_v3_master');
+      if(!myKey) return;
 
-      const agentPlayers = state.generator.plan.filter(p => p.agent === agentId);
-      if (agentPlayers.length === 0) {
-          notify("Este agente não possui jogadores no plano atual.", "error");
-          return;
-      }
-
-      const totalSum = agentPlayers.reduce((acc, p) => acc + p.total, 0);
-      const currentAvg = totalSum / agentPlayers.length;
-
-      if(adjustmentParams.targetAvg <= currentAvg) {
-          notify(`Média atual (R$${currentAvg.toFixed(2)}) já é superior ao alvo.`, 'error');
-          return;
-      }
-
-      const deficit = (adjustmentParams.targetAvg - currentAvg) * agentPlayers.length;
-      const testadores = agentPlayers.filter(p => p.perfil.includes('Testador') && !p.perfil.includes('Ajustado'));
-
-      if(testadores.length < adjustmentParams.numTesters) {
-          notify(`Agente ${agentId} só possui ${testadores.length} Testadores disponíveis. (Necessário: ${adjustmentParams.numTesters})`, 'error');
-          return;
-      }
-
-      // Evita NaN se o número de testes for 0 (embora o input evite, é bom proteger)
-      const safeNumTesters = Math.max(1, adjustmentParams.numTesters);
-      const redeposits = generateConstrainedSum(deficit, safeNumTesters, params.minBaixo, params.maxBaixo);
-      const newPlan = [...state.generator.plan];
-      
-      let updatesCount = 0;
-      // Procura no plano global os jogadores desse agente para ajustar
-      for(let i=0; i<newPlan.length; i++) {
-          if(updatesCount >= safeNumTesters) break;
-          
-          const p = newPlan[i];
-          if(p.agent === agentId && p.perfil.includes('Testador') && !p.perfil.includes('Ajustado')) {
-              const extraVal = redeposits[updatesCount];
-              p.deps.push({ val: extraVal, type: 'redeposito' });
-              p.total += extraVal;
-              p.perfil = '🛡️ Testador (Ajustado)';
-              updatesCount++;
+      try {
+          const { data } = await supabase
+            .from('access_keys')
+            .select('leader_key, owner_name')
+            .eq('key', myKey)
+            .single();
+            
+          if(data && data.leader_key) {
+              const channel = supabase.channel(`squad-room-${data.leader_key}`);
+              channel.subscribe(async (status) => {
+                  if(status === 'SUBSCRIBED') {
+                      await channel.send({
+                          type: 'broadcast',
+                          event: 'squad_msg',
+                          payload: {
+                              from: data.owner_name,
+                              message: message,
+                              type: type,
+                              timestamp: Date.now()
+                          }
+                      });
+                      supabase.removeChannel(channel);
+                  }
+              });
           }
+      } catch (e) {
+          console.error("Falha ao notificar líder", e);
       }
-
-      updateState({ generator: { ...state.generator, plan: newPlan } });
-      notify(`Ajuste aplicado! +R$${formatarBRL(deficit)} no total do agente.`, 'success');
   };
 
   // --- LÓGICA DE ENVIO SEQUENCIAL (VISUAL) ---
@@ -313,6 +295,10 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
 
       // 5. Finalização
       setProcessingState(prev => ({ ...prev, status: 'completed' }));
+      
+      // Notifica o Líder sobre o término
+      notifyLeader(`Finalizou um planejamento de ${plan.length} jogadores (${totalLots} lotes).`, 'success');
+
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       notify(`Sucesso! ${totalLots} lotes processados.`, 'success');
@@ -478,39 +464,49 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
 
         lots.push(
             <div key={lotIndex} className="glass-card rounded-2xl overflow-hidden animate-slide-up mb-6 shadow-xl border border-white/5">
-                {/* Header do Lote */}
-                <div className="p-4 bg-white/5 border-b border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+                {/* Header do Lote - LAYOUT CORRIGIDO PARA EVITAR SOBREPOSIÇÃO */}
+                <div className="p-4 bg-white/5 border-b border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    
+                    {/* ESQUERDA: TÍTULO E STATS */}
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg flex-shrink-0">
                             {lotNumber}
                         </div>
                         <div>
-                            <span className="text-white font-bold text-lg block">Lote #{lotNumber}</span>
-                            <div className="flex items-center gap-3 text-sm text-gray-400">
-                                <span className="bg-black/30 px-2 py-0.5 rounded text-xs border border-white/10 font-mono">Jogadores {chunkStartIndex + 1} - {chunkStartIndex + chunk.length}</span>
-                                <span className="text-emerald-400 font-mono font-bold">{formatarBRL(lotDep)}</span>
+                            <span className="text-white font-bold text-lg block mb-1">Lote #{lotNumber}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="bg-black/40 px-2 py-0.5 rounded text-xs border border-white/10 font-mono text-gray-300">
+                                    Jogadores {chunkStartIndex + 1}-{chunkStartIndex + chunk.length}
+                                </span>
+                                <span className="text-emerald-400 font-mono font-bold text-sm bg-emerald-900/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                    {formatarBRL(lotDep)}
+                                </span>
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-black/40 rounded-lg px-3 py-1.5 border border-white/10">
-                            <span className="text-xs text-gray-500 uppercase font-bold mr-3">Tamanho</span>
+
+                    {/* DIREITA: AÇÕES */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto self-end sm:self-center justify-end">
+                        <div className="flex items-center bg-black/40 rounded-lg px-2 py-1 border border-white/10">
+                            <span className="text-[10px] text-gray-500 uppercase font-bold mr-2 hidden md:inline">Qtd</span>
                             <input 
                                 type="number" 
-                                className="w-10 bg-transparent text-center font-bold text-white focus:outline-none text-sm" 
+                                className="w-8 bg-transparent text-center font-bold text-white focus:outline-none text-sm" 
                                 value={size} min={1}
                                 disabled={readOnly}
                                 onChange={(e) => updateState({generator: {...state.generator, customLotSizes: {...state.generator.customLotSizes, [currentLotIdx]: parseInt(e.target.value)||5}}})}
                             />
                         </div>
+                        
                         {!readOnly && (
                             <>
                                 <button 
                                     type="button"
                                     onClick={() => handleRegenerateLot(chunkStartIndex, size)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors text-xs font-bold border border-white/5"
+                                    className="p-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors border border-white/5"
+                                    title="Regerar Valores"
                                 >
-                                    <RotateCw size={14} /> Regerar
+                                    <RotateCw size={16} />
                                 </button>
                                 <button 
                                     type="button"
@@ -533,11 +529,12 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                         const newAccount = { id: Date.now() + Math.floor(Math.random() * 100000), deposito: dep, redeposito: redep, saque: 0, ciclos };
                                         updateState({ dailyRecords: { ...state.dailyRecords, [today]: { ...currentDay, accounts: [...currentDay.accounts, newAccount] } } });
                                         notify(`Lote ${lotNumber} enviado para Controle Diário!`, 'success');
+                                        notifyLeader(`Enviou o lote #${lotNumber} (R$${formatarBRL(dep+redep)}) para o caixa.`, 'info');
                                         navigateToDaily(today);
                                     }}
-                                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-900/20"
+                                    className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-emerald-900/20"
                                 >
-                                    <Send size={16} /> Enviar
+                                    <Send size={16} /> <span className="hidden sm:inline">ENVIAR</span>
                                 </button>
                             </>
                         )}

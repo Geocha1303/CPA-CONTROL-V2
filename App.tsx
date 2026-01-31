@@ -376,7 +376,7 @@ function App() {
   }, [currentUserKey]);
 
 
-  // --- TOUR STEPS DEFINITION (CORRIGIDO) ---
+  // --- TOUR STEPS DEFINITION (CORRIGIDO E RESTAURADO) ---
   const tourSteps: TourStep[] = [
       {
           targetId: 'nav-configuracoes',
@@ -441,7 +441,7 @@ function App() {
           targetId: 'tour-daily-table',
           title: 'Livro Caixa Automático',
           view: 'controle',
-          content: 'Veja que os depósitos e redepósitos já foram preenchidos. Você só precisa focar em colocar o SAQUE e os CICLOS.',
+          content: 'Veja que os depósitos e redepósitos já foram preenchidos. Você só precisa focar em colocar o SAQUE e os CICLOS/BÔNUS.',
           position: 'top',
           requiresInteraction: false
       },
@@ -456,7 +456,7 @@ function App() {
       // --- NOVO PASSO SQUAD ---
       {
           targetId: 'nav-squad',
-          title: 'Novo: Comando Squad',
+          title: 'Comando Squad',
           view: 'squad', // Força a troca para a view Squad
           content: (
               <div>

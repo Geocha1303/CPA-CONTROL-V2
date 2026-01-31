@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { SquadMember, AppState } from '../types';
-import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown, Database } from 'lucide-react';
+import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown, Database, MessageSquare, Bell, Send, CheckCircle2, TrendingUp, Trophy, Target, DollarSign } from 'lucide-react';
 import { formatarBRL, getHojeISO, calculateDayMetrics } from '../utils';
 
 interface Props {
@@ -10,8 +10,21 @@ interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
+interface FeedMessage {
+    id: number;
+    from: string;
+    message: string;
+    type: 'info' | 'success' | 'alert';
+    timestamp: number;
+}
+
+interface MemberMetrics {
+    profit: number;
+    volume: number;
+}
+
 const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
-  const [members, setMembers] = useState<SquadMember[]>([]);
+  const [members, setMembers] = useState<(SquadMember & { metrics?: MemberMetrics })[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
   const [loadingDataId, setLoadingDataId] = useState<string | null>(null);
@@ -21,12 +34,25 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
   const [inputLeaderKey, setInputLeaderKey] = useState('');
   
   // State visual
-  const [viewMode, setViewMode] = useState<'leader' | 'member'>('leader'); // Toggle visual
+  const [viewMode, setViewMode] = useState<'leader' | 'member'>('leader'); 
+  
+  // --- WAR ROOM (LEADER FEED) ---
+  const [feed, setFeed] = useState<FeedMessage[]>([]);
+  const feedChannelRef = useRef<any>(null);
+
+  // --- SQUAD GOALS (LOCAL STATE FOR LEADER) ---
+  const [squadGoal, setSquadGoal] = useState<number>(() => {
+      const saved = localStorage.getItem('cpa_squad_goal');
+      return saved ? parseFloat(saved) : 5000;
+  });
+
+  // --- MEMBER UPLINK ---
+  const [messageInput, setMessageInput] = useState('');
+  const [isSendingMsg, setIsSendingMsg] = useState(false);
 
   const fetchSquadData = async () => {
       setLoading(true);
       try {
-          // 1. Buscar meus dados (quem é meu líder?)
           const { data: myData, error: myError } = await supabase
             .from('access_keys')
             .select('leader_key')
@@ -35,11 +61,9 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
             
           if (myData) {
               setMyLeaderKey(myData.leader_key || '');
-              // Se eu tenho lider, provavelmente sou membro, mas posso ser lider tbm.
               if(myData.leader_key) setViewMode('member');
           }
 
-          // 2. Buscar meus subordinados (quem tem EU como líder?)
           const { data: keys, error } = await supabase
               .from('access_keys')
               .select('key, owner_name')
@@ -48,38 +72,44 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
           if (error) throw error;
 
           if (keys && keys.length > 0) {
-              // 3. Buscar status de atualização E a TAG dentro do raw_json na tabela user_data
               const keysList = keys.map(k => k.key);
               const { data: userData } = await supabase
                   .from('user_data')
                   .select('access_key, updated_at, raw_json')
                   .in('access_key', keysList);
 
-              const formattedMembers: SquadMember[] = keys.map(k => {
+              const formattedMembers: (SquadMember & { metrics?: MemberMetrics })[] = keys.map(k => {
                   const uData = userData?.find(ud => ud.access_key === k.key);
                   const rawConfig = uData?.raw_json as AppState;
-                  
-                  // Tenta pegar a Tag do JSON, senão usa '0000'
                   const userTag = rawConfig?.config?.userTag || '????';
+                  
+                  // Calculate Metrics for Leaderboard (Today)
+                  let metrics: MemberMetrics = { profit: 0, volume: 0 };
+                  if (rawConfig && rawConfig.dailyRecords) {
+                      const today = getHojeISO();
+                      const dayData = rawConfig.dailyRecords[today];
+                      const calc = calculateDayMetrics(dayData, rawConfig.config.valorBonus);
+                      metrics = { profit: calc.lucro, volume: calc.ret };
+                  }
 
                   return {
                       key: k.key,
                       owner_name: k.owner_name || 'Operador',
                       user_tag: userTag,
-                      last_update: uData?.updated_at || ''
+                      last_update: uData?.updated_at || '',
+                      metrics
                   };
               });
 
+              // Sort by Profit Descending
+              formattedMembers.sort((a, b) => (b.metrics?.profit || 0) - (a.metrics?.profit || 0));
+
               setMembers(formattedMembers);
-              // if(formattedMembers.length > 0) setViewMode('leader'); // Mantém o usuário na aba que ele escolheu
           } else {
               setMembers([]);
           }
       } catch (err: any) {
-          // Silent fail for keys that don't exist in DB yet (Free keys)
-          if(err.code !== 'PGRST116') { // PGRST116 = No rows returned
-            console.error(err);
-          }
+          if(err.code !== 'PGRST116') console.error(err);
       } finally {
           setLoading(false);
       }
@@ -87,7 +117,32 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
 
   useEffect(() => {
       fetchSquadData();
+      
+      // --- SUBSCRIBE TO SQUAD CHANNEL (LEADER MODE) ---
+      const channelName = `squad-room-${currentUserKey}`;
+      if (feedChannelRef.current) supabase.removeChannel(feedChannelRef.current);
+      const channel = supabase.channel(channelName);
+      feedChannelRef.current = channel;
+
+      channel
+        .on('broadcast', { event: 'squad_msg' }, (payload) => {
+            const msg = payload.payload as FeedMessage;
+            setFeed(prev => [{...msg, id: Date.now()}, ...prev].slice(0, 50)); 
+            if(msg.type !== 'info') {
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.2;
+                audio.play().catch(()=>{});
+            }
+        })
+        .subscribe();
+
+      return () => {
+          if(feedChannelRef.current) supabase.removeChannel(feedChannelRef.current);
+      };
+
   }, [currentUserKey]);
+
+  // --- ACTIONS ---
 
   const handleLinkLeader = async () => {
       if (!inputLeaderKey) return;
@@ -98,7 +153,6 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
 
       setLoadingAction(true);
       try {
-          // 1. Verificar se a chave do líder existe
           const { data: leaderExists, error: searchError } = await supabase
             .from('access_keys')
             .select('id')
@@ -109,9 +163,6 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
               throw new Error("Chave do Líder não encontrada no sistema.");
           }
 
-          // 2. Tenta atualizar. Se der erro de permissão (RLS), o try/catch pega.
-          // Se o usuário 'Free' não existir no banco, o update retorna 0 linhas afetadas se não fizer upsert.
-          
           const { error: upsertError } = await supabase
             .from('access_keys')
             .upsert({ 
@@ -123,7 +174,6 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
             }, { onConflict: 'key' });
 
           if (upsertError) {
-              console.error("Supabase Error:", upsertError);
               if (upsertError.code === '42501' || upsertError.message.includes('permission')) {
                   throw new Error("Erro de Permissão: Execute o código SQL no Supabase para liberar o Squad.");
               }
@@ -133,7 +183,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
           notify(`Vinculado ao Líder ${inputLeaderKey} com sucesso!`, "success");
           setMyLeaderKey(inputLeaderKey);
           setInputLeaderKey('');
-          setViewMode('member'); // Fica na aba de membro
+          setViewMode('member'); 
       } catch (err: any) {
           notify(err.message, "error");
       } finally {
@@ -189,10 +239,111 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
       }
   };
 
+  // --- MEMBER MESSAGING ---
+  const sendMessageToLeader = async () => {
+      if(!messageInput.trim() || !myLeaderKey) return;
+      setIsSendingMsg(true);
+      
+      try {
+          const channel = supabase.channel(`squad-room-${myLeaderKey}`);
+          
+          let myName = 'Membro';
+          const localData = localStorage.getItem('cpaControlV2_react_backup_auto');
+          if(localData) {
+              const parsed = JSON.parse(localData);
+              myName = parsed?.config?.userName || 'Membro';
+          }
+
+          const status = await new Promise((resolve) => {
+              channel.subscribe((status) => {
+                  if(status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR') resolve(status);
+              });
+          });
+
+          if(status === 'SUBSCRIBED') {
+              await channel.send({
+                  type: 'broadcast',
+                  event: 'squad_msg',
+                  payload: {
+                      from: myName,
+                      message: messageInput,
+                      type: 'info',
+                      timestamp: Date.now()
+                  }
+              });
+              notify("Mensagem enviada.", "success");
+              setMessageInput('');
+              supabase.removeChannel(channel);
+          } else {
+              notify("Erro ao conectar com líder.", "error");
+          }
+
+      } catch(e) {
+          console.error(e);
+          notify("Falha no envio.", "error");
+      } finally {
+          setIsSendingMsg(false);
+      }
+  };
+
+  const sendReportToLeader = async () => {
+      if(!myLeaderKey) return;
+      setIsSendingMsg(true);
+      try {
+          let message = "Relatório Diário: ";
+          let type: 'info' | 'success' | 'alert' = 'info';
+          
+          const localData = localStorage.getItem('cpaControlV2_react_backup_auto');
+          let myName = 'Membro';
+          
+          if(localData) {
+              const parsed = JSON.parse(localData) as AppState;
+              myName = parsed.config.userName || 'Membro';
+              const today = getHojeISO();
+              const metrics = calculateDayMetrics(parsed.dailyRecords[today], parsed.config.valorBonus);
+              
+              if(metrics.lucro > 1000) type = 'success';
+              else if(metrics.lucro < 0) type = 'alert';
+              
+              message += `Lucro: ${formatarBRL(metrics.lucro)} | Vendas: ${formatarBRL(metrics.ret)}`;
+          } else {
+              message += "Sem dados locais.";
+          }
+
+          const channel = supabase.channel(`squad-room-${myLeaderKey}`);
+          const status = await new Promise((resolve) => channel.subscribe(s => { if(s==='SUBSCRIBED') resolve(s); }));
+          
+          if(status === 'SUBSCRIBED') {
+              await channel.send({
+                  type: 'broadcast',
+                  event: 'squad_msg',
+                  payload: { from: myName, message, type, timestamp: Date.now() }
+              });
+              notify("Relatório enviado!", "success");
+              supabase.removeChannel(channel);
+          }
+      } catch(e) {
+          notify("Erro ao enviar reporte.", "error");
+      } finally {
+          setIsSendingMsg(false);
+      }
+  };
+
   const copyToClipboard = (text: string) => {
       navigator.clipboard.writeText(text);
       notify("Copiado!", "info");
   };
+
+  const handleSquadGoalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = parseFloat(e.target.value) || 0;
+      setSquadGoal(val);
+      localStorage.setItem('cpa_squad_goal', val.toString());
+  };
+
+  // --- CALCULATE TOTALS ---
+  const teamTotalProfit = members.reduce((acc, m) => acc + (m.metrics?.profit || 0), 0);
+  const teamTotalVolume = members.reduce((acc, m) => acc + (m.metrics?.volume || 0), 0);
+  const teamProgress = squadGoal > 0 ? (teamTotalProfit / squadGoal) * 100 : 0;
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in pb-20">
@@ -278,81 +429,173 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
         {viewMode === 'leader' && (
             <div className="animate-slide-in-right space-y-8">
                 
-                {/* LISTA DE FUNCIONÁRIOS */}
-                <div>
-                     <div className="flex items-center gap-3 mb-4 px-2">
-                        <Users size={18} className="text-indigo-400" />
-                        <h3 className="text-lg font-bold text-white">Minha Equipe Ativa</h3>
-                        <span className="bg-white/10 px-2 py-0.5 rounded text-xs text-gray-300 font-mono">{members.length}</span>
+                {/* --- MONITOR TÁTICO & METAS (NOVO) --- */}
+                {members.length > 0 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* KPI GERAL */}
+                        <div className="lg:col-span-2 gateway-card rounded-2xl p-6 border border-emerald-500/20 bg-emerald-900/5 relative overflow-hidden">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                        <Target size={20} className="text-emerald-400" /> Meta do Esquadrão (Hoje)
+                                    </h3>
+                                    <p className="text-gray-400 text-xs">Soma do lucro líquido de todos os agentes.</p>
+                                </div>
+                                <div className="text-right">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Definir Meta (R$)</label>
+                                    <input 
+                                        type="number" 
+                                        className="bg-black/30 border border-emerald-500/30 rounded px-2 py-1 text-right text-emerald-400 font-mono font-bold w-32 focus:outline-none focus:border-emerald-400"
+                                        value={squadGoal}
+                                        onChange={handleSquadGoalChange}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-end gap-2 mb-2">
+                                <span className="text-4xl font-black text-white font-mono">{formatarBRL(teamTotalProfit)}</span>
+                                <span className="text-sm text-gray-400 font-bold mb-1">/ {formatarBRL(squadGoal)}</span>
+                            </div>
+
+                            <div className="w-full bg-black/40 h-4 rounded-full overflow-hidden border border-white/5">
+                                <div 
+                                    className="h-full bg-emerald-500 shadow-[0_0_15px_#10b981] transition-all duration-1000 relative"
+                                    style={{width: `${Math.min(teamProgress, 100)}%`}}
+                                >
+                                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* VOLUME TOTAL */}
+                        <div className="gateway-card rounded-2xl p-6 border border-indigo-500/20 bg-indigo-900/5 flex flex-col justify-center">
+                            <h3 className="text-gray-400 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-2">
+                                <DollarSign size={14} className="text-indigo-400" /> Volume de Vendas Total
+                            </h3>
+                            <div className="text-3xl font-black text-white font-mono">{formatarBRL(teamTotalVolume)}</div>
+                            <p className="text-xs text-indigo-300 mt-1">Acumulado da equipe hoje</p>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    {/* COLUNA ESQUERDA: RANKING E LISTA (ATUALIZADO) */}
+                    <div className="xl:col-span-2 space-y-6">
+                         <div className="flex items-center gap-3 px-2">
+                            <Trophy size={18} className="text-amber-400" />
+                            <h3 className="text-lg font-bold text-white">Ranking Operacional</h3>
+                        </div>
+
+                        {members.length === 0 ? (
+                            <div className="text-center py-20 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Users size={32} className="text-gray-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-500">Nenhum operador vinculado</h3>
+                                <p className="text-sm text-gray-600 mt-2 max-w-sm mx-auto">
+                                    Aguardando operadores se conectarem à sua chave.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                 {members.map((member, index) => (
+                                    <div key={member.key} className="gateway-card rounded-xl p-4 border border-white/5 hover:border-indigo-500/30 transition-all group flex items-center justify-between bg-[#0a0614]">
+                                        <div className="flex items-center gap-4">
+                                            {/* RANK BADGE */}
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm
+                                                ${index === 0 ? 'bg-amber-400 text-black shadow-lg shadow-amber-400/20' : 
+                                                  index === 1 ? 'bg-gray-300 text-black' :
+                                                  index === 2 ? 'bg-amber-700 text-white' : 'bg-white/5 text-gray-500'}
+                                            `}>
+                                                {index + 1}
+                                            </div>
+                                            
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-bold text-white group-hover:text-indigo-300 transition-colors">{member.owner_name}</h3>
+                                                    <span className="bg-indigo-500/10 text-indigo-400 text-[10px] px-1.5 rounded font-mono font-bold">#{member.user_tag || '????'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-0.5">
+                                                    <span className={`font-bold ${member.last_update ? 'text-emerald-500' : 'text-gray-600'}`}>
+                                                        {member.last_update ? 'ONLINE' : 'OFFLINE'}
+                                                    </span>
+                                                    <span>Sync: {member.last_update ? new Date(member.last_update).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-6">
+                                            <div className="text-right hidden sm:block">
+                                                <p className="text-[9px] text-gray-500 uppercase font-bold">Lucro Hoje</p>
+                                                <p className={`font-mono font-bold ${member.metrics && member.metrics.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {formatarBRL(member.metrics?.profit)}
+                                                </p>
+                                            </div>
+                                            
+                                            <button 
+                                                onClick={() => handleSpectate(member)}
+                                                disabled={loadingDataId === member.key || !member.last_update}
+                                                className={`p-2 rounded-lg transition-all border
+                                                    ${!member.last_update 
+                                                        ? 'bg-gray-800 text-gray-600 border-transparent cursor-not-allowed' 
+                                                        : 'bg-white/5 hover:bg-indigo-600 hover:text-white border-white/5 text-gray-400'}
+                                                `}
+                                                title="Espionar Painel"
+                                            >
+                                                {loadingDataId === member.key ? <RefreshCw className="animate-spin" size={16}/> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {members.length === 0 ? (
-                        <div className="text-center py-20 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
-                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Users size={32} className="text-gray-600" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-500">Nenhum operador vinculado</h3>
-                            <p className="text-sm text-gray-600 mt-2 max-w-sm mx-auto">
-                                Aguardando operadores se conectarem à sua chave.
-                            </p>
+                    {/* COLUNA DIREITA: LOG DE OPERAÇÕES (FEED) */}
+                    <div className="gateway-card rounded-2xl flex flex-col h-[500px] border border-white/5 bg-[#05030a] relative overflow-hidden">
+                        <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <h3 className="text-xs font-bold text-white uppercase tracking-widest">Log de Operações (Ao Vivo)</h3>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                             {members.map(member => (
-                                <div key={member.key} className="gateway-card rounded-2xl p-6 border border-white/5 hover:border-indigo-500/30 transition-all group relative bg-[#0a0614]">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                                <h3 className="font-bold text-lg text-white group-hover:text-indigo-300 transition-colors">{member.owner_name}</h3>
-                                                <span className="bg-indigo-500/10 text-indigo-400 text-xs px-1.5 rounded font-mono font-bold">#{member.user_tag || '????'}</span>
-                                            </div>
-                                            <p className="text-[10px] font-mono text-gray-500 bg-black/30 px-2 py-0.5 rounded w-fit flex items-center gap-1">
-                                                {member.key}
-                                            </p>
-                                        </div>
-                                        <div className={`p-2 rounded-lg ${member.last_update ? 'bg-emerald-500/10 text-emerald-400 animate-pulse-slow' : 'bg-gray-800 text-gray-600'}`}>
-                                            <Activity size={18} />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3 mb-6 bg-black/20 p-3 rounded-lg border border-white/5">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-500 font-bold uppercase">Último Sync</span>
-                                            <span className={`font-mono ${member.last_update ? 'text-emerald-400' : 'text-gray-600'}`}>
-                                                {member.last_update ? new Date(member.last_update).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'S/ DADOS'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <button 
-                                        onClick={() => handleSpectate(member)}
-                                        disabled={loadingDataId === member.key || !member.last_update}
-                                        className={`w-full py-3 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg border
-                                            ${!member.last_update 
-                                                ? 'bg-gray-800 text-gray-600 border-transparent cursor-not-allowed' 
-                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 shadow-indigo-900/20'}
-                                        `}
-                                    >
-                                        {loadingDataId === member.key ? <RefreshCw className="animate-spin" size={14}/> : <Eye size={14} />}
-                                        {loadingDataId === member.key ? 'CARREGANDO...' : 'VER PAINEL'}
-                                    </button>
+                        
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                            {feed.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
+                                    <MessageSquare size={32} className="mb-2"/>
+                                    <p className="text-xs">Aguardando notificações...</p>
                                 </div>
-                            ))}
+                            ) : (
+                                feed.map(msg => (
+                                    <div key={msg.id} className={`p-3 rounded-lg border text-xs relative animate-slide-in-right
+                                        ${msg.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 
+                                          msg.type === 'alert' ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' :
+                                          'bg-white/5 border-white/10 text-gray-300'}
+                                    `}>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="font-bold text-white">{msg.from}</span>
+                                            <span className="text-[9px] opacity-60 font-mono">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                                        </div>
+                                        <p className="leading-relaxed">{msg.message}</p>
+                                    </div>
+                                ))
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         )}
 
         {viewMode === 'member' && (
-            <div className="animate-slide-in-right max-w-2xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-slide-in-right max-w-5xl mx-auto">
+                 
+                 {/* CARTÃO DE VÍNCULO */}
                  <div className="gateway-card rounded-2xl p-8 border border-white/10 relative overflow-hidden bg-gradient-to-b from-[#0a0614] to-[#05030a]">
                     <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
                         <Link size={200} />
                     </div>
 
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
-                        <Link size={20} className="text-emerald-400" /> Estabelecer Vínculo
+                        <Link size={20} className="text-emerald-400" /> Status do Vínculo
                     </h3>
 
                     {myLeaderKey ? (
@@ -360,9 +603,9 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                             <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
                                 <ShieldCheck size={40} />
                             </div>
-                            <h4 className="font-bold text-white text-2xl mb-2">Vínculo Ativo!</h4>
+                            <h4 className="font-bold text-white text-2xl mb-2">Conectado ao Comando</h4>
                             <p className="text-sm text-gray-400 mb-8 max-w-xs mx-auto">
-                                Seus dados estão sendo transmitidos em tempo real para o painel de comando.
+                                Transmissão de dados segura ativa. O líder está recebendo suas atualizações.
                             </p>
                             
                             <div className="bg-black/60 px-6 py-4 rounded-xl inline-block font-mono text-emerald-300 font-bold text-xl tracking-wider mb-8 border border-emerald-500/30 shadow-inner">
@@ -379,10 +622,6 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                     {loadingAction ? 'Desconectando...' : 'Abortar Conexão'}
                                 </button>
                             </div>
-
-                             <div className="mt-8 pt-6 border-t border-white/5 text-[10px] text-gray-500 flex items-center justify-center gap-2">
-                                <Lock size={10} /> Conexão Criptografada: Acesso unidirecional.
-                            </div>
                         </div>
                     ) : (
                         <div className="space-y-8 relative z-10">
@@ -393,13 +632,13 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                 <div>
                                     <strong className="text-blue-100 block mb-1">Instruções de Conexão:</strong>
                                     <p className="text-blue-200/60 leading-relaxed text-xs">
-                                        Ao se conectar, você autoriza que o dono da chave (seu líder) visualize seu progresso financeiro em tempo real. Você não terá acesso aos dados dele.
+                                        Insira a chave fornecida pelo seu gestor para sincronizar seu painel com a central de comando.
                                     </p>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block ml-1">Chave Mestra (Fornecida pelo Líder)</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block ml-1">Chave Mestra (Líder)</label>
                                 <div className="flex gap-3">
                                     <div className="relative flex-1 group">
                                         <Shield className="absolute left-4 top-4 text-gray-500 group-focus-within:text-emerald-400 transition-colors" size={20} />
@@ -426,6 +665,50 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                         </div>
                     )}
                  </div>
+
+                 {/* CANAL DE COMUNICAÇÃO (CHAT PARA LÍDER) */}
+                 {myLeaderKey && (
+                     <div className="gateway-card rounded-2xl p-8 border border-indigo-500/20 relative bg-indigo-900/5">
+                        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                            <MessageSquare size={20} className="text-indigo-400" /> Uplink Tático
+                        </h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Mensagem Direta</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Ex: Preciso de mais verba..."
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-colors"
+                                        value={messageInput}
+                                        onChange={e => setMessageInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && sendMessageToLeader()}
+                                    />
+                                    <button 
+                                        onClick={sendMessageToLeader}
+                                        disabled={isSendingMsg || !messageInput}
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Send size={20} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5">
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block">Ações Rápidas</label>
+                                <button 
+                                    onClick={sendReportToLeader}
+                                    disabled={isSendingMsg}
+                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                                >
+                                    {isSendingMsg ? <RefreshCw className="animate-spin" size={16}/> : <TrendingUp size={16} />}
+                                    REPORTAR RESULTADOS DO DIA
+                                </button>
+                            </div>
+                        </div>
+                     </div>
+                 )}
             </div>
         )}
     </div>
