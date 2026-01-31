@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { SquadMember, AppState } from '../types';
-import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown } from 'lucide-react';
+import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown, Database } from 'lucide-react';
 import { formatarBRL, getHojeISO, calculateDayMetrics } from '../utils';
 
 interface Props {
@@ -98,7 +98,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
 
       setLoadingAction(true);
       try {
-          // Verificar se a chave do líder existe
+          // 1. Verificar se a chave do líder existe
           const { data: leaderExists, error: searchError } = await supabase
             .from('access_keys')
             .select('id')
@@ -109,13 +109,26 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
               throw new Error("Chave do Líder não encontrada no sistema.");
           }
 
-          // Atualizar meu registro
-          const { error: updateError } = await supabase
+          // 2. Tenta atualizar. Se der erro de permissão (RLS), o try/catch pega.
+          // Se o usuário 'Free' não existir no banco, o update retorna 0 linhas afetadas se não fizer upsert.
+          
+          const { error: upsertError } = await supabase
             .from('access_keys')
-            .update({ leader_key: inputLeaderKey })
-            .eq('key', currentUserKey);
+            .upsert({ 
+                key: currentUserKey, 
+                leader_key: inputLeaderKey,
+                owner_name: 'Visitante (Squad)',
+                active: true,
+                is_admin: false
+            }, { onConflict: 'key' });
 
-          if (updateError) throw updateError;
+          if (upsertError) {
+              console.error("Supabase Error:", upsertError);
+              if (upsertError.code === '42501' || upsertError.message.includes('permission')) {
+                  throw new Error("Erro de Permissão: Execute o código SQL no Supabase para liberar o Squad.");
+              }
+              throw upsertError;
+          }
 
           notify(`Vinculado ao Líder ${inputLeaderKey} com sucesso!`, "success");
           setMyLeaderKey(inputLeaderKey);
@@ -137,7 +150,12 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
             .update({ leader_key: null })
             .eq('key', currentUserKey);
 
-          if (error) throw error;
+          if (error) {
+               if (error.code === '42501') {
+                  throw new Error("Erro de Permissão: Configure o Supabase para permitir updates.");
+              }
+              throw error;
+          }
           
           setMyLeaderKey('');
           notify("Você saiu do Squad.", "info");
@@ -182,12 +200,12 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
         {/* HEADER */}
         <div className="flex items-center justify-between border-b border-white/5 pb-6 mb-8">
             <div className="flex items-center gap-4">
-                <div className="p-4 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl shadow-lg shadow-indigo-900/30">
+                <div className="p-4 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-2xl shadow-lg shadow-indigo-900/30 border border-indigo-500/30">
                     <ShieldCheck size={32} className="text-white" />
                 </div>
                 <div>
                     <h2 className="text-3xl font-black text-white tracking-tight">Comando Squad</h2>
-                    <p className="text-gray-400 text-sm font-medium">Gestão Hierárquica e Monitoramento</p>
+                    <p className="text-gray-400 text-sm font-medium">Centro de Operações Hierárquicas</p>
                 </div>
             </div>
             <button 
@@ -211,19 +229,19 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                       <div>
                           <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                               <Crown size={24} className="text-amber-400 fill-amber-400/20" /> 
-                              Você é um Líder em Potencial
+                              ID de Comandante
                           </h3>
                           <p className="text-gray-400 text-sm max-w-lg leading-relaxed">
-                              Qualquer pessoa pode montar uma equipe. Basta compartilhar sua chave abaixo com seus amigos ou funcionários. Eles inserem na aba "Entrar em Equipe" e os dados deles aparecem aqui para você.
+                              Esta é sua credencial única. Para liderar, envie este código para seus subordinados. Eles devem inseri-lo na aba "Conexão".
                           </p>
                       </div>
 
                       <div className="flex flex-col items-center md:items-end gap-3 z-10">
                           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                              Sua Chave de Líder
+                              Sua Chave de Acesso
                           </span>
                           <div className="flex items-center gap-3">
-                              <div className="text-3xl md:text-4xl font-black text-white font-mono tracking-wider drop-shadow-lg text-center md:text-right">
+                              <div className="text-2xl md:text-4xl font-black text-white font-mono tracking-wider drop-shadow-lg text-center md:text-right bg-black/30 px-4 py-2 rounded-lg border border-white/10">
                                   {currentUserKey}
                               </div>
                               <button 
@@ -241,18 +259,18 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
 
         {/* TOGGLE VISUAL */}
         <div className="flex justify-center mb-8">
-            <div className="bg-black/40 p-1.5 rounded-xl border border-white/10 flex gap-2">
+            <div className="bg-black/40 p-1.5 rounded-xl border border-white/10 flex gap-2 shadow-inner">
                 <button 
                     onClick={() => setViewMode('leader')}
-                    className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'leader' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'leader' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                 >
-                    <Users size={16} /> Painel do Líder (Meus Funcionários)
+                    <Users size={16} /> Painel do Líder (Meus Agentes)
                 </button>
                 <button 
                     onClick={() => setViewMode('member')}
-                    className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'member' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'member' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                 >
-                    <UserPlus size={16} /> Entrar em Equipe (Sou Funcionário)
+                    <Link size={16} /> Conexão (Entrar em Equipe)
                 </button>
             </div>
         </div>
@@ -275,13 +293,13 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                             </div>
                             <h3 className="text-lg font-bold text-gray-500">Nenhum operador vinculado</h3>
                             <p className="text-sm text-gray-600 mt-2 max-w-sm mx-auto">
-                                Envie sua chave (acima) para os operadores e peça para eles conectarem na aba "Entrar em Equipe".
+                                Aguardando operadores se conectarem à sua chave.
                             </p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                              {members.map(member => (
-                                <div key={member.key} className="gateway-card rounded-2xl p-6 border border-white/5 hover:border-indigo-500/30 transition-all group relative">
+                                <div key={member.key} className="gateway-card rounded-2xl p-6 border border-white/5 hover:border-indigo-500/30 transition-all group relative bg-[#0a0614]">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <div className="flex items-center gap-1.5 mb-1">
@@ -292,7 +310,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                                 {member.key}
                                             </p>
                                         </div>
-                                        <div className={`p-2 rounded-lg ${member.last_update ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-600'}`}>
+                                        <div className={`p-2 rounded-lg ${member.last_update ? 'bg-emerald-500/10 text-emerald-400 animate-pulse-slow' : 'bg-gray-800 text-gray-600'}`}>
                                             <Activity size={18} />
                                         </div>
                                     </div>
@@ -328,20 +346,26 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
 
         {viewMode === 'member' && (
             <div className="animate-slide-in-right max-w-2xl mx-auto">
-                 <div className="gateway-card rounded-2xl p-8 border border-white/10 relative overflow-hidden">
-                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                        <Link size={20} className="text-emerald-400" /> Conectar ao Líder
+                 <div className="gateway-card rounded-2xl p-8 border border-white/10 relative overflow-hidden bg-gradient-to-b from-[#0a0614] to-[#05030a]">
+                    <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+                        <Link size={200} />
+                    </div>
+
+                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+                        <Link size={20} className="text-emerald-400" /> Estabelecer Vínculo
                     </h3>
 
                     {myLeaderKey ? (
-                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6 text-center">
-                            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-400">
-                                <ShieldCheck size={32} />
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-8 text-center relative z-10 backdrop-blur-sm">
+                            <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                                <ShieldCheck size={40} />
                             </div>
-                            <h4 className="font-bold text-white text-lg mb-1">Você está conectado!</h4>
-                            <p className="text-sm text-gray-400 mb-6">Seus dados estão sendo enviados para o Líder:</p>
+                            <h4 className="font-bold text-white text-2xl mb-2">Vínculo Ativo!</h4>
+                            <p className="text-sm text-gray-400 mb-8 max-w-xs mx-auto">
+                                Seus dados estão sendo transmitidos em tempo real para o painel de comando.
+                            </p>
                             
-                            <div className="bg-black/40 px-6 py-3 rounded-lg inline-block font-mono text-emerald-300 font-bold text-xl tracking-wider mb-6 border border-emerald-500/20">
+                            <div className="bg-black/60 px-6 py-4 rounded-xl inline-block font-mono text-emerald-300 font-bold text-xl tracking-wider mb-8 border border-emerald-500/30 shadow-inner">
                                 {myLeaderKey}
                             </div>
                             
@@ -349,37 +373,40 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                 <button 
                                     onClick={handleUnlinkLeader}
                                     disabled={loadingAction}
-                                    className="text-xs text-rose-400 hover:text-rose-300 underline decoration-rose-500/30 hover:decoration-rose-500 decoration-2 font-bold"
+                                    className="px-6 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold transition-all flex items-center gap-2"
                                 >
-                                    {loadingAction ? 'Desconectando...' : 'Desconectar / Sair da Equipe'}
+                                    {loadingAction ? <RefreshCw className="animate-spin" size={12} /> : <AlertTriangle size={12} />}
+                                    {loadingAction ? 'Desconectando...' : 'Abortar Conexão'}
                                 </button>
                             </div>
 
-                             <div className="mt-6 pt-6 border-t border-white/5 text-[10px] text-gray-500 flex items-center justify-center gap-2">
-                                <Lock size={10} /> Conexão Segura: Você NÃO tem acesso aos dados do Líder.
+                             <div className="mt-8 pt-6 border-t border-white/5 text-[10px] text-gray-500 flex items-center justify-center gap-2">
+                                <Lock size={10} /> Conexão Criptografada: Acesso unidirecional.
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            <div className="bg-blue-500/5 p-4 rounded-xl border border-blue-500/10 text-sm text-blue-200 flex gap-3">
-                                <Info className="shrink-0 mt-0.5" size={18} />
+                        <div className="space-y-8 relative z-10">
+                            <div className="bg-blue-500/5 p-5 rounded-xl border border-blue-500/10 text-sm text-blue-200 flex gap-4">
+                                <div className="p-2 bg-blue-500/10 rounded-lg h-fit">
+                                    <Info className="text-blue-400" size={20} />
+                                </div>
                                 <div>
-                                    <strong>Como funciona:</strong>
-                                    <p className="mt-1 text-blue-200/70">
-                                        Ao digitar a chave do seu chefe abaixo, ele poderá ver suas vendas e lucros em tempo real. Você <strong>NÃO</strong> verá os dados dele.
+                                    <strong className="text-blue-100 block mb-1">Instruções de Conexão:</strong>
+                                    <p className="text-blue-200/60 leading-relaxed text-xs">
+                                        Ao se conectar, você autoriza que o dono da chave (seu líder) visualize seu progresso financeiro em tempo real. Você não terá acesso aos dados dele.
                                     </p>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block ml-1">Chave do Líder (Peça para ele)</label>
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <Shield className="absolute left-4 top-3.5 text-gray-500" size={18} />
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-3 block ml-1">Chave Mestra (Fornecida pelo Líder)</label>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1 group">
+                                        <Shield className="absolute left-4 top-4 text-gray-500 group-focus-within:text-emerald-400 transition-colors" size={20} />
                                         <input 
                                             type="text" 
                                             placeholder="Ex: CPA-XXXX-YYYY"
-                                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white focus:border-emerald-500 outline-none transition-all font-mono uppercase"
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white focus:border-emerald-500 outline-none transition-all font-mono uppercase font-bold text-lg shadow-inner focus:bg-emerald-500/5"
                                             value={inputLeaderKey}
                                             onChange={e => setInputLeaderKey(e.target.value.toUpperCase())}
                                         />
@@ -387,11 +414,11 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify }) => {
                                     <button 
                                         onClick={handleLinkLeader}
                                         disabled={!inputLeaderKey || loadingAction}
-                                        className={`px-6 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2
+                                        className={`px-8 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-[0.98]
                                             ${!inputLeaderKey ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}
                                         `}
                                     >
-                                        {loadingAction ? <RefreshCw className="animate-spin" size={18} /> : <Link size={18} />}
+                                        {loadingAction ? <RefreshCw className="animate-spin" size={20} /> : <Database size={20} />}
                                         CONECTAR
                                     </button>
                                 </div>

@@ -8,7 +8,7 @@ import {
 import { 
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
-  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3
+  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown
 } from 'lucide-react';
 
 interface Props {
@@ -84,10 +84,6 @@ const Dashboard: React.FC<Props> = ({ state }) => {
             record.accounts.forEach(acc => {
                 totalDepositos += (acc.deposito || 0);
                 totalRedepositos += (acc.redeposito || 0);
-                
-                // Count cycles differently if manual? No, conceptually cycle is an event.
-                // But if manual, 'ciclos' holds currency value. 
-                // So tracking 'events' becomes tricky. Let's just track 1 event per account.
                 totalCheckoutEvents += 1; 
             });
         }
@@ -153,7 +149,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#050510]/90 border border-white/20 p-4 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] backdrop-blur-2xl min-w-[200px]">
+        <div className="bg-[#050510]/95 border border-white/10 p-4 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] backdrop-blur-md min-w-[200px]">
           <p className="text-gray-400 text-[10px] font-bold uppercase mb-3 tracking-widest border-b border-white/10 pb-2 flex items-center gap-2">
             <CalendarOff size={12} /> {label}
           </p>
@@ -162,7 +158,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.stroke || entry.fill, boxShadow: `0 0 8px ${entry.stroke || entry.fill}` }}></div>
                     <span className="text-gray-300 font-medium capitalize text-xs">
-                        {entry.dataKey === 'faturamento' ? 'Faturamento' : 'Lucro Líq.'}
+                        {entry.dataKey === 'faturamento' ? 'Volume' : 'Lucro'}
                     </span>
                 </div>
                 <span className={`font-bold font-mono text-sm ${entry.dataKey === 'lucro' ? 'text-emerald-400' : 'text-white'}`}>
@@ -195,12 +191,12 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                Dashboard
             </h1>
             <p className="text-gray-400 text-xs font-medium mt-1 pl-1">
-                Visão consolidada de performance.
+                Visão consolidada de performance financeira.
             </p>
           </div>
           
           <div className="flex gap-2">
-               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default">
+               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default backdrop-blur-sm">
                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center justify-end gap-1">
                        ROI Total <InfoTooltip text="Retorno sobre Investimento. Quanto você lucrou percentualmente sobre o gasto." />
                    </p>
@@ -208,7 +204,7 @@ const Dashboard: React.FC<Props> = ({ state }) => {
                        {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
                    </p>
                </div>
-               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default">
+               <div className="px-5 py-2.5 bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-xl text-right relative group cursor-default backdrop-blur-sm">
                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1 flex items-center justify-end gap-1">
                        Margem Líq. <InfoTooltip text="Porcentagem de dinheiro que realmente sobra no bolso após pagar tudo." />
                    </p>
@@ -217,48 +213,57 @@ const Dashboard: React.FC<Props> = ({ state }) => {
           </div>
         </div>
 
-        {/* --- KPI SUMMARY CARDS --- */}
+        {/* --- KPI SUMMARY CARDS (ATUALIZADO) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* CARD 1: LUCRO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/10 hover:border-emerald-500/30 transition-colors">
+            {/* CARD 1: LUCRO (NEON EMERALD) */}
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/20 hover:border-emerald-500/40 transition-all bg-gradient-to-br from-emerald-950/30 to-transparent">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                    <Zap size={100} />
+                </div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                            <Zap size={20} />
+                        <div className="p-2 bg-emerald-500 text-black rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                            <Wallet size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Resultado Líquido</span>
+                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Resultado Líquido</span>
                     </div>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight text-glow">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
                         {formatarBRL(metrics.lucroLiquido)}
                     </div>
                 </div>
             </div>
 
-            {/* CARD 2: FATURAMENTO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-indigo-500/10 hover:border-indigo-500/30 transition-colors">
+            {/* CARD 2: FATURAMENTO (NEON INDIGO) */}
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-indigo-500/20 hover:border-indigo-500/40 transition-all bg-gradient-to-br from-indigo-950/30 to-transparent">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                    <Activity size={100} />
+                </div>
                 <div className="relative z-10">
                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-                            <Activity size={20} />
+                        <div className="p-2 bg-indigo-500 text-white rounded-lg shadow-[0_0_15px_rgba(99,102,241,0.4)]">
+                            <TrendingUp size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume (Fat.)</span>
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Entradas (Volume)</span>
                     </div>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(99,102,241,0.3)]">
                         {formatarBRL(metrics.totalRet)}
                     </div>
                 </div>
             </div>
 
-            {/* CARD 3: CUSTOS */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-rose-500/10 hover:border-rose-500/30 transition-colors">
+            {/* CARD 3: CUSTOS (NEON ROSE) */}
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-rose-500/20 hover:border-rose-500/40 transition-all bg-gradient-to-br from-rose-950/30 to-transparent">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
+                    <TrendingDown size={100} />
+                </div>
                 <div className="relative z-10">
                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-rose-500/10 rounded-lg text-rose-400 border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                        <div className="p-2 bg-rose-500 text-white rounded-lg shadow-[0_0_15px_rgba(244,63,94,0.4)]">
                             <Filter size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saídas Totais</span>
+                        <span className="text-xs font-bold text-rose-400 uppercase tracking-widest">Saídas Totais</span>
                     </div>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">
                         {formatarBRL(metrics.totalInv)}
                     </div>
                 </div>

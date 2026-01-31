@@ -152,11 +152,11 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         }
     };
 
-    const handleFreeAccess = () => {
+    const handleFreeAccess = async () => {
         setLoading(true);
-        setTimeout(() => {
+        
+        try {
             // Lógica de Identidade Persistente
-            // Verifica se o usuário já tem uma chave única salva neste navegador
             let existingFreeKey = localStorage.getItem(FREE_KEY_STORAGE);
             
             // Se não tiver (ou se for a antiga genérica), gera uma nova
@@ -166,12 +166,34 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 existingFreeKey = `FREE-${p1}-${p2}`;
                 localStorage.setItem(FREE_KEY_STORAGE, existingFreeKey);
             }
-            
+
+            // --- AUTO REGISTRO NO SUPABASE ---
+            // Tenta registrar. Se falhar por RLS, loga o erro mas deixa entrar.
+            try {
+                await supabase
+                    .from('access_keys')
+                    .upsert({
+                        key: existingFreeKey,
+                        owner_name: 'Visitante Gratuito',
+                        active: true,
+                        is_admin: false
+                    }, { onConflict: 'key' });
+            } catch (innerError) {
+                console.warn("Falha no Auto-Registro (provavelmente RLS):", innerError);
+            }
+
             // Salva na sessão atual para logar
             localStorage.setItem(AUTH_STORAGE_KEY, existingFreeKey);
             
-            onLogin(existingFreeKey, false, 'Visitante Gratuito');
-        }, 800);
+            // Pequeno delay visual
+            setTimeout(() => {
+                onLogin(existingFreeKey, false, 'Visitante Gratuito');
+            }, 500);
+
+        } catch (err) {
+            console.error("Erro inesperado no login Free:", err);
+            setLoading(false);
+        }
     };
 
     return (
@@ -314,11 +336,8 @@ function App() {
 
   // --- SYNC TO CLOUD FUNCTION (AUTO) ---
   const syncToCloud = async (dataToSync: AppState) => {
-      // PERMITIR SYNC PARA TODOS (Inclusive Free, agora que são únicos)
       if (isDemoMode || !currentUserKey) return;
-      
       try {
-          // Salva no Supabase na tabela user_data
           const { error } = await supabase
               .from('user_data')
               .upsert({
@@ -329,8 +348,9 @@ function App() {
               }, { onConflict: 'access_key' });
           
           if (error) {
-              console.error("Cloud Sync Warning:", error.message);
-              // Não notifica erro visualmente para não atrapalhar
+              // Silently ignore RLS errors on frequent syncs to avoid console spam
+              // Only real errors matter here
+              if(error.code !== '42501') console.error("Cloud Sync Warning:", error.message);
           }
       } catch (e) {
           console.error("Cloud Sync Exception:", e);
@@ -341,37 +361,22 @@ function App() {
   useEffect(() => {
       const deviceId = localStorage.getItem(DEVICE_ID_KEY);
       const alertChannel = supabase.channel('system_global_alerts');
-      
-      alertChannel
-        .on('broadcast', { event: 'sys_alert' }, (payload) => {
+      alertChannel.on('broadcast', { event: 'sys_alert' }, (payload) => {
             const data = payload.payload;
-            const isForMe = 
-                data.target === 'ALL' || 
-                data.target === currentUserKey || 
-                data.target === deviceId;
-
+            const isForMe = data.target === 'ALL' || data.target === currentUserKey || data.target === deviceId;
             if (!isForMe) return;
-
             if (data) {
                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                 audio.volume = 0.5;
                 audio.play().catch(() => {});
-                
-                setSystemAlert({
-                    title: data.title,
-                    message: data.message
-                });
+                setSystemAlert({ title: data.title, message: data.message });
             }
-        })
-        .subscribe();
-
-      return () => {
-          supabase.removeChannel(alertChannel);
-      };
+        }).subscribe();
+      return () => { supabase.removeChannel(alertChannel); };
   }, [currentUserKey]);
 
 
-  // --- TOUR STEPS DEFINITION ---
+  // --- TOUR STEPS DEFINITION (CORRIGIDO) ---
   const tourSteps: TourStep[] = [
       {
           targetId: 'nav-configuracoes',
@@ -403,19 +408,69 @@ function App() {
           position: 'bottom',
           requiresInteraction: true 
       },
-      // ... (Outros passos do Tour mantidos iguais, removidos aqui apenas para brevidade do XML)
-      // Presumindo que os passos do TourGuide já existem do arquivo anterior
+      {
+          targetId: 'nav-planejamento',
+          title: 'Planejamento com IA',
+          view: 'planejamento',
+          content: 'Acesse o laboratório para criar estratégias de depósito.',
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-plan-generate',
+          title: 'Gerar Estratégia',
+          view: 'planejamento',
+          content: (
+              <div>
+                <p className="mb-2">O sistema cria valores orgânicos baseados no seu histórico para evitar bloqueios.</p>
+                <p className="text-xs text-emerald-400 font-bold">Clique em "GERAR PLANO RÍTMICO" para testar.</p>
+              </div>
+          ),
+          position: 'right',
+          requiresInteraction: true
+      },
+      {
+          targetId: 'tour-lot-send-1',
+          title: 'Executar Lote',
+          view: 'planejamento',
+          content: 'Ao enviar um lote, os valores vão automaticamente para o seu Controle Diário (Livro Caixa). Clique em "Enviar" no Lote #1.',
+          position: 'top',
+          requiresInteraction: true
+      },
+      {
+          targetId: 'tour-daily-table',
+          title: 'Livro Caixa Automático',
+          view: 'controle',
+          content: 'Veja que os depósitos e redepósitos já foram preenchidos. Você só precisa focar em colocar o SAQUE e os CICLOS.',
+          position: 'top',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'tour-daily-costs',
+          title: 'Controle de Custos',
+          view: 'controle',
+          content: 'Não esqueça de registrar custos diários (Proxy, SMS) para ter o lucro líquido real.',
+          position: 'bottom',
+          requiresInteraction: false
+      },
+      // --- NOVO PASSO SQUAD ---
+      {
+          targetId: 'nav-squad',
+          title: 'Novo: Comando Squad',
+          view: 'squad', // Força a troca para a view Squad
+          content: (
+              <div>
+                  <p className="mb-3">Aqui você gerencia sua equipe ou entra em uma.</p>
+                  <ul className="text-xs space-y-2 text-gray-300">
+                      <li className="flex gap-2"><Crown size={14} className="text-amber-400 shrink-0"/> <strong>Líder:</strong> Copie sua chave e envie para seus funcionários.</li>
+                      <li className="flex gap-2"><Users size={14} className="text-emerald-400 shrink-0"/> <strong>Membro:</strong> Cole a chave do líder para enviar seus dados automaticamente.</li>
+                  </ul>
+              </div>
+          ),
+          position: 'right',
+          requiresInteraction: false
+      }
   ];
-  // Re-adicionando passos essenciais para validação XML
-  tourSteps.push({
-      targetId: 'nav-planejamento',
-      title: 'Vamos Planejar',
-      view: 'planejamento',
-      content: <p>Vá para Planejamento</p>,
-      position: 'right',
-      requiresInteraction: false
-  });
-
 
   // --- TOUR LOGIC ---
   useEffect(() => {
@@ -434,14 +489,22 @@ function App() {
           setCanProceed(true);
           return;
       }
+      
       let valid = false;
+      const today = getHojeISO();
+
       if (currentStep.title === 'Quem é você?') {
            valid = state.config.userName !== 'OPERADOR' && (state.config.userName || '').trim() !== '';
+      } else if (currentStep.title === 'Gerar Estratégia') {
+           valid = state.generator.plan.length > 0;
+      } else if (currentStep.title === 'Executar Lote') {
+           const hasAccountsToday = (state.dailyRecords[today]?.accounts || []).length > 0;
+           valid = hasAccountsToday;
       } else {
            valid = true;
       }
       setCanProceed(valid);
-  }, [state, tourStepIndex, tourOpen]);
+  }, [state, tourStepIndex, tourOpen, activeView]); // Adicionado activeView para garantir re-render na troca
 
   const handleTourComplete = async () => {
       setTourOpen(false);
@@ -539,6 +602,17 @@ function App() {
                 uniqueFreeKey = `FREE-${p1}-${p2}`;
                 localStorage.setItem(FREE_KEY_STORAGE, uniqueFreeKey);
           }
+
+          // ** CORREÇÃO AUTOMÁTICA DE REGISTRO **
+          // Insere a chave no Supabase para garantir que o Squad funcione
+          supabase.from('access_keys').upsert({
+              key: uniqueFreeKey,
+              owner_name: 'Visitante Migrado',
+              active: true,
+              is_admin: false
+          }, { onConflict: 'key' }).then(({ error }) => {
+              if (error) console.error("Falha ao registrar chave migrada:", error);
+          });
           
           // Atualiza a sessão atual para a chave correta
           localStorage.setItem(AUTH_STORAGE_KEY, uniqueFreeKey);
