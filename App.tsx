@@ -36,7 +36,8 @@ import {
   Users, // Squad Icon
   Heart, // Icone para Apoiador
   ArrowRight,
-  Globe
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag } from './utils';
@@ -89,8 +90,8 @@ const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master';
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
 
-// --- LOGIN COMPONENT (PROFESSIONAL UPDATE) ---
-const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void }) => {
+// --- LOGIN COMPONENT (PROFESSIONAL DESIGN) ---
+const LoginScreen = ({ onLogin, autoLoginCheck }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void, autoLoginCheck: boolean }) => {
     const [inputKey, setInputKey] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -105,6 +106,16 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
         }
         setDeviceId(storedId);
     }, []);
+
+    // Se estiver verificando sessão automática, mostra apenas um loader minimalista
+    if (autoLoginCheck) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#02000f] text-white">
+                <Loader2 size={40} className="text-primary animate-spin mb-4" />
+                <p className="text-xs font-mono text-gray-500 uppercase tracking-widest animate-pulse">Restaurando Sessão Segura...</p>
+            </div>
+        );
+    }
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -167,6 +178,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                 localStorage.setItem(FREE_KEY_STORAGE, existingFreeKey);
             }
 
+            // Tenta registrar silenciosamente
             try {
                 await supabase
                     .from('access_keys')
@@ -194,90 +206,97 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
     return (
         <div className="flex items-center justify-center min-h-screen bg-[#050505] font-sans selection:bg-white/20 relative overflow-hidden">
             {/* Professional Background Grid */}
-            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none" 
+            <div className="absolute inset-0 z-0 opacity-10 pointer-events-none" 
                  style={{ 
                      backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)', 
-                     backgroundSize: '40px 40px' 
+                     backgroundSize: '30px 30px' 
                  }}>
             </div>
             
             {/* Subtle Ambient Glow */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/10 blur-[120px] rounded-full pointer-events-none"></div>
+            <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
 
-            <div className="relative z-10 w-full max-w-[400px] p-6 animate-fade-in">
+            <div className="relative z-10 w-full max-w-[420px] p-6 animate-fade-in">
                 
                 {/* Header Section */}
                 <div className="text-center mb-10">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/5 border border-white/10 mb-4 shadow-2xl">
-                        <Activity className="text-white" size={24} />
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-black border border-white/10 mb-6 shadow-2xl relative group">
+                        <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <Activity className="text-white relative z-10" size={28} />
                     </div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight mb-2">CPA Gateway <span className="text-primary text-sm align-top">PRO</span></h1>
-                    <p className="text-gray-500 text-xs uppercase tracking-widest font-medium">Sistema de Gestão Financeira v3.7</p>
+                    <h1 className="text-3xl font-bold text-white tracking-tight mb-2">CPA Gateway <span className="text-primary text-sm align-top font-mono ml-1">PRO</span></h1>
+                    <p className="text-gray-500 text-xs uppercase tracking-widest font-medium">Professional Financial Management System</p>
                 </div>
 
                 {/* Main Card */}
-                <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600"></div>
+                <div className="bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-50"></div>
                     
                     <div className="p-8">
                         {loginMode === 'free' ? (
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <h3 className="text-white font-bold text-lg">Acesso Gratuito</h3>
+                            <div className="space-y-8">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                        <h3 className="text-white font-bold text-sm uppercase tracking-wider">Acesso Gratuito Disponível</h3>
+                                    </div>
                                     <p className="text-gray-400 text-sm leading-relaxed">
-                                        Versão completa disponível para uso imediato. Sem cadastro, sem cartão.
+                                        Utilize todas as ferramentas de gestão financeira e planejamento sem custos. Seus dados são salvos localmente.
                                     </p>
                                 </div>
 
                                 <button 
                                     onClick={handleFreeAccess}
                                     disabled={loading}
-                                    className="w-full group relative overflow-hidden bg-white text-black font-bold py-4 rounded-xl transition-all hover:bg-gray-100 active:scale-[0.98] flex items-center justify-center gap-3"
+                                    className="w-full group relative overflow-hidden bg-white hover:bg-gray-200 text-black font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                                 >
                                     {loading ? <RefreshCw className="animate-spin" size={20} /> : <Unlock size={20} />}
-                                    <span>INICIAR SESSÃO</span>
-                                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                    <span className="tracking-wide">INICIAR SESSÃO</span>
+                                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                 </button>
                                 
-                                <div className="flex justify-center pt-2">
+                                <div className="pt-4 border-t border-white/5 flex justify-center">
                                     <button 
                                         onClick={() => setLoginMode('vip')}
-                                        className="text-xs text-gray-500 hover:text-white transition-colors flex items-center gap-1.5 font-medium"
+                                        className="text-xs text-gray-500 hover:text-white transition-colors flex items-center gap-2 font-medium group/vip"
                                     >
-                                        <Crown size={12} className="text-amber-500" />
-                                        Possui uma chave VIP?
+                                        <Crown size={12} className="text-amber-600 group-hover/vip:text-amber-400 transition-colors" />
+                                        Possui licença VIP?
                                     </button>
                                 </div>
                             </div>
                         ) : (
                             <form onSubmit={handleLogin} className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                                        <Lock size={16} className="text-amber-500"/> Acesso VIP
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                                        <Lock size={14} className="text-amber-500"/> Área Restrita
                                     </h3>
                                     <button 
                                         type="button"
                                         onClick={() => setLoginMode('free')}
-                                        className="text-[10px] text-gray-500 hover:text-white uppercase font-bold tracking-wider"
+                                        className="text-[10px] text-gray-500 hover:text-white uppercase font-bold tracking-wider flex items-center gap-1"
                                     >
-                                        Voltar
+                                        <ChevronDown size={12} className="rotate-90"/> Voltar
                                     </button>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Chave de Licença</label>
-                                    <input 
-                                        type="text" 
-                                        value={inputKey}
-                                        onChange={(e) => setInputKey(e.target.value.toUpperCase())}
-                                        className="w-full bg-[#151515] border border-white/10 rounded-xl px-4 py-3.5 text-white font-mono text-center tracking-widest text-lg focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none transition-all placeholder:text-gray-700 uppercase"
-                                        placeholder="CPA-XXXX-YYYY"
-                                        autoFocus
-                                    />
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider ml-1">Chave de Licença</label>
+                                    <div className="relative group/input">
+                                        <input 
+                                            type="text" 
+                                            value={inputKey}
+                                            onChange={(e) => setInputKey(e.target.value.toUpperCase())}
+                                            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-4 text-white font-mono text-center tracking-[0.2em] text-lg focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 outline-none transition-all placeholder:text-gray-800 uppercase"
+                                            placeholder="XXXX-XXXX-XXXX"
+                                            autoFocus
+                                        />
+                                        <div className="absolute inset-0 rounded-xl border border-white/5 pointer-events-none group-hover/input:border-white/20 transition-colors"></div>
+                                    </div>
                                 </div>
 
                                 {error && (
-                                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-2">
+                                    <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
                                         <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
                                         <p className="text-xs text-red-400 font-medium leading-tight">{error}</p>
                                     </div>
@@ -286,7 +305,7 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                                 <button 
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
+                                    className="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-white font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
                                 >
                                     {loading ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle2 size={20} />}
                                     <span>VALIDAR ACESSO</span>
@@ -296,17 +315,17 @@ const LoginScreen = ({ onLogin }: { onLogin: (key: string, isAdmin: boolean, own
                     </div>
 
                     {/* Footer Status Bar */}
-                    <div className="bg-[#050505] px-6 py-3 border-t border-white/5 flex justify-between items-center text-[10px] font-mono text-gray-600">
+                    <div className="bg-[#050505]/50 px-6 py-3 border-t border-white/5 flex justify-between items-center text-[10px] font-mono text-gray-600">
                          <span className="flex items-center gap-1.5">
                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                             System Operational
+                             Secure Connection
                          </span>
                          <span className="opacity-50">ID: {deviceId.substring(0, 8)}</span>
                     </div>
                 </div>
                 
-                <p className="text-center text-[10px] text-gray-600 mt-8">
-                    &copy; 2024 CPA Control. Secure Environment.
+                <p className="text-center text-[10px] text-gray-700 mt-8 font-mono">
+                    &copy; 2024 CPA Control. v3.7.2 (Stable)
                 </p>
             </div>
         </div>
@@ -318,6 +337,9 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserKey, setCurrentUserKey] = useState('');
   
+  // --- STATE FOR AUTO-LOGIN CHECK ---
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
   const [state, setState] = useState<AppState>(initialState);
   
   // --- PRIVACY MODE (BOSS KEY) ---
@@ -355,6 +377,54 @@ function App() {
 
   // --- SYSTEM BROADCAST ALERT ---
   const [systemAlert, setSystemAlert] = useState<{title: string, message: string} | null>(null);
+
+  // --- AUTO-LOGIN / SESSION RESTORE LOGIC ---
+  useEffect(() => {
+      const restoreSession = async () => {
+          setIsCheckingAuth(true);
+          const savedKey = localStorage.getItem(AUTH_STORAGE_KEY);
+          
+          if (savedKey) {
+              try {
+                  // Validação silenciosa no Supabase
+                  const { data, error } = await supabase
+                      .from('access_keys')
+                      .select('is_admin, owner_name, active')
+                      .eq('key', savedKey)
+                      .single();
+
+                  if (data && data.active !== false) {
+                      // Sessão válida, restaura estado
+                      setCurrentUserKey(savedKey);
+                      setIsAdmin(data.is_admin);
+                      setIsAuthenticated(true);
+                      
+                      // Carrega dados locais
+                      const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
+                      if (localData) {
+                          const parsed = JSON.parse(localData);
+                          const merged = mergeDeep(initialState, parsed);
+                          if (data.owner_name && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
+                              merged.config.userName = data.owner_name;
+                          }
+                          setState(merged);
+                      }
+                      setIsLoaded(true);
+                  } else {
+                      // Chave inválida ou bloqueada, limpa sessão
+                      localStorage.removeItem(AUTH_STORAGE_KEY);
+                  }
+              } catch (e) {
+                  console.error("Erro ao restaurar sessão:", e);
+                  // Em caso de erro de rede, podemos optar por logar offline se tiver dados locais
+                  // Por segurança, vamos pedir login novamente, mas manter dados locais.
+              }
+          }
+          setIsCheckingAuth(false);
+      };
+
+      restoreSession();
+  }, []);
 
   // --- PRIVACY MODE LISTENER ---
   useEffect(() => {
@@ -713,7 +783,7 @@ function App() {
 
   // --- RENDER ---
   if (!isAuthenticated) {
-      return <LoginScreen onLogin={handleLogin} />;
+      return <LoginScreen onLogin={handleLogin} autoLoginCheck={isCheckingAuth} />;
   }
 
   const MenuButton = ({ id, icon: Icon, label, alert }: any) => (
