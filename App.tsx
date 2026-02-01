@@ -37,7 +37,8 @@ import {
   Heart, // Icone para Apoiador
   ArrowRight,
   Globe,
-  Loader2
+  Loader2,
+  Link as LinkIcon // Renomeado para evitar conflitos
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag } from './utils';
@@ -426,6 +427,38 @@ function App() {
       restoreSession();
   }, []);
 
+  // --- REALTIME PRESENCE (RADAR) BROADCAST ---
+  // Este hook anuncia para o Supabase que o usuário está online.
+  useEffect(() => {
+      if (!isAuthenticated || !currentUserKey || !isLoaded || isDemoMode) return;
+
+      const deviceId = localStorage.getItem(DEVICE_ID_KEY) || 'unknown';
+      const channel = supabase.channel('online_users', {
+          config: {
+              presence: {
+                  key: deviceId, // Use deviceId as unique key for presence to allow multiple tabs/devices per user
+              },
+          },
+      });
+
+      channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+              await channel.track({
+                  user: state.config.userName || 'Operador',
+                  key: currentUserKey,
+                  online_at: new Date().toISOString(),
+                  is_admin: isAdmin,
+                  device_id: deviceId
+              });
+          }
+      });
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [isAuthenticated, currentUserKey, isLoaded, state.config.userName, isAdmin, isDemoMode]);
+
+
   // --- PRIVACY MODE LISTENER ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -518,18 +551,16 @@ function App() {
   }, [isAuthenticated, isLoaded, isDemoMode, tourOpen, state.config.userName]);
 
 
-  // --- TOUR STEPS DEFINITION (CORRIGIDO E RESTAURADO) ---
+  // --- NOVO ROTEIRO DO TOUR (MAIS EXPLICATIVO E IMERSIVO) ---
   const tourSteps: TourStep[] = [
       {
           targetId: 'nav-configuracoes',
-          title: 'Configuração Inicial',
+          title: 'Inicialização do Sistema',
           view: 'configuracoes',
           content: (
               <div>
-                  <p className="mb-3">Vamos começar ajustando o sistema para você. O sistema te levou para a aba Configurações.</p>
-                  <div className="bg-blue-900/30 border-l-2 border-blue-500 p-2 rounded text-[11px] text-blue-200 leading-relaxed">
-                      <strong>💡 Dica:</strong> Configurar corretamente garante que seus cálculos de lucro líquido sejam precisos desde o primeiro dia.
-                  </div>
+                  <p className="mb-2">Bem-vindo ao <strong>CPA Gateway Pro</strong>. Vamos calibrar sua central de comando.</p>
+                  <p className="text-gray-400 text-xs">O primeiro passo é definir quem está no controle para que os cálculos e relatórios sejam precisos.</p>
               </div>
           ),
           position: 'right',
@@ -537,13 +568,14 @@ function App() {
       },
       {
           targetId: 'tour-settings-name',
-          title: 'Quem é você?',
+          title: 'Identidade Operacional',
           view: 'configuracoes',
           content: (
               <div>
-                  <p className="mb-3">Para continuar, apague "OPERADOR" e digite seu nome ou apelido.</p>
-                  <div className="bg-indigo-900/30 border-l-2 border-indigo-500 p-2 rounded text-[11px] text-indigo-200 leading-relaxed">
-                      <strong>💡 Dica:</strong> Esse nome aparecerá nos relatórios de monitoramento e na saudação do dashboard.
+                  <p className="mb-3 font-bold text-white">Quem é o Operador?</p>
+                  <p className="mb-2 text-xs">Substitua "OPERADOR" pelo seu nome ou apelido. Isso garante sua identificação no Squad e nos relatórios de performance.</p>
+                  <div className="bg-indigo-900/30 border-l-2 border-indigo-500 p-2 rounded text-[10px] text-indigo-200">
+                      Sua TAG única será gerada automaticamente ao lado.
                   </div>
               </div>
           ),
@@ -552,61 +584,89 @@ function App() {
       },
       {
           targetId: 'nav-planejamento',
-          title: 'Planejamento com IA',
+          title: 'Módulo de Estratégia',
           view: 'planejamento',
-          content: 'Acesse o laboratório para criar estratégias de depósito.',
+          content: (
+              <div>
+                  <p className="mb-2">Acesse o laboratório de IA. Aqui é onde a mágica acontece.</p>
+                  <p className="text-xs text-gray-400">Em vez de depositar valores aleatórios, usamos algoritmos para simular comportamento humano orgânico e evitar bloqueios.</p>
+              </div>
+          ),
           position: 'right',
           requiresInteraction: false
       },
       {
           targetId: 'tour-plan-generate',
-          title: 'Gerar Estratégia',
+          title: 'Geração de Cenários',
           view: 'planejamento',
           content: (
               <div>
-                <p className="mb-2">O sistema cria valores orgânicos baseados no seu histórico para evitar bloqueios.</p>
-                <p className="text-xs text-emerald-400 font-bold">Clique em "GERAR PLANO RÍTMICO" para testar.</p>
+                <p className="mb-3">A IA configurada criará um plano rítmico balanceado.</p>
+                <p className="text-xs mb-3 text-gray-300">Ela mistura perfis (Testador, Cético, Viciado) para que sua operação pareça natural para as plataformas.</p>
+                <p className="text-xs text-emerald-400 font-bold border border-emerald-500/30 p-2 rounded bg-emerald-500/10 text-center">Clique em "GERAR PLANO RÍTMICO" para testar.</p>
               </div>
           ),
-          position: 'right',
+          position: 'top',
           requiresInteraction: true
       },
       {
           targetId: 'tour-lot-send-1',
-          title: 'Executar Lote',
+          title: 'Execução Tática',
           view: 'planejamento',
-          content: 'Ao enviar um lote, os valores vão automaticamente para o seu Controle Diário (Livro Caixa). Clique em "Enviar" no Lote #1.',
+          content: (
+              <div>
+                  <p className="mb-2">Um plano sem ação é apenas um sonho.</p>
+                  <p className="text-xs mb-3">Ao clicar em <strong className="text-white">ENVIAR</strong>, o sistema processa esses valores fictícios e os transforma em lançamentos reais no seu Livro Caixa.</p>
+                  <div className="text-[10px] text-amber-300 bg-amber-900/20 p-2 rounded border border-amber-500/20">
+                      Isso automatiza 90% do trabalho manual de registro.
+                  </div>
+              </div>
+          ),
           position: 'bottom', // CORREÇÃO: Posicionado abaixo para não cobrir o botão
           requiresInteraction: true
       },
       {
           targetId: 'tour-daily-table',
-          title: 'Livro Caixa Automático',
+          title: 'Livro Caixa Inteligente',
           view: 'controle',
-          content: 'Veja que os depósitos e redepósitos já foram preenchidos. Você só precisa focar em colocar o SAQUE e os CICLOS/BÔNUS.',
+          content: (
+              <div>
+                  <p className="mb-2">Aqui está a realidade financeira do dia.</p>
+                  <p className="text-xs text-gray-300 mb-2">Os depósitos gerados já aparecem aqui. Sua única tarefa é preencher o <strong>SAQUE</strong> e os <strong>BÔNUS/CICLOS</strong> quando eles ocorrerem.</p>
+                  <p className="text-xs text-blue-400 font-bold">O lucro líquido é calculado instantaneamente.</p>
+              </div>
+          ),
           position: 'top',
           requiresInteraction: false
       },
       {
-          targetId: 'tour-daily-costs',
-          title: 'Controle de Custos',
-          view: 'controle',
-          content: 'Não esqueça de registrar custos diários (Proxy, SMS) para ter o lucro líquido real.',
-          position: 'bottom',
-          requiresInteraction: false
-      },
-      // --- NOVO PASSO SQUAD ---
-      {
           targetId: 'nav-squad',
-          title: 'Comando Squad',
+          title: 'Rede de Inteligência',
           view: 'squad', // Força a troca para a view Squad
           content: (
               <div>
-                  <p className="mb-3">Aqui você gerencia sua equipe ou entra em uma.</p>
-                  <ul className="text-xs space-y-2 text-gray-300">
-                      <li className="flex gap-2"><Crown size={14} className="text-amber-400 shrink-0"/> <strong>Líder:</strong> Copie sua chave e envie para seus funcionários.</li>
-                      <li className="flex gap-2"><Users size={14} className="text-emerald-400 shrink-0"/> <strong>Membro:</strong> Cole a chave do líder para enviar seus dados automaticamente.</li>
+                  <p className="mb-3">Não opere no escuro. O Squad conecta você a uma hierarquia.</p>
+                  <ul className="text-xs space-y-2 text-gray-300 mb-2">
+                      <li className="flex gap-2 items-center"><Crown size={12} className="text-amber-400 shrink-0"/> <strong>Líder:</strong> Monitora a equipe em tempo real.</li>
+                      <li className="flex gap-2 items-center"><LinkIcon size={12} className="text-emerald-400 shrink-0"/> <strong>Membro:</strong> Envia dados automaticamente para o líder.</li>
                   </ul>
+                  <p className="text-[10px] text-gray-500">Se tiver um código de líder, insira-o aqui para sincronizar.</p>
+              </div>
+          ),
+          position: 'right',
+          requiresInteraction: false
+      },
+      {
+          targetId: 'nav-dashboard',
+          title: 'Visão de Comando',
+          view: 'dashboard',
+          content: (
+              <div>
+                  <p className="mb-2">Seu Dashboard é o resumo de tudo.</p>
+                  <p className="text-xs text-gray-300">Acompanhe ROI, Margem de Lucro e compare sua performance com a média global da comunidade usando a Inteligência Global.</p>
+                  <div className="mt-3 p-2 bg-primary/20 border border-primary/30 rounded text-center font-bold text-white text-xs">
+                      Sistema Pronto. Boa operação! 🚀
+                  </div>
               </div>
           ),
           position: 'right',

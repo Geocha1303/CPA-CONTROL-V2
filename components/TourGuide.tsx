@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useLayoutEffect, useCallback } from 'react';
-import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock, SkipForward } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock, SkipForward, Cpu } from 'lucide-react';
 
 export interface TourStep {
   targetId: string;
@@ -16,7 +16,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
-  onSkip?: () => void; // Nova prop opcional
+  onSkip?: () => void;
   currentStepIndex: number;
   setCurrentStepIndex: (i: number) => void;
   disableNext?: boolean;
@@ -45,7 +45,6 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
             toJSON: () => {}
         });
       } else {
-          // Se não encontrar o elemento, define como null para evitar travar a tela
           setTargetRect(null);
       }
   }, [step]);
@@ -53,21 +52,18 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
   useLayoutEffect(() => {
     if (!isOpen || !step) return;
 
-    // Scroll inicial
     const element = document.getElementById(step.targetId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // Delay para animações e renderização
     const timer = setTimeout(updatePosition, 300);
-    // Retry
     const retry = setTimeout(updatePosition, 800);
 
     if (step.action) step.action();
 
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true); // Capture phase para pegar scroll de containers internos
+    window.addEventListener('scroll', updatePosition, true);
 
     return () => {
         window.removeEventListener('resize', updatePosition);
@@ -78,8 +74,6 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
   }, [currentStepIndex, isOpen, step, updatePosition]);
 
   if (!isOpen || !step) return null;
-
-  // Se não encontrar o elemento, não renderiza nada (evita tela preta bloqueando tudo)
   if (!targetRect) return null;
 
   const handleNext = () => {
@@ -97,11 +91,11 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
     }
   };
 
-  // Cálculos Card
+  // Cálculos Card Inteligente
   let top = 0;
   let left = 0;
-  const cardWidth = 320; 
-  const gap = 20;
+  const cardWidth = 340; 
+  const gap = 25;
 
   if (targetRect) {
       if (step.position === 'right') {
@@ -111,26 +105,28 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
           top = targetRect.top;
           left = targetRect.left - cardWidth - gap;
       } else if (step.position === 'top') {
-          top = targetRect.top - gap - 220;
+          top = targetRect.top - gap - 250; // Mais espaço para o card maior
           left = targetRect.left;
       } else {
           top = targetRect.bottom + gap;
           left = targetRect.left;
       }
 
-      // Ajustes de borda
+      // Edge detection simples
       if (left + cardWidth > window.innerWidth) left = window.innerWidth - cardWidth - 20;
       if (left < 20) left = 20;
       if (top < 20) top = 20;
-      if (top + 200 > window.innerHeight) top = window.innerHeight - 250;
+      if (top + 250 > window.innerHeight) top = window.innerHeight - 300;
   }
 
+  const progressPercent = ((currentStepIndex + 1) / steps.length) * 100;
+
   return (
-    <div className="fixed inset-0 z-[9999] overflow-hidden pointer-events-none">
+    <div className="fixed inset-0 z-[9999] overflow-hidden pointer-events-none font-sans">
       
-      {/* Máscara com Recorte */}
+      {/* Máscara de Foco */}
       <div 
-        className="absolute inset-0 bg-black/80 transition-all duration-300 ease-out pointer-events-auto"
+        className="absolute inset-0 bg-black/80 transition-all duration-500 ease-out pointer-events-auto backdrop-blur-[2px]"
         style={{
             clipPath: targetRect 
                 ? `polygon(
@@ -150,10 +146,10 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
         }}
       ></div>
 
-      {/* Destaque Visual */}
+      {/* Target Highlighter */}
       {targetRect && (
           <div 
-            className="absolute border-2 border-primary shadow-[0_0_30px_rgba(112,0,255,0.6)] rounded-lg pointer-events-none transition-all duration-300"
+            className="absolute border-2 border-primary shadow-[0_0_50px_rgba(112,0,255,0.6)] rounded-xl pointer-events-none transition-all duration-500"
             style={{
                 top: targetRect.top,
                 left: targetRect.left,
@@ -161,74 +157,106 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
                 height: targetRect.height
             }}
           >
-              <div className="absolute -top-3 -right-3 w-6 h-6 bg-primary rounded-full animate-ping opacity-75"></div>
-              <div className="absolute -top-3 -right-3 w-6 h-6 bg-primary rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
-                  {currentStepIndex + 1}
-              </div>
+              <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-white"></div>
+              <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-white"></div>
+              <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-white"></div>
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white"></div>
           </div>
       )}
 
-      {/* Card */}
+      {/* Card Futurista */}
       {targetRect && (
           <div 
-            className="absolute transition-all duration-300 pointer-events-auto"
+            className="absolute transition-all duration-500 pointer-events-auto ease-out"
             style={{ top, left, width: cardWidth }}
           >
-              <div className="bg-[#0f0a1e] border border-white/20 rounded-2xl shadow-2xl p-5 animate-fade-in relative backdrop-blur-xl">
+              <div className="bg-[#0f0a1e]/90 border border-primary/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl animate-fade-in relative group">
                   
-                  <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-bold text-white text-lg">{step.title}</h3>
-                      <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
-                          <X size={16} />
-                      </button>
-                  </div>
-                  
-                  <div className="text-sm text-gray-300 leading-relaxed mb-6 font-medium">
-                      {step.content}
+                  {/* Progress Bar Top */}
+                  <div className="h-1 w-full bg-gray-800">
+                      <div className="h-full bg-primary transition-all duration-500 shadow-[0_0_10px_#7000FF]" style={{ width: `${progressPercent}%` }}></div>
                   </div>
 
-                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/10">
-                      
-                      {/* Botão Pular (Esquerda) */}
-                      {onSkip && (
-                          <button 
-                            onClick={onSkip}
-                            className="text-[10px] text-gray-500 hover:text-white uppercase font-bold tracking-widest flex items-center gap-1 transition-colors mr-auto"
-                          >
-                              <SkipForward size={10} /> Pular
-                          </button>
-                      )}
-                      
-                      {!onSkip && (
-                          <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mr-auto">
-                              Passo {currentStepIndex + 1} de {steps.length}
-                          </span>
-                      )}
-                      
-                      <div className="flex gap-2">
-                          <button 
-                            onClick={handlePrev}
-                            disabled={currentStepIndex === 0}
-                            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 disabled:opacity-30 transition-colors"
-                          >
-                              <ChevronLeft size={18} />
-                          </button>
-                          
-                          <button 
-                            onClick={handleNext}
-                            disabled={disableNext}
-                            className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all shadow-lg border
-                                ${disableNext 
-                                    ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' 
-                                    : 'bg-primary hover:bg-primary-glow text-white border-primary/50 shadow-primary/20 cursor-pointer'}
-                            `}
-                          >
-                              {disableNext && <Lock size={12} />}
-                              {currentStepIndex === steps.length - 1 ? 'Concluir' : 'Próximo'}
-                              {!disableNext && (currentStepIndex === steps.length - 1 ? <CheckCircle2 size={14} /> : <ChevronRight size={14} />)}
+                  <div className="p-6 relative">
+                      {/* Background Detail */}
+                      <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                          <Cpu size={80} />
+                      </div>
+
+                      {/* Header */}
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                          <div>
+                              <div className="text-[9px] text-primary font-bold uppercase tracking-[0.2em] mb-1 flex items-center gap-1">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
+                                  System Onboarding
+                              </div>
+                              <h3 className="font-bold text-white text-xl tracking-tight">{step.title}</h3>
+                          </div>
+                          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors bg-white/5 p-1.5 rounded-lg hover:bg-white/10">
+                              <X size={14} />
                           </button>
                       </div>
+                      
+                      {/* Content */}
+                      <div className="text-sm text-gray-300 leading-relaxed mb-6 font-medium border-l-2 border-primary/20 pl-3">
+                          {step.content}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between mt-auto">
+                          
+                          {/* Paginator */}
+                          <div className="flex items-center gap-1">
+                              {steps.map((_, i) => (
+                                  <div 
+                                    key={i} 
+                                    className={`h-1.5 rounded-full transition-all ${i === currentStepIndex ? 'w-4 bg-primary' : 'w-1.5 bg-gray-700'}`}
+                                  ></div>
+                              ))}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                              <button 
+                                onClick={handlePrev}
+                                disabled={currentStepIndex === 0}
+                                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 disabled:opacity-20 transition-colors"
+                              >
+                                  <ChevronLeft size={16} />
+                              </button>
+                              
+                              <button 
+                                onClick={handleNext}
+                                disabled={disableNext}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg border relative overflow-hidden group/btn
+                                    ${disableNext 
+                                        ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' 
+                                        : 'bg-primary hover:bg-primary-glow text-white border-primary/50 shadow-primary/20 cursor-pointer'}
+                                `}
+                              >
+                                  <span className="relative z-10 flex items-center gap-2">
+                                      {disableNext && <Lock size={12} />}
+                                      {currentStepIndex === steps.length - 1 ? 'FINALIZAR' : 'PRÓXIMO'}
+                                      {!disableNext && (currentStepIndex === steps.length - 1 ? <CheckCircle2 size={14} /> : <ChevronRight size={14} />)}
+                                  </span>
+                                  {disableNext && (
+                                      <div className="absolute inset-0 bg-black/20"></div>
+                                  )}
+                              </button>
+                          </div>
+                      </div>
                   </div>
+                  
+                  {/* Skip Option */}
+                  {onSkip && (
+                      <div className="bg-black/20 px-6 py-2 border-t border-white/5 flex justify-center">
+                          <button 
+                            onClick={onSkip}
+                            className="text-[9px] text-gray-500 hover:text-gray-300 uppercase font-bold tracking-widest flex items-center gap-1 transition-colors"
+                          >
+                              <SkipForward size={10} /> Pular Tutorial
+                          </button>
+                      </div>
+                  )}
               </div>
           </div>
       )}

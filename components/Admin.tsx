@@ -68,38 +68,52 @@ const Admin: React.FC<Props> = ({ notify }) => {
       }
       setConnectionStatus('CONNECTING');
 
-      const channel = supabase.channel('online_users');
+      // Use a unique name for the admin channel to avoid conflicts
+      const channel = supabase.channel('admin_monitor_room', {
+          config: {
+              presence: { key: 'admin-monitor' },
+          }
+      });
       channelRef.current = channel;
 
+      // Subscribe to the global 'online_users' channel to see everyone
+      const globalPresenceChannel = supabase.channel('online_users');
+
       const updatePresenceList = () => {
-        const newState = channel.presenceState();
+        const newState = globalPresenceChannel.presenceState();
         const users: OnlineUser[] = [];
+        
         Object.values(newState).forEach((presences: any) => {
-            presences.forEach((p: any) => users.push(p as OnlineUser));
+            presences.forEach((p: any) => {
+                // Filter out invalid presence data
+                if (p.user && p.key) {
+                    users.push(p as OnlineUser);
+                }
+            });
         });
-        // Remove duplicatas baseadas no device_id para não mostrar o mesmo user 2x se a conexão oscilar
-        const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id, item])).values());
+        
+        // Remove duplicatas baseadas no device_id (para não mostrar o mesmo user 2x se a conexão oscilar)
+        // Se device_id for null/undefined (versões antigas), usa a key como fallback
+        const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id || item.key, item])).values());
         setOnlineUsers(uniqueUsers);
       };
 
-      channel
+      globalPresenceChannel
         .on('presence', { event: 'sync' }, updatePresenceList)
         .on('presence', { event: 'join' }, updatePresenceList)
         .on('presence', { event: 'leave' }, updatePresenceList)
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 setConnectionStatus('CONNECTED');
-                await channel.track({
-                    user: 'Admin Monitor',
-                    key: 'ADMIN-PANEL',
-                    online_at: new Date().toISOString(),
-                    is_admin: true,
-                    device_id: 'ADMIN-CONSOLE'
-                });
+                // Admin doesn't necessarily need to broadcast presence to users, 
+                // but needs to listen.
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 setConnectionStatus('ERROR');
             }
         });
+        
+      // Keep reference to clean up both
+      channelRef.current = globalPresenceChannel;
   };
 
   // --- FUNÇÕES DE BROADCAST ---
