@@ -379,6 +379,16 @@ function App() {
   // --- SYSTEM BROADCAST ALERT ---
   const [systemAlert, setSystemAlert] = useState<{title: string, message: string} | null>(null);
 
+  // REF PARA O CONTAINER PRINCIPAL (SCROLL RESET FIX)
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // RESET SCROLL ON VIEW CHANGE
+  useEffect(() => {
+      if (mainContentRef.current) {
+          mainContentRef.current.scrollTo(0, 0);
+      }
+  }, [activeView]);
+
   // --- AUTO-LOGIN / SESSION RESTORE LOGIC ---
   useEffect(() => {
       const restoreSession = async () => {
@@ -1006,7 +1016,7 @@ function App() {
         </header>
         
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[#02000f]">
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[#02000f]">
              {/* Background Gradients */}
              <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-primary/5 to-transparent pointer-events-none z-0"></div>
 

@@ -8,11 +8,13 @@ interface Props {
   updateState: (s: Partial<AppState>) => void;
   navigateToDaily: (date: string) => void;
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
+  readOnly?: boolean;
+  privacyMode?: boolean;
 }
 
 type TabType = 'kpis' | 'agents' | 'lots';
 
-const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify }) => {
+const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify, readOnly, privacyMode }) => {
   // Use state.generator as initial but keep local state for inputs to allow smooth typing
   const [params, setParams] = useState(state.generator.params);
   const [dist, setDist] = useState(state.generator.distribuicaoAgentes);
@@ -521,6 +523,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                         </button>
                         <button 
                             type="button"
+                            id={lotIndex === 1 ? "tour-lot-send-1" : undefined} // BUG FIX: ID necessário para o Tour Guide
                             onClick={() => {
                                 const lotChunk = plan.slice(chunkStartIndex, chunkStartIndex + size);
                                 const today = getHojeISO();
@@ -824,6 +827,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
 
         {/* Action Button */}
         <button 
+            id="tour-plan-generate" // BUG FIX: ID para Tour
             onClick={handleGenerate}
             className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-5 rounded-xl shadow-lg shadow-violet-900/40 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group text-lg"
         >

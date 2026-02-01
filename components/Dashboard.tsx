@@ -1,15 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL, getHojeISO } from '../utils';
 import { 
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { 
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
   MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown,
-  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock, Users
+  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock, Users, Clock, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -24,6 +24,21 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [globalAggregatedData, setGlobalAggregatedData] = useState<Record<string, DayRecord>>({});
   const [globalUserCount, setGlobalUserCount] = useState(0);
+  
+  // --- TIME & GREETING STATE ---
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
 
   // --- FETCH GLOBAL DATA ---
   const handleToggleMode = async () => {
@@ -287,29 +302,37 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   return (
     <div className="space-y-6 animate-fade-in pb-10">
         
-        {/* --- HEADER --- */}
+        {/* --- HEADER COM SAUDAÇÃO (NOVO) --- */}
         <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-               Dashboard
-               {privacyMode && <span className="bg-amber-500/20 text-amber-500 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 uppercase tracking-widest flex items-center gap-1"><Lock size={10}/> Oculto</span>}
+            <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold bg-white/10 text-white px-2 py-0.5 rounded border border-white/5 uppercase tracking-wider flex items-center gap-1">
+                    <ShieldCheck size={10} className="text-emerald-400" /> Sistema Operacional
+                </span>
+                {privacyMode && <span className="bg-amber-500/20 text-amber-500 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 uppercase tracking-widest flex items-center gap-1"><Lock size={10}/> Oculto</span>}
+            </div>
+            <h1 className="text-3xl font-black text-white tracking-tight">
+               {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">{state.config.userName || 'Operador'}</span>
             </h1>
-            <p className="text-gray-400 text-xs font-medium mt-1 pl-1">
-                Visão geral da sua operação financeira.
+            <p className="text-gray-400 text-xs font-medium mt-1 flex items-center gap-2">
+                <Clock size={12} className="text-gray-500" />
+                {currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}
+                <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                {currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit', second: '2-digit'})}
             </p>
           </div>
           
           <div className="flex gap-3">
-               <div className="px-4 py-2 bg-white/5 border border-white/5 rounded-xl text-right backdrop-blur-sm">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1">
+               <div className="px-4 py-2 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 rounded-xl text-right backdrop-blur-sm group hover:border-emerald-500/20 transition-all">
+                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-emerald-400 transition-colors">
                        ROI <InfoTooltip text="Retorno sobre Investimento" />
                    </p>
                    <p className={`text-lg font-black font-mono leading-none ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                        {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
                    </p>
                </div>
-               <div className="px-4 py-2 bg-white/5 border border-white/5 rounded-xl text-right backdrop-blur-sm">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1">
+               <div className="px-4 py-2 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 rounded-xl text-right backdrop-blur-sm group hover:border-blue-500/20 transition-all">
+                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-blue-400 transition-colors">
                        Margem <InfoTooltip text="Porcentagem de Lucro Real" />
                    </p>
                    <p className="text-lg font-black text-blue-400 font-mono leading-none">{metrics.margin.toFixed(0)}%</p>
@@ -317,7 +340,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
           </div>
         </div>
 
-        {/* --- GLOBAL INTELLIGENCE WIDGET (NOVO) --- */}
+        {/* --- GLOBAL INTELLIGENCE WIDGET --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
             {/* WIDGET 1: HEATMAP */}
@@ -396,7 +419,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                      </div>
 
                      <div className="space-y-3 mt-4">
-                         <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-start gap-3">
+                         <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-start gap-3 hover:bg-white/10 transition-colors cursor-default">
                              <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400 shrink-0">
                                  <Calendar size={18} />
                              </div>
@@ -415,11 +438,12 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
         </div>
 
-        {/* --- KPI CARDS (VISUAL NOVO) --- */}
+        {/* --- KPI CARDS (VISUAL MELHORADO) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* CARD 1: LUCRO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/20 hover:border-emerald-500/40 transition-all bg-gradient-to-br from-emerald-950/20 to-[#02000f]">
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/20 hover:border-emerald-500/40 transition-all bg-gradient-to-br from-emerald-950/20 via-[#02000f] to-[#02000f]">
                 <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl group-hover:bg-emerald-500/30 transition-all"></div>
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-transparent opacity-50"></div>
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20">
@@ -434,8 +458,9 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
 
             {/* CARD 2: FATURAMENTO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-indigo-500/20 hover:border-indigo-500/40 transition-all bg-gradient-to-br from-indigo-950/20 to-[#02000f]">
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-indigo-500/20 hover:border-indigo-500/40 transition-all bg-gradient-to-br from-indigo-950/20 via-[#02000f] to-[#02000f]">
                  <div className="absolute -right-6 -top-6 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl group-hover:bg-indigo-500/30 transition-all"></div>
+                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-transparent opacity-50"></div>
                 <div className="relative z-10">
                      <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/20">
@@ -450,8 +475,9 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
 
             {/* CARD 3: CUSTOS */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-rose-500/20 hover:border-rose-500/40 transition-all bg-gradient-to-br from-rose-950/20 to-[#02000f]">
+            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-rose-500/20 hover:border-rose-500/40 transition-all bg-gradient-to-br from-rose-950/20 via-[#02000f] to-[#02000f]">
                  <div className="absolute -right-6 -top-6 w-24 h-24 bg-rose-500/20 rounded-full blur-2xl group-hover:bg-rose-500/30 transition-all"></div>
+                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-transparent opacity-50"></div>
                 <div className="relative z-10">
                      <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/20">
@@ -466,7 +492,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
         </div>
 
-        {/* --- MAIN CHART --- */}
+        {/* --- MAIN CHART (COM AREA GLOW) --- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
             <div className="xl:col-span-2 gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[400px] border border-white/5 bg-[#03000a]">
                 <div className="flex items-center justify-between mb-8">
@@ -495,12 +521,17 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                                         <stop offset="0%" stopColor="#6366f1" stopOpacity={0.6}/>
                                         <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1}/>
                                     </linearGradient>
+                                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.2}/>
+                                        <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                                 <XAxis dataKey="dateStr" stroke="none" tick={{fill: '#6b7280', fontSize: 10}} dy={10} minTickGap={20} />
                                 <YAxis stroke="none" tick={{fill: '#6b7280', fontSize: 10}} hide={privacyMode} />
                                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                                 <Bar dataKey="faturamento" name="Faturamento" fill="url(#barGradient)" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Area type="monotone" dataKey="lucro" stroke="none" fill="url(#areaGradient)" />
                                 <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5, fill: '#10b981' }} />
                             </ComposedChart>
                         </ResponsiveContainer>
@@ -550,7 +581,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                             <p className="text-[10px] text-gray-500 text-center py-4">Sem histórico recente.</p>
                         ) : (
                             metrics.recentActivity.map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 last:border-0 pb-2 last:pb-0">
+                                <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 last:border-0 pb-2 last:pb-0 hover:bg-white/5 p-2 rounded transition-colors">
                                     <div>
                                         <div className="text-gray-300 font-bold">{new Date(item.date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</div>
                                         <div className="text-[9px] text-gray-600">ID #{item.id.toString().slice(-4)}</div>
