@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User } from 'lucide-react';
+import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabaseClient'; // IMPORT SUPABASE
 
 interface SlotGame {
@@ -160,7 +160,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
             const { error } = await supabase.from('custom_slots').insert([payload]);
             if (error) throw error;
             
-            notify('Jogo salvo na nuvem!', 'success');
+            notify('Jogo salvo na sua lista privada!', 'success');
             setNewGame({ name: '', provider: '', imageUrl: '' });
             setShowModal(false);
             fetchCustomSlots(); // Atualiza lista
@@ -170,7 +170,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
     };
 
     const handleDeleteGame = async (id: number) => {
-        if(confirm('Tem certeza que deseja excluir este jogo da nuvem?')) {
+        if(confirm('Tem certeza que deseja excluir este jogo?')) {
             try {
                 const { error } = await supabase.from('custom_slots').delete().eq('id', id);
                 if (error) throw error;
@@ -273,7 +273,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                     <div className="bg-[#050b08] border border-emerald-500/20 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl shadow-emerald-900/10 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                         <div className="absolute right-0 top-0 p-8 opacity-5 pointer-events-none">
-                            <Ghost size={100} />
+                            <Lock size={100} />
                         </div>
                         
                         <div className="flex items-center gap-4 relative z-10">
@@ -282,19 +282,22 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                             </div>
                             <div>
                                 <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                                    Segurança e Privacidade Total
-                                    <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded uppercase tracking-wider font-bold">Encrypted</span>
+                                    Armazenamento Local & Privado
+                                    <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded uppercase tracking-wider font-bold">100% Offline Mode</span>
                                 </h3>
                                 <p className="text-gray-400 text-xs mt-1 max-w-xl leading-relaxed">
-                                    Seus jogos são sincronizados com sua conta, mas <strong className="text-emerald-400">outros clientes NÃO PODEM ver sua lista</strong>. 
-                                    Apenas você e a administração têm acesso a esses dados.
+                                    Para garantir sua total privacidade e segurança, os jogos adicionados aqui são salvos <strong className="text-emerald-400">exclusivamente no cache do seu navegador</strong>. Ninguém tem acesso a esta lista além de você.
+                                    <br/>
+                                    <span className="text-rose-400/90 font-bold block mt-1 flex items-center gap-1">
+                                        <AlertTriangle size={10} /> Aviso: Se limpar o histórico/dados do Chrome, você perderá esta tabela.
+                                    </span>
                                 </p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 relative z-10">
                             <HardDrive size={12} />
-                            <span>Database: Private</span>
+                            <span>Storage: LocalHost (Encrypted)</span>
                         </div>
                     </div>
                 </div>
