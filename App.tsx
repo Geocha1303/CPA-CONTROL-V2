@@ -38,6 +38,7 @@ import {
   ArrowRight,
   Globe,
   Loader2,
+  Gamepad2, // Icone para Slots
   Link as LinkIcon // Renomeado para evitar conflitos
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
@@ -52,7 +53,8 @@ import Expenses from './components/Expenses';
 import Settings from './components/Settings';
 import Goals from './components/Goals';
 import Admin from './components/Admin';
-import Squad from './components/Squad'; // Novo Componente
+import Squad from './components/Squad';
+import SlotsRadar from './components/SlotsRadar'; // Novo Componente
 import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
@@ -446,7 +448,7 @@ function App() {
       const channel = supabase.channel('online_users', {
           config: {
               presence: {
-                  key: deviceId, // Use deviceId as unique key for presence to allow multiple tabs/devices per user
+                  key: deviceId,
               },
           },
       });
@@ -456,8 +458,8 @@ function App() {
               await channel.track({
                   user: state.config.userName || 'Operador',
                   key: currentUserKey,
-                  online_at: new Date().toISOString(),
                   is_admin: isAdmin,
+                  online_at: new Date().toISOString(),
                   device_id: deviceId
               });
           }
@@ -469,610 +471,306 @@ function App() {
   }, [isAuthenticated, currentUserKey, isLoaded, state.config.userName, isAdmin, isDemoMode]);
 
 
-  // --- PRIVACY MODE LISTENER ---
+  // --- CLOUD SYNC & AUTO-SAVE (COM DEBOUNCE OTIMIZADO) ---
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'F9') {
-            setPrivacyMode(prev => !prev);
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // --- ENSURE TAG EXISTENCE ---
-  useEffect(() => {
-      if (isLoaded && !state.config.userTag) {
-          const newTag = generateUserTag();
-          setState(prev => ({ ...prev, config: { ...prev.config, userTag: newTag } }));
-      }
-  }, [isLoaded, state.config.userTag]);
-
-  // --- SYNC TO CLOUD FUNCTION (AUTO) ---
-  const syncToCloud = async (dataToSync: AppState) => {
-      if (isDemoMode || !currentUserKey) return;
-      try {
-          const { error } = await supabase
-              .from('user_data')
-              .upsert({
-                  access_key: currentUserKey,
-                  raw_json: dataToSync,
-                  owner_name: dataToSync.config.userName || 'Operador',
-                  updated_at: new Date().toISOString()
-              }, { onConflict: 'access_key' });
-          
-          if (error) {
-              if(error.code !== '42501') console.error("Cloud Sync Warning:", error.message);
-          }
-      } catch (e) {
-          console.error("Cloud Sync Exception:", e);
-      }
-  };
-
-  // --- LISTENER GLOBAL DE ALERTAS ---
-  useEffect(() => {
-      const deviceId = localStorage.getItem(DEVICE_ID_KEY);
-      const alertChannel = supabase.channel('system_global_alerts');
-      alertChannel.on('broadcast', { event: 'sys_alert' }, (payload) => {
-            const data = payload.payload;
-            const isForMe = data.target === 'ALL' || data.target === currentUserKey || data.target === deviceId;
-            if (!isForMe) return;
-            if (data) {
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                audio.volume = 0.5;
-                audio.play().catch(() => {});
-                setSystemAlert({ title: data.title, message: data.message });
-            }
-        }).subscribe();
-      return () => { supabase.removeChannel(alertChannel); };
-  }, [currentUserKey]);
-
-  // --- NOTIFICAÇÕES AUTOMÁTICAS E AVISOS DO ADM ---
-  useEffect(() => {
-      if (isAuthenticated && isLoaded && !isDemoMode) {
-          
-          // 1. Notificação sobre a Inteligência Global (Discreta) - Sempre aparece
-          const timer = setTimeout(() => {
-              notify("🚀 NOVIDADE: Inteligência Global disponível no Dashboard! Compare seus resultados.", "success");
-          }, 2500);
-
-          // 2. CHECK DE NOME (MENSAGEM DO ADM AUTOMÁTICA)
-          // Lógica ajustada: SÓ VERIFICA se o TOUR NÃO ESTIVER ABERTO.
-          // Isso evita sobreposição no primeiro login. 
-          // Usuários antigos (com tour dismissed) receberão o alerta imediatamente se o nome estiver errado.
-          
-          if (!tourOpen) {
-              const currentName = state.config.userName || '';
-              const isDefaultName = currentName === 'OPERADOR' || currentName === 'Visitante Gratuito';
-
-              if (isDefaultName) {
-                  const alertTimer = setTimeout(() => {
-                      setSystemAlert({
-                          title: "📢 MENSAGEM DO ADMINISTRADOR",
-                          message: `Detectamos que seu perfil ainda está com o nome padrão '${currentName}'. Para garantir sua identificação no Squad e evitar remoção por inatividade, acesse a aba SISTEMA e atualize seu nome agora mesmo.`
-                      });
-                  }, 4000);
-                  return () => clearTimeout(alertTimer);
-              }
-          }
-
-          return () => clearTimeout(timer);
-      }
-  }, [isAuthenticated, isLoaded, isDemoMode, tourOpen, state.config.userName]);
-
-
-  // --- NOVO ROTEIRO DO TOUR (MAIS EXPLICATIVO E IMERSIVO) ---
-  const tourSteps: TourStep[] = [
-      {
-          targetId: 'nav-configuracoes',
-          title: 'Inicialização do Sistema',
-          view: 'configuracoes',
-          content: (
-              <div>
-                  <p className="mb-2">Bem-vindo ao <strong>CPA Gateway Pro</strong>. Vamos calibrar sua central de comando.</p>
-                  <p className="text-gray-400 text-xs">O primeiro passo é definir quem está no controle para que os cálculos e relatórios sejam precisos.</p>
-              </div>
-          ),
-          position: 'right',
-          requiresInteraction: false
-      },
-      {
-          targetId: 'tour-settings-name',
-          title: 'Identidade Operacional',
-          view: 'configuracoes',
-          content: (
-              <div>
-                  <p className="mb-3 font-bold text-white">Quem é o Operador?</p>
-                  <p className="mb-2 text-xs">Substitua "OPERADOR" pelo seu nome ou apelido. Isso garante sua identificação no Squad e nos relatórios de performance.</p>
-                  <div className="bg-indigo-900/30 border-l-2 border-indigo-500 p-2 rounded text-[10px] text-indigo-200">
-                      Sua TAG única será gerada automaticamente ao lado.
-                  </div>
-              </div>
-          ),
-          position: 'bottom',
-          requiresInteraction: true 
-      },
-      {
-          targetId: 'nav-planejamento',
-          title: 'Módulo de Estratégia',
-          view: 'planejamento',
-          content: (
-              <div>
-                  <p className="mb-2">Acesse o laboratório de IA. Aqui é onde a mágica acontece.</p>
-                  <p className="text-xs text-gray-400">Em vez de depositar valores aleatórios, usamos algoritmos para simular comportamento humano orgânico e evitar bloqueios.</p>
-              </div>
-          ),
-          position: 'right',
-          requiresInteraction: false
-      },
-      {
-          targetId: 'tour-plan-generate',
-          title: 'Geração de Cenários',
-          view: 'planejamento',
-          content: (
-              <div>
-                <p className="mb-3">A IA configurada criará um plano rítmico balanceado.</p>
-                <p className="text-xs mb-3 text-gray-300">Ela mistura perfis (Testador, Cético, Viciado) para que sua operação pareça natural para as plataformas.</p>
-                <p className="text-xs text-emerald-400 font-bold border border-emerald-500/30 p-2 rounded bg-emerald-500/10 text-center">Clique em "GERAR PLANO RÍTMICO" para testar.</p>
-              </div>
-          ),
-          position: 'top',
-          requiresInteraction: true
-      },
-      {
-          targetId: 'tour-lot-send-1',
-          title: 'Execução Tática',
-          view: 'planejamento',
-          content: (
-              <div>
-                  <p className="mb-2">Um plano sem ação é apenas um sonho.</p>
-                  <p className="text-xs mb-3">Ao clicar em <strong className="text-white">ENVIAR</strong>, o sistema processa esses valores fictícios e os transforma em lançamentos reais no seu Livro Caixa.</p>
-                  <div className="text-[10px] text-amber-300 bg-amber-900/20 p-2 rounded border border-amber-500/20">
-                      Isso automatiza 90% do trabalho manual de registro.
-                  </div>
-              </div>
-          ),
-          position: 'bottom', // CORREÇÃO: Posicionado abaixo para não cobrir o botão
-          requiresInteraction: true
-      },
-      {
-          targetId: 'tour-daily-table',
-          title: 'Livro Caixa Inteligente',
-          view: 'controle',
-          content: (
-              <div>
-                  <p className="mb-2">Aqui está a realidade financeira do dia.</p>
-                  <p className="text-xs text-gray-300 mb-2">Os depósitos gerados já aparecem aqui. Sua única tarefa é preencher o <strong>SAQUE</strong> e os <strong>BÔNUS/CICLOS</strong> quando eles ocorrerem.</p>
-                  <p className="text-xs text-blue-400 font-bold">O lucro líquido é calculado instantaneamente.</p>
-              </div>
-          ),
-          position: 'top',
-          requiresInteraction: false
-      },
-      {
-          targetId: 'nav-squad',
-          title: 'Rede de Inteligência',
-          view: 'squad', // Força a troca para a view Squad
-          content: (
-              <div>
-                  <p className="mb-3">Não opere no escuro. O Squad conecta você a uma hierarquia.</p>
-                  <ul className="text-xs space-y-2 text-gray-300 mb-2">
-                      <li className="flex gap-2 items-center"><Crown size={12} className="text-amber-400 shrink-0"/> <strong>Líder:</strong> Monitora a equipe em tempo real.</li>
-                      <li className="flex gap-2 items-center"><LinkIcon size={12} className="text-emerald-400 shrink-0"/> <strong>Membro:</strong> Envia dados automaticamente para o líder.</li>
-                  </ul>
-                  <p className="text-[10px] text-gray-500">Se tiver um código de líder, insira-o aqui para sincronizar.</p>
-              </div>
-          ),
-          position: 'right',
-          requiresInteraction: false
-      },
-      {
-          targetId: 'nav-dashboard',
-          title: 'Visão de Comando',
-          view: 'dashboard',
-          content: (
-              <div>
-                  <p className="mb-2">Seu Dashboard é o resumo de tudo.</p>
-                  <p className="text-xs text-gray-300">Acompanhe ROI, Margem de Lucro e compare sua performance com a média global da comunidade usando a Inteligência Global.</p>
-                  <div className="mt-3 p-2 bg-primary/20 border border-primary/30 rounded text-center font-bold text-white text-xs">
-                      Sistema Pronto. Boa operação! 🚀
-                  </div>
-              </div>
-          ),
-          position: 'right',
-          requiresInteraction: false
-      }
-  ];
-
-  // --- TOUR LOGIC ---
-  useEffect(() => {
-    if (!isLoaded || !state.onboarding) return;
+    if (!isAuthenticated || !isLoaded || isDemoMode) return;
     
-    // Check if tour should start (only if not dismissed)
-    if (!state.onboarding.dismissed && !tourOpen) {
-        // Only start if name is NOT set (fresh start)
-        // OR if specific flags are missing
-        if (!state.onboarding.steps.configName) {
-            setTourOpen(true);
-        }
+    // Save to LocalStorage immediately on change
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+    setLastSaved(new Date());
+
+    // Debounce Cloud Sync (Supabase)
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    
+    // Se não for admin e tiver chave, sincroniza
+    if (!isAdmin && currentUserKey && currentUserKey !== 'TROPA-FREE') {
+        setSaveStatus('saving');
+        syncTimeoutRef.current = window.setTimeout(async () => {
+            try {
+                const { error } = await supabase
+                    .from('user_data')
+                    .upsert({ 
+                        access_key: currentUserKey, 
+                        raw_json: state,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'access_key' });
+                
+                if(error) throw error;
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            } catch (err) {
+                console.error("Cloud sync failed:", err);
+                setSaveStatus('error');
+            }
+        }, 3000); // 3 seconds debounce for cloud
+    } else {
+        setSaveStatus('saved'); // Local only
     }
-  }, [isLoaded, state.onboarding?.dismissed]);
 
-  // --- AUTO NAVIGATE TOUR STEPS ---
-  useEffect(() => {
-      if (tourOpen) {
-          const step = tourSteps[tourStepIndex];
-          if (step && step.view && activeView !== step.view) {
-              setActiveView(step.view as ViewType);
-          }
-      }
-  }, [tourOpen, tourStepIndex, activeView]);
-
-  const handleTourComplete = () => {
-      setTourOpen(false);
-      updateState({ onboarding: { ...state.onboarding, dismissed: true } as any });
-      notify("Tour concluído! Bom trabalho.", "success");
-  };
-
-  const handleSkipTour = () => {
-      setShowSkipConfirm(true);
-  };
-
-  const confirmSkip = () => {
-      setShowSkipConfirm(false);
-      setTourOpen(false);
-      updateState({ onboarding: { ...state.onboarding, dismissed: true } as any });
-      notify("Tour pulado.", "info");
-  };
-
+  }, [state, isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode]);
 
   useEffect(() => {
-    try {
-        const isSupported = 'showOpenFilePicker' in window;
-        setHasFileSystemSupport(isSupported);
-        setIsIframe(window.self !== window.top);
-    } catch (e) {
-        setHasFileSystemSupport(false);
+    if(!state.config.userTag) {
+        setState(prev => ({ ...prev, config: { ...prev.config, userTag: generateUserTag() } }));
     }
-  }, []);
+  }, [isLoaded]);
 
-  // Login Handler
-  const handleLogin = (key: string, adminStatus: boolean, ownerName: string) => {
-      setCurrentUserKey(key);
-      setIsAdmin(adminStatus);
-      setIsAuthenticated(true);
+  // Listener para Broadcast Global (Alertas do Admin)
+  useEffect(() => {
+      if (!isAuthenticated) return;
       
-      // Load Data
-      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedData) {
-          try {
-              const parsed = JSON.parse(savedData);
-              const merged = mergeDeep(initialState, parsed);
-              // Force owner name from key if provided and not set locally
-              if (ownerName && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
-                  merged.config.userName = ownerName;
-              }
-              setState(merged);
-          } catch (e) {
-              console.error("Erro ao carregar dados locais", e);
-          }
-      }
-      setIsLoaded(true);
-  };
+      const channel = supabase.channel('system_global_alerts');
+      const myDeviceId = localStorage.getItem(DEVICE_ID_KEY);
 
-  // Logout
-  const handleLogout = () => {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      setIsAuthenticated(false);
-      setCurrentUserKey('');
-      setIsAdmin(false);
-      setState(initialState);
-      setIsLoaded(false);
-  };
+      channel
+        .on('broadcast', { event: 'sys_alert' }, (payload) => {
+            const data = payload.payload;
+            
+            // Verifica se é para todos (ALL) ou específico para meu Device ID
+            if (data.target === 'ALL' || data.target === myDeviceId) {
+                setSystemAlert({
+                    title: data.title,
+                    message: data.message
+                });
+                // Toca som de alerta
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.play().catch(()=>{});
+            }
+        })
+        .subscribe();
 
-  // Demo Mode Toggle
-  const toggleDemoMode = () => {
-      if (isDemoMode) {
-          // Revert to real state
-          if (realStateRef.current) setState(realStateRef.current);
-          setIsDemoMode(false);
-          notify("Modo Demonstração encerrado.", "info");
-      } else {
-          // Save real state and generate demo
-          realStateRef.current = state;
-          const demoState = generateDemoState(state.config);
-          setState(demoState);
-          setIsDemoMode(true);
-          notify("Modo Demonstração ativado! Dados fictícios.", "success");
-      }
-  };
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [isAuthenticated]);
 
-  // Spectator Mode
-  const handleSpectate = (data: AppState, memberName: string) => {
-      // Save my current state to ref just in case, though spectate is readonly usually
-      if (!isDemoMode && !spectatingData) {
-          realStateRef.current = state;
-      }
-      setSpectatingData({ data, name: memberName });
-  };
-
-  const exitSpectator = () => {
-      setSpectatingData(null);
-      if (realStateRef.current) {
-          setState(realStateRef.current);
-          realStateRef.current = null;
-      }
-  };
-
-  // State Update Wrapper
-  const updateState = (updates: Partial<AppState>) => {
-      if (spectatingData) return; // Read only in spectate
-      if (isDemoMode) {
-          // Allow updates in demo mode but don't save to LS
-          setState(prev => mergeDeep(prev, updates));
-          return;
-      }
-
-      setState(prev => {
-          const newState = mergeDeep(prev, updates);
-          
-          // Auto-save logic
-          if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-          if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-          
-          setSaveStatus('saving');
-          
-          saveTimeoutRef.current = window.setTimeout(() => {
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
-              setLastSaved(new Date());
-              setSaveStatus('saved');
-              setTimeout(() => setSaveStatus('idle'), 2000);
-          }, 1000);
-
-          // Cloud Sync (Debounced 5s)
-          syncTimeoutRef.current = window.setTimeout(() => {
-              syncToCloud(newState);
-          }, 5000);
-
-          return newState;
-      });
-  };
-
-  // Notification Handler
   const notify = (message: string, type: 'success' | 'error' | 'info') => {
-      const id = Date.now();
-      setNotifications(prev => [...prev, { id, type, message }]);
-      setTimeout(() => {
-          setNotifications(prev => prev.filter(n => n.id !== id));
-      }, 4000);
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 4000);
   };
 
-  // View active logic (Spectator overrides)
-  const activeState = spectatingData ? spectatingData.data : state;
-  const isReadOnly = !!spectatingData || isDemoMode; 
+  const updateState = (updates: Partial<AppState>) => {
+    if (isDemoMode) return; // Read-only in demo
+    setState(prev => mergeDeep(prev, updates));
+  };
 
-  // --- RENDER ---
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.location.reload();
+  };
+
+  // --- ACCESS CONTROL FOR SLOTS ---
+  // Verifica se o usuário tem permissão VIP (Admin ou Chave Paga)
+  // Chave paga = não é TROPA-FREE e não começa com FREE-
+  const isVip = isAdmin || (isAuthenticated && currentUserKey !== 'TROPA-FREE' && !currentUserKey.startsWith('FREE-'));
+
   if (!isAuthenticated) {
-      return <LoginScreen onLogin={handleLogin} autoLoginCheck={isCheckingAuth} />;
+    return <LoginScreen onLogin={(key, admin, ownerName) => {
+        setCurrentUserKey(key);
+        setIsAdmin(admin);
+        setIsAuthenticated(true);
+        // Se for novo login, atualiza nome se não existir
+        setState(prev => {
+            if (prev.config.userName === 'OPERADOR') {
+                return { ...prev, config: { ...prev.config, userName: ownerName } };
+            }
+            return prev;
+        });
+        setIsLoaded(true);
+    }} autoLoginCheck={isCheckingAuth} />;
   }
 
-  const MenuButton = ({ id, icon: Icon, label, alert }: any) => (
-      <button 
-        id={`nav-${id}`} // CORREÇÃO: ID compatível com o Tour (nav-dashboard, nav-squad, etc)
-        onClick={() => { setActiveView(id); setMobileMenuOpen(false); }}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm relative
-            ${activeView === id 
-                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-      >
-          <Icon size={18} />
-          <span>{label}</span>
-          {alert && <span className="absolute right-3 w-2 h-2 bg-accent-pink rounded-full animate-pulse"></span>}
-      </button>
-  );
+  const activeState = spectatingData ? spectatingData.data : state;
 
   return (
-    <div className={`flex h-screen bg-background overflow-hidden font-sans selection:bg-primary/30 ${privacyMode ? 'privacy-active' : ''}`}>
+    <div className="flex flex-col h-screen bg-background overflow-hidden relative font-sans text-gray-200">
       
-      {/* SYSTEM ALERT MODAL (BROADCAST) */}
+      {/* Background Grids */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-mesh opacity-30"></div>
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(112, 0, 255, 0.03) 0%, transparent 50%)' }}></div>
+      </div>
+
+      {/* --- SYSTEM ALERT MODAL --- */}
       {systemAlert && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-              <div className="bg-[#0f0a1e] border border-amber-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
-                  <div className="flex gap-4">
-                      <div className="p-3 bg-amber-500/10 rounded-xl h-fit">
-                          <Megaphone className="text-amber-500" size={32} />
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-indigo-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-shimmer"></div>
+                  <div className="flex items-start gap-4 mb-4">
+                      <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400 animate-pulse">
+                          <Megaphone size={24} />
                       </div>
                       <div>
-                          <h3 className="text-xl font-bold text-white mb-2">{systemAlert.title}</h3>
-                          <p className="text-gray-300 text-sm leading-relaxed">{systemAlert.message}</p>
+                          <h3 className="text-xl font-bold text-white mb-1">{systemAlert.title}</h3>
+                          <p className="text-xs text-indigo-300 font-bold uppercase tracking-wider">Mensagem do Sistema</p>
                       </div>
                   </div>
+                  <p className="text-gray-300 text-sm leading-relaxed mb-6 border-l-2 border-indigo-500/20 pl-4">
+                      {systemAlert.message}
+                  </p>
                   <button 
-                    onClick={() => setSystemAlert(null)}
-                    className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all border border-white/5 uppercase text-xs tracking-wider"
+                      onClick={() => setSystemAlert(null)}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all"
                   >
-                      Entendido
+                      ENTENDIDO
                   </button>
               </div>
           </div>
       )}
 
-      {/* CONFIRM SKIP MODAL */}
-      {showSkipConfirm && (
-          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in">
-              <div className="bg-[#0f0a1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full text-center">
-                  <h3 className="text-lg font-bold text-white mb-2">Pular Introdução?</h3>
-                  <p className="text-gray-400 text-xs mb-6">Você pode reiniciar o tour depois na aba Sistema.</p>
-                  <div className="flex gap-3">
-                      <button onClick={() => setShowSkipConfirm(false)} className="flex-1 py-2 rounded-lg bg-white/5 text-gray-400 text-xs font-bold hover:bg-white/10">Cancelar</button>
-                      <button onClick={confirmSkip} className="flex-1 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">Sim, Pular</button>
-                  </div>
-              </div>
+      {/* Top Header */}
+      <header className="h-16 border-b border-white/5 bg-[#02000f]/80 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 z-50 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
+             <Activity className="text-white" size={18} />
           </div>
-      )}
-
-      {/* TOUR GUIDE */}
-      <TourGuide 
-          steps={tourSteps}
-          isOpen={tourOpen}
-          onClose={() => handleSkipTour()}
-          onComplete={handleTourComplete}
-          onSkip={handleSkipTour}
-          currentStepIndex={tourStepIndex}
-          setCurrentStepIndex={setTourStepIndex}
-          disableNext={!canProceed && tourSteps[tourStepIndex].requiresInteraction}
-      />
-
-      {/* --- SIDEBAR --- */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-surface/95 backdrop-blur-xl border-r border-white/5 transform transition-transform duration-300 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-4">
-            {/* Logo Area */}
-            <div className="flex items-center gap-3 px-2 mb-8 mt-2">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
-                    <Activity className="text-white" size={24} />
-                </div>
-                <div>
-                    <h1 className="font-bold text-white text-lg tracking-tight">CPA Gateway</h1>
-                    <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Online V3.7</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* User Info Card */}
-            <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Operador</span>
-                    {isAdmin && <span className="bg-amber-500/20 text-amber-500 text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 font-bold">ADMIN</span>}
-                </div>
-                <div className="font-mono text-white font-bold truncate">
-                    {spectatingData ? spectatingData.name : (state.config.userName || 'Anônimo')}
-                </div>
-                <div className="text-[10px] text-gray-500 mt-1 font-mono">
-                    ID: {spectatingData ? 'ESPECTADOR' : (currentUserKey.length > 15 ? currentUserKey.substring(0, 15)+'...' : currentUserKey)}
-                </div>
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex-1 space-y-1">
-                <MenuButton id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-                <MenuButton id="planejamento" icon={Cpu} label="Planejamento" />
-                <MenuButton id="controle" icon={CalendarDays} label="Controle Diário" />
-                <MenuButton id="squad" icon={Users} label="Comando Squad" alert={false} />
-                <MenuButton id="despesas" icon={Receipt} label="Despesas" />
-                <MenuButton id="metas" icon={Target} label="Metas & Sonhos" />
-                
-                <div className="pt-4 mt-4 border-t border-white/5">
-                    <MenuButton id="configuracoes" icon={SettingsIcon} label="Sistema" />
-                    {isAdmin && <MenuButton id="admin" icon={Shield} label="Painel Admin" />}
-                </div>
-            </nav>
-
-            {/* Footer Actions */}
-            <div className="mt-auto space-y-2">
-                {spectatingData ? (
-                    <button 
-                        onClick={exitSpectator}
-                        className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 animate-pulse"
-                    >
-                        <EyeOff size={16} /> SAIR DO MODO ESPECTADOR
-                    </button>
-                ) : (
-                    <>
-                        <button 
-                            onClick={toggleDemoMode}
-                            className={`w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${isDemoMode ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10'}`}
-                        >
-                            {isDemoMode ? <Terminal size={16} /> : <Terminal size={16} />} 
-                            {isDemoMode ? 'SAIR DA DEMO' : 'MODO DEMO'}
-                        </button>
-                        
-                        <button 
-                            onClick={handleLogout}
-                            className="w-full bg-white/5 hover:bg-rose-500/10 hover:text-rose-500 text-gray-400 border border-white/5 hover:border-rose-500/20 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
-                        >
-                            <LogOut size={16} /> DESCONECTAR
-                        </button>
-                    </>
-                )}
-            </div>
+          <div>
+            <h1 className="font-bold text-lg tracking-tight text-white leading-none">CPA Gateway <span className="text-primary text-xs align-top">PRO</span></h1>
+            {spectatingData && <span className="text-[10px] text-amber-500 font-bold animate-pulse flex items-center gap-1"><Eye size={10}/> ESPECTADOR: {spectatingData.name}</span>}
+          </div>
         </div>
-      </aside>
-
-      {/* --- MAIN CONTENT --- */}
-      <main className={`flex-1 flex flex-col h-full relative transition-all duration-300 lg:ml-64`}>
-        {/* Topbar (Mobile Only mostly) */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:hidden bg-surface/80 backdrop-blur-md z-30 sticky top-0">
-             <div className="flex items-center gap-3">
-                <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-white">
-                    <Menu size={24} />
-                </button>
-                <span className="font-bold text-white">CPA Gateway</span>
-             </div>
-             {spectatingData && <div className="text-xs bg-rose-500 text-white px-2 py-1 rounded font-bold animate-pulse">ESPIANDO</div>}
-        </header>
         
-        {/* Content Area */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[#02000f]">
-             {/* Background Gradients */}
-             <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-primary/5 to-transparent pointer-events-none z-0"></div>
+        <div className="flex items-center gap-4">
+            {/* Save Status Indicator */}
+            {!spectatingData && !isDemoMode && (
+                <div className="hidden md:flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-gray-500">
+                    {saveStatus === 'saving' && <><RefreshCw size={10} className="animate-spin text-primary"/> Syncing...</>}
+                    {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-emerald-500"/> Saved</>}
+                    {saveStatus === 'error' && <><AlertCircle size={10} className="text-rose-500"/> Sync Error</>}
+                </div>
+            )}
 
-             <div className="p-4 lg:p-8 relative z-10 max-w-[1920px] mx-auto min-h-full">
-                 {spectatingData && (
-                     <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl mb-6 flex items-center justify-between animate-fade-in">
-                         <div className="flex items-center gap-2">
-                             <Eye size={20} />
-                             <span className="font-bold text-sm">Você está visualizando o painel de: {spectatingData.name}</span>
+            {/* Privacy Toggle */}
+            <button 
+                onClick={() => setPrivacyMode(!privacyMode)}
+                className={`p-2 rounded-lg transition-colors ${privacyMode ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-white/5 text-gray-400'}`}
+                title="Modo Privacidade (Ocultar Valores)"
+            >
+                {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+
+            {/* Logout */}
+            <button onClick={handleLogout} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors" title="Sair">
+                <LogOut size={18} />
+            </button>
+            
+            {/* Mobile Menu Toggle */}
+            <button 
+                className="md:hidden p-2 text-gray-400"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+        </div>
+      </header>
+
+      {/* Main Layout */}
+      <div className="flex flex-1 overflow-hidden relative">
+        
+        {/* Sidebar / Mobile Menu */}
+        <nav className={`
+            fixed md:relative z-40 w-full md:w-20 lg:w-64 bg-[#05030a] md:bg-transparent border-r border-white/5 flex flex-col transition-all duration-300
+            ${mobileMenuOpen ? 'translate-x-0 inset-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+             <div className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
+                 {[
+                     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                     { id: 'planejamento', label: 'Planejamento', icon: Target },
+                     { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
+                     { id: 'despesas', label: 'Despesas', icon: Receipt },
+                     { id: 'metas', label: 'Metas', icon: Crown },
+                     // MOSTRA BOTÃO SLOTS PARA TODOS (AGORA LIBERADO)
+                     { id: 'slots', label: 'Slots Radar', icon: Gamepad2 },
+                     { id: 'squad', label: 'Squad', icon: Users },
+                     ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }] : []),
+                     { id: 'configuracoes', label: 'Ajustes', icon: SettingsIcon },
+                 ].map(item => (
+                     <button
+                        key={item.id}
+                        onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group ${
+                            activeView === item.id 
+                            ? 'bg-primary/10 text-white border border-primary/20 shadow-[0_0_15px_rgba(112,0,255,0.1)]' 
+                            : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+                        }`}
+                     >
+                         <div className={`p-2 rounded-lg transition-colors ${activeView === item.id ? 'bg-primary text-white' : 'bg-white/5 text-gray-500 group-hover:text-white'}`}>
+                             <item.icon size={18} />
                          </div>
-                         <button onClick={exitSpectator} className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-rose-400 transition-colors">
-                             Voltar ao Meu Painel
-                         </button>
-                     </div>
-                 )}
-
-                 {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
-                 {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(date) => { setCurrentDate(date); setActiveView('controle'); }} notify={notify} readOnly={isReadOnly} privacyMode={privacyMode} />}
-                 {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={isReadOnly} privacyMode={privacyMode} />}
-                 {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={isReadOnly} privacyMode={privacyMode} />}
-                 {activeView === 'configuracoes' && <Settings state={activeState} updateState={updateState} notify={notify} />}
-                 {activeView === 'metas' && <Goals state={activeState} updateState={updateState} privacyMode={privacyMode} />}
-                 {activeView === 'admin' && isAdmin && <Admin notify={notify} />}
-                 {activeView === 'squad' && <Squad currentUserKey={currentUserKey} onSpectate={handleSpectate} notify={notify} privacyMode={privacyMode} />}
+                         <span className={`font-medium text-sm md:hidden lg:block ${activeView === item.id ? 'font-bold' : ''}`}>{item.label}</span>
+                     </button>
+                 ))}
              </div>
-        </div>
 
-        {/* Notifications Toast */}
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
-            {notifications.map(n => (
-                <div key={n.id} className={`transform transition-all duration-300 animate-slide-in-right min-w-[300px] pointer-events-auto
-                    ${n.type === 'success' ? 'bg-[#0f291e] border-emerald-500/30 text-emerald-400' : 
-                      n.type === 'error' ? 'bg-[#2a1215] border-rose-500/30 text-rose-400' : 
-                      'bg-[#0f172a] border-blue-500/30 text-blue-400'}
-                    border p-4 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-xl
-                `}>
-                    {n.type === 'success' ? <CheckCircle2 size={20} /> : n.type === 'error' ? <AlertCircle size={20} /> : <Info size={20} />}
-                    <p className="text-sm font-medium">{n.message}</p>
-                </div>
-            ))}
-        </div>
+             {/* Footer Info */}
+             <div className="p-4 border-t border-white/5 hidden lg:block">
+                 <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                     <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Licença Ativa</p>
+                     <p className="text-xs text-white font-mono truncate" title={currentUserKey}>{currentUserKey === 'TROPA-FREE' ? 'GRATUITA' : currentUserKey}</p>
+                 </div>
+             </div>
+        </nav>
 
-        {/* Auto-Save Indicator */}
-        <div className="fixed bottom-6 left-6 lg:left-72 z-40 pointer-events-none">
-            {saveStatus === 'saving' && (
-                <div className="bg-black/40 backdrop-blur-md border border-white/10 text-gray-400 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 animate-pulse">
-                    <RefreshCw size={10} className="animate-spin" /> Salvando...
+        {/* Main Content Area */}
+        <main 
+            ref={mainContentRef}
+            className="flex-1 overflow-y-auto overflow-x-hidden bg-background relative scroll-smooth p-4 lg:p-8"
+        >
+            {spectatingData && (
+                <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 px-4 py-3 rounded-xl mb-6 flex justify-between items-center animate-fade-in">
+                    <span className="flex items-center gap-2 font-bold text-sm">
+                        <Eye size={18} /> MODO ESPECTADOR: Visualizando dados de {spectatingData.name}
+                    </span>
+                    <button 
+                        onClick={() => setSpectatingData(null)}
+                        className="bg-amber-500 text-black px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-400 transition-colors"
+                    >
+                        SAIR
+                    </button>
                 </div>
             )}
-            {saveStatus === 'saved' && (
-                <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-500 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 size={10} /> Salvo
-                </div>
-            )}
-        </div>
-      </main>
+
+            {/* Notifications */}
+            <div className="fixed top-20 right-4 z-[100] space-y-2 pointer-events-none">
+                {notifications.map(n => (
+                    <div key={n.id} className={`pointer-events-auto transform transition-all duration-300 animate-slide-in-right max-w-sm w-full shadow-2xl rounded-xl p-4 border flex items-start gap-3 backdrop-blur-md ${
+                        n.type === 'success' ? 'bg-emerald-900/80 border-emerald-500/30 text-emerald-100' :
+                        n.type === 'error' ? 'bg-rose-900/80 border-rose-500/30 text-rose-100' :
+                        'bg-blue-900/80 border-blue-500/30 text-blue-100'
+                    }`}>
+                        <div className={`p-1.5 rounded-full shrink-0 ${
+                            n.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
+                            n.type === 'error' ? 'bg-rose-500/20 text-rose-400' :
+                            'bg-blue-500/20 text-blue-400'
+                        }`}>
+                            {n.type === 'success' ? <CheckCircle2 size={16} /> : n.type === 'error' ? <AlertCircle size={16} /> : <Info size={16} />}
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium leading-tight">{n.message}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Render Views */}
+            {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
+            {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
+            {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
+            {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
+            {activeView === 'metas' && <Goals state={activeState} updateState={updateState} privacyMode={privacyMode} />}
+            {activeView === 'configuracoes' && <Settings state={activeState} updateState={updateState} notify={notify} />}
+            {activeView === 'admin' && isAdmin && <Admin notify={notify} />}
+            {activeView === 'squad' && <Squad currentUserKey={currentUserKey} onSpectate={(data, name) => { setSpectatingData({data, name}); setActiveView('dashboard'); }} notify={notify} privacyMode={privacyMode} />}
+            
+            {/* RENDERIZA SLOTS PARA TODOS */}
+            {activeView === 'slots' && <SlotsRadar notify={notify} isAdmin={isAdmin} currentUserKey={currentUserKey} userName={state.config.userName} />}
+
+        </main>
+      </div>
+
     </div>
   );
 }
