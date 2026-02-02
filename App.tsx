@@ -173,7 +173,10 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
     const handleFreeAccess = async () => {
         setLoading(true);
         try {
+            // Tenta recuperar a chave FREE existente no navegador
             let existingFreeKey = localStorage.getItem(FREE_KEY_STORAGE);
+            
+            // Se não existir, gera uma nova
             if (!existingFreeKey || existingFreeKey === 'TROPA-FREE') {
                 const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
                 const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -181,7 +184,7 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
                 localStorage.setItem(FREE_KEY_STORAGE, existingFreeKey);
             }
 
-            // Tenta registrar silenciosamente
+            // Tenta registrar silenciosamente na nuvem (para o Admin ver)
             try {
                 await supabase
                     .from('access_keys')
@@ -195,7 +198,10 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
                 console.warn("Offline fallback:", innerError);
             }
 
+            // Define como sessão ativa
             localStorage.setItem(AUTH_STORAGE_KEY, existingFreeKey);
+            
+            // Login imediato
             setTimeout(() => {
                 onLogin(existingFreeKey, false, 'Visitante Gratuito');
             }, 500);
@@ -399,6 +405,24 @@ function App() {
       }
   }, [activeView]);
 
+  // Função auxiliar para buscar backup na nuvem (Melhora persistência)
+  const loadCloudData = async (key: string): Promise<AppState | null> => {
+      try {
+          const { data, error } = await supabase
+              .from('user_data')
+              .select('raw_json')
+              .eq('access_key', key)
+              .single();
+          
+          if (!error && data && data.raw_json) {
+              return data.raw_json as AppState;
+          }
+      } catch (e) {
+          console.error("Erro ao buscar backup nuvem:", e);
+      }
+      return null;
+  };
+
   // --- AUTO-LOGIN / SESSION RESTORE LOGIC ---
   useEffect(() => {
       const restoreSession = async () => {
@@ -420,16 +444,30 @@ function App() {
                       setIsAdmin(data.is_admin);
                       setIsAuthenticated(true);
                       
-                      // Carrega dados locais
-                      const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
-                      if (localData) {
-                          const parsed = JSON.parse(localData);
-                          const merged = mergeDeep(initialState, parsed);
-                          if (data.owner_name && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
-                              merged.config.userName = data.owner_name;
-                          }
-                          setState(merged);
+                      // 1. Tenta carregar dados LOCAIS
+                      const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
+                      let loadedData = localString ? JSON.parse(localString) : null;
+
+                      // 2. Se não houver dados locais, OU para garantir nome atualizado, busca na NUVEM
+                      if (!loadedData) {
+                          const cloudData = await loadCloudData(savedKey);
+                          if (cloudData) loadedData = cloudData;
+                      } else {
+                          // Se tem local, tenta buscar nuvem em background para garantir nome (Opcional, mas bom para sync)
+                          // Para simplicidade e performance no load, confiamos no local se existir,
+                          // mas se o nome for OPERADOR/default, tentamos pegar da chave.
                       }
+
+                      const merged = mergeDeep(initialState, loadedData || {});
+                      
+                      // Prioridade do Nome: 
+                      // 1. O que está salvo no state (se não for default)
+                      // 2. O nome atrelado à chave (Owner Name)
+                      if (data.owner_name && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
+                          merged.config.userName = data.owner_name;
+                      }
+                      
+                      setState(merged);
                       setIsLoaded(true);
                   } else {
                       // Chave inválida ou bloqueada, limpa sessão
@@ -437,8 +475,6 @@ function App() {
                   }
               } catch (e) {
                   console.error("Erro ao restaurar sessão:", e);
-                  // Em caso de erro de rede, podemos optar por logar offline se tiver dados locais
-                  // Por segurança, vamos pedir login novamente, mas manter dados locais.
               }
           }
           setIsCheckingAuth(false);
@@ -577,16 +613,40 @@ function App() {
 
   if (!isAuthenticated) {
     return <LoginScreen 
-        onLogin={(key, admin, ownerName) => {
+        onLogin={async (key, admin, ownerName) => {
             setCurrentUserKey(key);
             setIsAdmin(admin);
             setIsAuthenticated(true);
-            // Se for novo login, atualiza nome se não existir
+            
+            // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS ---
+            // 1. Tenta pegar dados LOCAIS (Chrome) primeiro
+            // Isso garante que o usuário free recupere os dados salvos no navegador
+            const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
+            let restoredState = localString ? JSON.parse(localString) : null;
+
+            // 2. Tenta buscar backup na NUVEM (Supabase) em seguida (se houver)
+            const cloudData = await loadCloudData(key);
+            
             setState(prev => {
-                if (prev.config.userName === 'OPERADOR') {
-                    return { ...prev, config: { ...prev.config, userName: ownerName } };
+                // Base: Estado Inicial
+                let finalState = initialState;
+
+                // Merge 1: Dados Locais (prioridade inicial)
+                if (restoredState) {
+                    finalState = mergeDeep(finalState, restoredState);
                 }
-                return prev;
+
+                // Merge 2: Dados da Nuvem (se existirem e forem válidos, sobrepõem/complementam)
+                if (cloudData) {
+                    finalState = mergeDeep(finalState, cloudData);
+                }
+                
+                // Garante que o nome do usuário seja preservado
+                if (!finalState.config.userName || finalState.config.userName === 'OPERADOR') {
+                    finalState.config.userName = ownerName;
+                }
+                
+                return finalState;
             });
             setIsLoaded(true);
         }} 
