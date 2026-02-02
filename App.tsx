@@ -258,12 +258,12 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
                                     <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                 </button>
 
-                                {/* BOTÃO DEMONSTRAÇÃO RESTAURADO */}
+                                {/* BOTÃO DEMONSTRAÇÃO RESTAURADO E DESTACADO */}
                                 <button 
                                     onClick={onDemo}
-                                    className="w-full group bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white font-bold py-3 rounded-xl transition-all border border-white/5 hover:border-white/20 flex items-center justify-center gap-2 text-xs"
+                                    className="w-full group bg-gradient-to-r from-white/5 to-white/10 hover:from-white/10 hover:to-white/20 text-gray-300 hover:text-white font-bold py-3 rounded-xl transition-all border border-white/5 hover:border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wide"
                                 >
-                                    <Eye size={16} /> MODO DEMONSTRAÇÃO
+                                    <Eye size={16} className="text-amber-400 group-hover:scale-110 transition-transform" /> MODO DEMONSTRAÇÃO
                                 </button>
                                 
                                 <div className="pt-2 border-t border-white/5 flex justify-center">
@@ -726,6 +726,23 @@ function App() {
 
              {/* Footer Info */}
              <div className="p-4 border-t border-white/5 hidden lg:block">
+                 {/* DEMO BUTTON ADDED HERE */}
+                 {!isDemoMode && (
+                     <button 
+                        onClick={() => {
+                            if(confirm("Entrar no Modo Demonstração? (Seus dados atuais serão mantidos a salvo, mas a visualização mudará)")) {
+                                setIsDemoMode(true);
+                                setState(generateDemoState(initialState.config));
+                                setActiveView('dashboard');
+                            }
+                        }}
+                        className="w-full mb-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-400 hover:text-white transition-all group uppercase tracking-wide"
+                     >
+                         <Eye size={14} className="group-hover:text-amber-400 transition-colors" />
+                         Modo Demonstração
+                     </button>
+                 )}
+
                  <div className="bg-white/5 rounded-xl p-3 border border-white/5">
                      <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Licença Ativa</p>
                      <p className="text-xs text-white font-mono truncate" title={currentUserKey}>{currentUserKey === 'TROPA-FREE' ? 'GRATUITA' : currentUserKey}</p>
