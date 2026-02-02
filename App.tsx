@@ -94,7 +94,7 @@ const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
 
 // --- LOGIN COMPONENT (PROFESSIONAL DESIGN) ---
-const LoginScreen = ({ onLogin, autoLoginCheck }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void, autoLoginCheck: boolean }) => {
+const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void, onDemo: () => void, autoLoginCheck: boolean }) => {
     const [inputKey, setInputKey] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -237,7 +237,7 @@ const LoginScreen = ({ onLogin, autoLoginCheck }: { onLogin: (key: string, isAdm
                     
                     <div className="p-8">
                         {loginMode === 'free' ? (
-                            <div className="space-y-8">
+                            <div className="space-y-6">
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-2 mb-1">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
@@ -257,8 +257,16 @@ const LoginScreen = ({ onLogin, autoLoginCheck }: { onLogin: (key: string, isAdm
                                     <span className="tracking-wide">INICIAR SESSÃO</span>
                                     <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                 </button>
+
+                                {/* BOTÃO DEMONSTRAÇÃO RESTAURADO */}
+                                <button 
+                                    onClick={onDemo}
+                                    className="w-full group bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white font-bold py-3 rounded-xl transition-all border border-white/5 hover:border-white/20 flex items-center justify-center gap-2 text-xs"
+                                >
+                                    <Eye size={16} /> MODO DEMONSTRAÇÃO
+                                </button>
                                 
-                                <div className="pt-4 border-t border-white/5 flex justify-center">
+                                <div className="pt-2 border-t border-white/5 flex justify-center">
                                     <button 
                                         onClick={() => setLoginMode('vip')}
                                         className="text-xs text-gray-500 hover:text-white transition-colors flex items-center gap-2 font-medium group/vip"
@@ -568,19 +576,29 @@ function App() {
   const isVip = isAdmin || (isAuthenticated && currentUserKey !== 'TROPA-FREE' && !currentUserKey.startsWith('FREE-'));
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={(key, admin, ownerName) => {
-        setCurrentUserKey(key);
-        setIsAdmin(admin);
-        setIsAuthenticated(true);
-        // Se for novo login, atualiza nome se não existir
-        setState(prev => {
-            if (prev.config.userName === 'OPERADOR') {
-                return { ...prev, config: { ...prev.config, userName: ownerName } };
-            }
-            return prev;
-        });
-        setIsLoaded(true);
-    }} autoLoginCheck={isCheckingAuth} />;
+    return <LoginScreen 
+        onLogin={(key, admin, ownerName) => {
+            setCurrentUserKey(key);
+            setIsAdmin(admin);
+            setIsAuthenticated(true);
+            // Se for novo login, atualiza nome se não existir
+            setState(prev => {
+                if (prev.config.userName === 'OPERADOR') {
+                    return { ...prev, config: { ...prev.config, userName: ownerName } };
+                }
+                return prev;
+            });
+            setIsLoaded(true);
+        }} 
+        onDemo={() => {
+            setIsDemoMode(true);
+            setState(generateDemoState(initialState.config));
+            setIsAuthenticated(true);
+            setIsLoaded(true);
+            notify('Modo Demonstração Ativado', 'info');
+        }}
+        autoLoginCheck={isCheckingAuth} 
+    />;
   }
 
   const activeState = spectatingData ? spectatingData.data : state;
@@ -630,6 +648,7 @@ function App() {
           <div>
             <h1 className="font-bold text-lg tracking-tight text-white leading-none">CPA Gateway <span className="text-primary text-xs align-top">PRO</span></h1>
             {spectatingData && <span className="text-[10px] text-amber-500 font-bold animate-pulse flex items-center gap-1"><Eye size={10}/> ESPECTADOR: {spectatingData.name}</span>}
+            {isDemoMode && <span className="text-[9px] text-white/50 bg-white/10 px-1.5 rounded ml-2">MODO DEMO</span>}
           </div>
         </div>
         
