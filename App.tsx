@@ -95,6 +95,64 @@ const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master';
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
 
+// --- COMPONENTE MODAL DE IDENTIDADE OBRIGATÓRIA ---
+const IdentityModal = ({ onSave, currentName }: { onSave: (name: string) => void, currentName?: string }) => {
+    const [name, setName] = useState('');
+    
+    // Lista de nomes inválidos
+    const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+
+    const isValid = name.trim().length > 2 && !invalidNames.includes(name.trim().toUpperCase());
+
+    return (
+        <div className="fixed inset-0 z-[10000] bg-[#02000f]/95 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-[#0a0a0a] border border-primary/50 rounded-2xl w-full max-w-md p-8 shadow-[0_0_50px_rgba(112,0,255,0.3)] relative overflow-hidden text-center">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent"></div>
+                
+                <div className="mb-6 flex justify-center">
+                    <div className="p-4 bg-primary/10 rounded-full border border-primary/20 shadow-[0_0_20px_rgba(112,0,255,0.15)] animate-pulse-slow">
+                        <Fingerprint size={40} className="text-primary" />
+                    </div>
+                </div>
+
+                <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Identificação Necessária</h2>
+                <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+                    {currentName && currentName.toUpperCase().includes('VISITANTE') 
+                        ? "O modo Visitante é temporário. Para salvar seu progresso e acessar o Squad, escolha um nome de operador."
+                        : "Detectamos que você está usando um nome padrão do sistema. Por favor, identifique-se para continuar."}
+                </p>
+
+                <div className="space-y-4">
+                    <div className="relative group text-left">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Novo Nome de Operador</label>
+                        <input 
+                            type="text" 
+                            autoFocus
+                            placeholder="Ex: Fox, Imperador, Ana..."
+                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-lg text-white font-bold focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-gray-700 text-center uppercase"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && isValid && onSave(name)}
+                        />
+                    </div>
+
+                    <button 
+                        onClick={() => onSave(name)}
+                        disabled={!isValid}
+                        className={`w-full py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg
+                            ${!isValid 
+                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                                : 'bg-primary hover:bg-primary-glow text-white shadow-primary/20 transform hover:-translate-y-1 active:scale-95'}
+                        `}
+                    >
+                        Confirmar Identidade <ArrowRight size={16} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- LOGIN COMPONENT (PROFESSIONAL DESIGN) ---
 const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void, onDemo: () => void, autoLoginCheck: boolean }) => {
     const [inputKey, setInputKey] = useState('');
@@ -606,10 +664,10 @@ function App() {
       };
   }, [isAuthenticated, currentUserKey]);
 
-  // --- TOUR GUIDE LOGIC ---
+  // --- TOUR GUIDE LOGIC (REVISITED) ---
   useEffect(() => {
-      // Inicia o Tour apenas se o estado indicar que não foi dispensado
-      // Adicionada verificação extra "&& state.onboarding" para evitar crash se o useEffect de reparo ainda não rodou
+      // Este efeito garante que o tour abra se a flag 'dismissed' for false.
+      // Ele verifica 'isLoaded' para garantir que os dados do usuário (e o estado do tutorial) já foram carregados.
       if (isAuthenticated && isLoaded && state.onboarding && state.onboarding.dismissed === false && !tourOpen) {
           setTourOpen(true);
       }
@@ -701,6 +759,12 @@ function App() {
   // Chave paga = não é TROPA-FREE e não começa com FREE-
   const isVip = isAdmin || (isAuthenticated && currentUserKey !== 'TROPA-FREE' && !currentUserKey.startsWith('FREE-'));
 
+  // --- CHECK FOR DEFAULT NAME (OPERADOR / VISITANTE) ---
+  // Atualizado para incluir 'Visitante Gratuito' e variantes, forçando a troca.
+  const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+  const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
+                            (!state.config.userName || invalidNames.includes(state.config.userName.toUpperCase()));
+
   if (!isAuthenticated) {
     return <LoginScreen 
         onLogin={async (key, admin, ownerName) => {
@@ -731,9 +795,14 @@ function App() {
                     finalState = mergeDeep(finalState, restoredState);
                 }
                 
-                // Garante que o nome do usuário seja preservado
-                if (!finalState.config.userName || finalState.config.userName === 'OPERADOR') {
-                    finalState.config.userName = ownerName;
+                // IMPORTANTE: NÃO forçar ownerName aqui se já existir um nome salvo válido.
+                // Apenas se for nulo ou inválido, usamos o ownerName da chave.
+                if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) {
+                    if (ownerName && !invalidNames.includes(ownerName.toUpperCase())) {
+                        finalState.config.userName = ownerName;
+                    } else if (!finalState.config.userName) {
+                        finalState.config.userName = 'OPERADOR';
+                    }
                 }
                 
                 return finalState;
@@ -758,6 +827,21 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden relative font-sans text-gray-200">
       
+      {/* IDENTITY MODAL (BLOCKER) */}
+      {showIdentityCheck && (
+          <IdentityModal 
+            currentName={state.config.userName}
+            onSave={(name) => {
+                updateState({ 
+                    config: { ...state.config, userName: name },
+                    // RESETA O TUTORIAL: Força dismissed=false para garantir que o TourGuide abra assim que o modal fechar.
+                    onboarding: { ...state.onboarding, dismissed: false }
+                });
+                notify("Identidade definida com sucesso! Iniciando tour...", "success");
+            }} 
+          />
+      )}
+
       {/* Background Grids */}
       <div className="fixed inset-0 pointer-events-none z-0">
           <div className="absolute inset-0 bg-mesh opacity-30"></div>
@@ -798,7 +882,7 @@ function App() {
              <Activity className="text-white" size={18} />
           </div>
           <div>
-            <h1 className="font-bold text-lg tracking-tight text-white leading-none">CPA Gateway <span className="text-primary text-xs align-top">PRO</span></h1>
+            <h1 className="font-bold text-lg tracking-tight text-white leading-none">CPA Gateway <span className="text-primary text-xs align-top font-mono ml-1">PRO</span></h1>
             {spectatingData && <span className="text-[10px] text-amber-500 font-bold animate-pulse flex items-center gap-1"><Eye size={10}/> ESPECTADOR: {spectatingData.name}</span>}
             {isDemoMode && <span className="text-[9px] text-white/50 bg-white/10 px-1.5 rounded ml-2">MODO DEMO</span>}
           </div>
