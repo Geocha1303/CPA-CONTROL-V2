@@ -14,9 +14,9 @@ interface Product {
 }
 
 interface Section {
-    id: string; // Adicionado ID para controle de abas
+    id: string;
     title: string;
-    shortTitle: string; // Título curto para o botão da aba
+    shortTitle: string;
     description?: string;
     icon?: React.ElementType;
     products: Product[];
@@ -178,20 +178,20 @@ const STORE_DATA: Section[] = [
                 deliveryType: 'Automatic'
             },
             {
-                id: 13,
-                name: '2GB - PROXY ROTATIVA',
-                price: 14.60,
-                image: 'https://cdn.ereemby.com/attachments/17680655007915372imagem.jpeg',
-                link: 'https://cpaofc.com.br/product/176801629396063944186128713371',
-                deliveryType: 'Automatic'
-            },
-            {
                 id: 12,
                 name: '3GB - PROXY ROTATIVA',
                 price: 20.50,
                 image: 'https://cdn.ereemby.com/attachments/17680655007915372imagem.jpeg',
                 link: 'https://cpaofc.com.br/product/176801607519166958499088726574524',
                 tag: 'MAIS VENDIDO',
+                deliveryType: 'Automatic'
+            },
+            {
+                id: 13,
+                name: '2GB - PROXY ROTATIVA',
+                price: 14.60,
+                image: 'https://cdn.ereemby.com/attachments/17680655007915372imagem.jpeg',
+                link: 'https://cpaofc.com.br/product/176801629396063944186128713371',
                 deliveryType: 'Automatic'
             },
             {
@@ -264,7 +264,7 @@ const STORE_DATA: Section[] = [
     }
 ];
 
-// --- COMPONENTE DE CARTÃO TILT 3D (COMPACTO) ---
+// --- COMPONENTE DE CARTÃO TILT 3D (CORRIGIDO PARA CLIQUE ÚNICO) ---
 const TiltCard: React.FC<{ product: Product }> = ({ product }) => {
     const cardRef = useRef<HTMLDivElement>(null);
     const [rotation, setRotation] = useState({ x: 0, y: 0 });
@@ -279,7 +279,7 @@ const TiltCard: React.FC<{ product: Product }> = ({ product }) => {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        const rotateY = ((mouseX - width / 2) / width) * 15; // Reduzido para 15deg
+        const rotateY = ((mouseX - width / 2) / width) * 15;
         const rotateX = ((mouseY - height / 2) / height) * -15;
 
         setRotation({ x: rotateX, y: rotateY });
@@ -298,90 +298,94 @@ const TiltCard: React.FC<{ product: Product }> = ({ product }) => {
     return (
         <div 
             ref={cardRef}
-            className="relative h-full transition-all duration-300 ease-out"
+            className="relative h-full"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
+            style={{ perspective: '1000px' }}
         >
-            <div 
-                className="h-full bg-[#0c0818] rounded-2xl border border-white/5 overflow-hidden shadow-xl group relative flex flex-col"
+            {/* O CARD INTEIRO É UM LINK AGORA */}
+            <a 
+                href={product.link}
+                target="_blank"
+                rel="noreferrer"
+                className="block h-full w-full transition-transform duration-100 ease-out focus:outline-none"
                 style={{
                     transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) scale3d(1.0, 1.0, 1.0)`,
-                    transition: 'transform 0.1s ease-out',
                     transformStyle: 'preserve-3d'
                 }}
             >
-                {/* GLARE EFFECT */}
-                <div 
-                    className="absolute inset-0 pointer-events-none z-50 mix-blend-overlay transition-opacity duration-300"
-                    style={{
-                        background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 80%)`,
-                        opacity: glare.opacity
-                    }}
-                ></div>
-
-                {/* IMAGEM (Compactada) */}
-                <div className="aspect-[16/10] relative overflow-hidden bg-gray-900" style={{ transform: 'translateZ(0px)' }}>
-                    <img 
-                        src={product.image} 
-                        alt={product.name}
-                        className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0c0818] via-transparent to-transparent opacity-80"></div>
+                <div className="h-full bg-[#0c0818] rounded-2xl border border-white/5 overflow-hidden shadow-xl group relative flex flex-col">
                     
-                    {product.tag && (
-                        <div className="absolute top-2 left-2" style={{ transform: 'translateZ(20px)' }}>
-                            <span className="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded shadow-lg flex items-center gap-1 uppercase tracking-wider">
-                                <Sparkles size={8} fill="black" /> {product.tag}
-                            </span>
-                        </div>
-                    )}
+                    {/* GLARE EFFECT (Pointer Events None é CRUCIAL) */}
+                    <div 
+                        className="absolute inset-0 pointer-events-none z-50 mix-blend-overlay transition-opacity duration-300"
+                        style={{
+                            background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 80%)`,
+                            opacity: glare.opacity
+                        }}
+                    ></div>
 
-                    {product.deliveryType === 'Automatic' && (
-                        <div className="absolute top-2 right-2" style={{ transform: 'translateZ(15px)' }}>
-                            <div className="bg-black/60 backdrop-blur-md text-emerald-400 text-[9px] font-bold px-2 py-1 rounded border border-emerald-500/30 flex items-center gap-1">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                                Auto
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* CONTEÚDO (Compactado) */}
-                <div className="p-4 flex flex-col flex-1 relative z-20" style={{ transform: 'translateZ(30px)' }}>
-                    <div className="flex-1">
-                        <h3 className="text-white font-bold text-sm leading-tight mb-2 line-clamp-2 min-h-[2.5em] group-hover:text-emerald-300 transition-colors drop-shadow-md">
-                            {product.name}
-                        </h3>
+                    {/* IMAGEM */}
+                    <div className="aspect-[16/10] relative overflow-hidden bg-gray-900" style={{ transform: 'translateZ(0px)' }}>
+                        <img 
+                            src={product.image} 
+                            alt={product.name}
+                            className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0c0818] via-transparent to-transparent opacity-80 pointer-events-none"></div>
                         
-                        <div className="flex items-end gap-2 mb-4">
-                            <div className="text-2xl font-black text-white font-mono tracking-tighter drop-shadow-lg">
-                                {formatarBRL(product.price)}
+                        {product.tag && (
+                            <div className="absolute top-2 left-2 pointer-events-none" style={{ transform: 'translateZ(20px)' }}>
+                                <span className="bg-emerald-500 text-black text-[9px] font-black px-2 py-1 rounded shadow-lg flex items-center gap-1 uppercase tracking-wider">
+                                    <Sparkles size={8} fill="black" /> {product.tag}
+                                </span>
                             </div>
-                            {product.oldPrice && (
-                                <div className="text-[10px] text-gray-600 line-through font-bold mb-1.5">
-                                    {formatarBRL(product.oldPrice)}
+                        )}
+
+                        {product.deliveryType === 'Automatic' && (
+                            <div className="absolute top-2 right-2 pointer-events-none" style={{ transform: 'translateZ(15px)' }}>
+                                <div className="bg-black/60 backdrop-blur-md text-emerald-400 text-[9px] font-bold px-2 py-1 rounded border border-emerald-500/30 flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    Auto
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="space-y-3">
-                        <a 
-                            href={product.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-full bg-white/5 hover:bg-emerald-600 hover:text-black text-white font-bold py-2.5 rounded-lg transition-all border border-white/10 flex items-center justify-center gap-2 group/btn relative overflow-hidden shadow-lg text-xs"
-                            style={{ transform: 'translateZ(10px)' }}
-                        >
-                            <span className="relative z-10 flex items-center gap-2">
-                                <ShoppingBag size={14} /> COMPRAR
-                            </span>
-                            <ArrowRight size={12} className="relative z-10 opacity-0 -translate-x-2 group-hover/btn:opacity-100 group-hover/btn:translate-x-0 transition-all" />
-                        </a>
+                    {/* CONTEÚDO */}
+                    <div className="p-4 flex flex-col flex-1 relative z-20" style={{ transform: 'translateZ(30px)' }}>
+                        <div className="flex-1">
+                            <h3 className="text-white font-bold text-sm leading-tight mb-2 line-clamp-2 min-h-[2.5em] group-hover:text-emerald-300 transition-colors drop-shadow-md">
+                                {product.name}
+                            </h3>
+                            
+                            <div className="flex items-end gap-2 mb-4 pointer-events-none">
+                                <div className="text-2xl font-black text-white font-mono tracking-tighter drop-shadow-lg">
+                                    {formatarBRL(product.price)}
+                                </div>
+                                {product.oldPrice && (
+                                    <div className="text-[10px] text-gray-600 line-through font-bold mb-1.5">
+                                        {formatarBRL(product.oldPrice)}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 pointer-events-none">
+                            {/* Botão visual (DIV) para evitar link dentro de link */}
+                            <div 
+                                className="w-full bg-white/5 group-hover:bg-emerald-600 group-hover:text-black text-white font-bold py-2.5 rounded-lg transition-all border border-white/10 flex items-center justify-center gap-2 relative overflow-hidden shadow-lg text-xs"
+                                style={{ transform: 'translateZ(10px)' }}
+                            >
+                                <span className="relative z-10 flex items-center gap-2">
+                                    <ShoppingBag size={14} /> COMPRAR
+                                </span>
+                                <ArrowRight size={12} className="relative z-10 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     );
 };
