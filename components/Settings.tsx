@@ -121,8 +121,14 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                             <div className="flex gap-2">
                                 <div className="relative group flex-1">
                                     <span className="absolute left-4 top-3.5 text-gray-500 group-focus-within:text-cyan-400 transition-colors"><User size={16} /></span>
-                                    <input type="text" value={state.config.userName || ''} placeholder="Ex: Seu Nome" onChange={(e) => handleNameChange(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" />
+                                    <input 
+                                        type="text" 
+                                        value={state.config.userName || ''} 
+                                        placeholder="Ex: Seu Nome" 
+                                        onChange={(e) => handleNameChange(e.target.value)}
+                                        autoComplete="off" // ADICIONADO: Previne overlap
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white font-bold focus:border-cyan-500 focus:outline-none transition-all shadow-inner" 
+                                    />
                                 </div>
                                 {/* VISUALIZAÇÃO DA TAG */}
                                 <div className="bg-black/20 border border-white/10 rounded-xl px-4 flex items-center justify-center min-w-[80px]" title="Sua TAG única">

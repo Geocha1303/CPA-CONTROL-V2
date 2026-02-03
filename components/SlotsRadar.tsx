@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle } from 'lucide-react';
+import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle, ArrowRight } from 'lucide-react';
 import { supabase } from '../supabaseClient'; // IMPORT SUPABASE
 
 interface SlotGame {
@@ -37,10 +37,10 @@ const GAMES_DB: SlotGame[] = [
 
     // --- JILI ---
     { id: 301, name: 'Jungle King', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Aventura'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Jili-Games/24635/Jungle-King-Jili-Games-6897657_s.jpg' },
-    { id: 302, name: 'Crazy 777', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Rápido'], imageUrl: 'https://cdn.softswiss.net/i/s3/jili/Crazy777.png' },
+    { id: 302, name: 'Crazy 777', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Rápido'], imageUrl: 'https://slotsia.com/en/wp-content/uploads/sites/12/img-crazy-777-game-card-2.png' },
     { id: 303, name: 'Jumple King', provider: 'JILI', volatility: 'Média', stars: 2, tags: ['Pulo'], imageUrl: 'https://images.unsplash.com/photo-1629814249159-e14b1e5a51e5?q=80&w=400&auto=format&fit=crop' },
     { id: 304, name: 'Golden Joker', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Cartas'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/1spin4win/48429/golden-joker-fortune-7112636_s.webp' },
-    { id: 305, name: 'FaFaFa', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Simples'], imageUrl: 'https://images.unsplash.com/photo-1610219586619-2169b1586566?q=80&w=400&auto=format&fit=crop' },
+    { id: 305, name: 'FaFaFa', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Simples'], imageUrl: 'https://www.andyroid.net/wp-content/uploads/2015/11/Fafafa-Casino-Slots-icon.jpg' },
 
     // --- JDB ---
     { id: 401, name: 'Triple King Kong', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Gorila'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/9113/Triple-King-Kong-1_s.jpg' },
@@ -78,7 +78,7 @@ const GAMES_DB: SlotGame[] = [
     { id: 804, name: 'Golden Panther', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Pantera'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/33033/The-Golden-Panther-7014265_s.jpg' },
     { id: 805, name: 'Rich Man', provider: 'FC', volatility: 'Alta', stars: 3, tags: ['Magnata'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/32824/Rich-Man-7012747_s.jpg' },
     { id: 806, name: 'Color Game', provider: 'FC', volatility: 'Baixa', stars: 3, tags: ['Dados'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/AllWaySpin/23024/Color-Game-6875568_s.jpg' },
-    { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Batalha'], imageUrl: 'https://cdn.softswiss.net/i/s3/playngo/GameOfGladiators.png' },
+    { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Batalha'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/40070/roma-gladiatrix-7065751.webp' },
 ];
 
 const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, userName }) => {
@@ -105,6 +105,9 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                  query = query.eq('user_key', currentUserKey);
             }
             // Se for Admin, ele pega tudo (query sem filtro)
+            
+            // CORREÇÃO LINHA-POR-LINHA: Ordernar por ID decrescente para novos aparecerem primeiro
+            query = query.order('id', { ascending: false });
 
             const { data, error } = await query;
             if (error) throw error;
@@ -223,17 +226,6 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                         />
                     </div>
                     
-                    {/* Botão Adicionar (Só aparece na aba Custom) */}
-                    {activeTab === 'custom' && !isAdmin && (
-                        <button 
-                            onClick={() => setShowModal(true)}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white p-3 rounded-xl shadow-lg transition-all border border-emerald-500/50"
-                            title="Adicionar Jogo Manualmente"
-                        >
-                            <Plus size={20} />
-                        </button>
-                    )}
-                    
                     {/* Botão Refresh (Admin Custom Tab) */}
                     {activeTab === 'custom' && isAdmin && (
                          <button 
@@ -283,21 +275,16 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                             <div>
                                 <h3 className="text-white font-bold text-sm flex items-center gap-2">
                                     Armazenamento Local & Privado
-                                    <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-0.5 rounded uppercase tracking-wider font-bold">100% Offline Mode</span>
                                 </h3>
                                 <p className="text-gray-400 text-xs mt-1 max-w-xl leading-relaxed">
-                                    Para garantir sua total privacidade e segurança, os jogos adicionados aqui são salvos <strong className="text-emerald-400">exclusivamente no cache do seu navegador</strong>. Ninguém tem acesso a esta lista além de você.
-                                    <br/>
-                                    <span className="text-rose-400/90 font-bold block mt-1 flex items-center gap-1">
-                                        <AlertTriangle size={10} /> Aviso: Se limpar o histórico/dados do Chrome, você perderá esta tabela.
-                                    </span>
+                                    Para garantir sua privacidade, os jogos adicionados aqui são visíveis <strong className="text-emerald-400">apenas para você</strong> nesta sessão.
                                 </p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 relative z-10">
                             <HardDrive size={12} />
-                            <span>Storage: LocalHost (Encrypted)</span>
+                            <span>Storage: Secure</span>
                         </div>
                     </div>
                 </div>
@@ -325,21 +312,22 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
             {/* Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 
-                {/* BUTTON CARD - ADICIONAR (Only in Custom Tab & Not Admin & Always Visible First) */}
+                {/* --- CARD FANTASMA (BOTÃO DE ADICIONAR) INTEGRADO AO GRID --- */}
+                {/* Aparece sempre como primeiro item na aba CUSTOM (se não for Admin) */}
                 {activeTab === 'custom' && !isAdmin && (
                     <button 
                         onClick={() => setShowModal(true)}
-                        className="group relative bg-emerald-900/10 rounded-2xl overflow-hidden border border-dashed border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-900/20 transition-all duration-300 flex flex-col items-center justify-center text-center p-6 min-h-[260px] cursor-pointer shadow-lg hover:shadow-emerald-900/20"
+                        className="group relative bg-emerald-900/5 rounded-2xl overflow-hidden border-2 border-dashed border-emerald-500/20 hover:border-emerald-500 hover:bg-emerald-900/10 transition-all duration-300 flex flex-col items-center justify-center text-center p-4 aspect-[3/4] cursor-pointer"
                     >
-                        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-emerald-400">
-                            <Plus size={32} />
-                        </div>
-                        <h3 className="text-emerald-100 font-bold text-lg mb-1">Adicionar Slot</h3>
-                        <p className="text-emerald-500/60 text-xs px-2">Cadastre um jogo exclusivo para sua lista.</p>
+                         <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+                             <Plus size={28} className="text-emerald-400" />
+                         </div>
+                         <h3 className="text-emerald-200 font-bold text-sm">Adicionar Novo</h3>
+                         <p className="text-emerald-500/50 text-[10px] mt-1">Clique para cadastrar</p>
                     </button>
                 )}
 
-                {/* GAME CARDS */}
+                {/* --- GAME CARDS --- */}
                 {isLoadingCustom ? (
                      <div className="col-span-full py-20 text-center">
                          <RefreshCw className="animate-spin text-emerald-500 mx-auto mb-4" size={32} />
@@ -350,16 +338,11 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                         <Gamepad2 size={48} className="mx-auto mb-4 text-gray-600" />
                         <p className="text-gray-500 font-bold">Nenhum jogo encontrado.</p>
                     </div>
-                ) : filteredGames.length === 0 && activeTab === 'custom' ? (
-                     <div className="col-span-full md:col-span-2 lg:col-span-3 py-10 flex items-center justify-center text-center opacity-70">
-                        <div>
-                             <p className="text-emerald-400 font-bold mb-2 flex items-center justify-center gap-2">
-                                 <Sparkles size={16} /> Comece sua Coleção
-                             </p>
-                             <p className="text-gray-500 text-sm max-w-xs mx-auto">
-                                 Sua lista está vazia. Clique no card ao lado para adicionar seu primeiro jogo.
-                             </p>
-                        </div>
+                ) : filteredGames.length === 0 && activeTab === 'custom' && !isAdmin ? (
+                    // ESTADO VAZIO (CUSTOM) - AINDA MOSTRA O GHOST CARD (ACIMA), ENTÃO AQUI É SÓ TEXTO DE APOIO SE NECESSÁRIO
+                    <div className="col-span-full md:col-span-2 flex items-center p-6 text-gray-500 opacity-60">
+                         <ArrowRight className="mr-3 text-emerald-500 animate-bounce-x" />
+                         <p className="text-sm">Comece adicionando seu primeiro jogo aqui ao lado.</p>
                     </div>
                 ) : (
                     filteredGames.map(game => (
@@ -373,13 +356,14 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 relative z-10"
                                     loading="lazy"
                                     onError={(e) => {
+                                        // CORREÇÃO LINHA-POR-LINHA: Fallback visual para evitar quebra de layout
                                         e.currentTarget.style.display = 'none';
                                         e.currentTarget.parentElement?.querySelector('.fallback-layer')?.classList.remove('hidden');
                                         e.currentTarget.parentElement?.classList.add('bg-gradient-to-br', 'from-gray-800', 'to-black');
                                     }}
                                 />
                                 
-                                {/* Fallback Layer */}
+                                {/* Fallback Layer (Só aparece se a imagem falhar) */}
                                 <div className="fallback-layer hidden absolute inset-0 flex-col items-center justify-center p-4 text-center z-0 animate-fade-in">
                                     <div className="p-3 bg-white/5 rounded-full mb-3 border border-white/10">
                                         <Gem size={24} className="text-pink-500/50" />

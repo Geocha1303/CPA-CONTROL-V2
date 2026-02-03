@@ -54,7 +54,7 @@ import Settings from './components/Settings';
 import Goals from './components/Goals';
 import Admin from './components/Admin';
 import Squad from './components/Squad';
-import SlotsRadar from './components/SlotsRadar'; // Novo Componente
+import SlotsRadar from './components/SlotsRadar'; 
 import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
@@ -572,8 +572,8 @@ function App() {
         .on('broadcast', { event: 'sys_alert' }, (payload) => {
             const data = payload.payload;
             
-            // Verifica se é para todos (ALL) ou específico para meu Device ID
-            if (data.target === 'ALL' || data.target === myDeviceId) {
+            // CORREÇÃO: Verifica se é para todos, ou para este DeviceID, OU para esta CHAVE (fallback do admin)
+            if (data.target === 'ALL' || data.target === myDeviceId || data.target === currentUserKey) {
                 setSystemAlert({
                     title: data.title,
                     message: data.message
@@ -588,7 +588,78 @@ function App() {
       return () => {
           supabase.removeChannel(channel);
       };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUserKey]);
+
+  // --- TOUR GUIDE LOGIC ---
+  useEffect(() => {
+      // Inicia o Tour apenas se o estado indicar que não foi dispensado
+      if (isAuthenticated && isLoaded && state.onboarding?.dismissed === false && !tourOpen) {
+          setTourOpen(true);
+      }
+  }, [isAuthenticated, isLoaded, state.onboarding]);
+
+  // Definição dos Passos do Tour (Usando os IDs criados nos componentes)
+  const tourSteps: TourStep[] = [
+      {
+          targetId: 'dashboard',
+          title: 'Visão Geral',
+          content: 'Bem-vindo ao CPA Gateway Pro. Este é seu painel de controle principal, onde você acompanha seu ROI, Lucro Líquido e performance em tempo real.',
+          view: 'dashboard',
+          position: 'right'
+      },
+      {
+          targetId: 'configuracoes',
+          title: 'Primeiro Passo: Identidade',
+          content: 'Antes de começar, vamos configurar seu nome de operador e preferências. Clique aqui para acessar as configurações.',
+          view: 'configuracoes',
+          action: () => setActiveView('configuracoes'),
+          position: 'right'
+      },
+      {
+          targetId: 'tour-settings-name',
+          title: 'Quem é você?',
+          content: 'Defina seu nome de operador aqui. Sua TAG única foi gerada automaticamente ao lado.',
+          view: 'configuracoes',
+          position: 'bottom'
+      },
+      {
+          targetId: 'tour-settings-bonus-toggle',
+          title: 'Modo de Trabalho',
+          content: 'Escolha se prefere digitar o valor exato (R$) ganho em cada operação ou se prefere que o sistema calcule baseado em ciclos (telas).',
+          view: 'configuracoes',
+          position: 'bottom'
+      },
+      {
+          targetId: 'planejamento',
+          title: 'Estratégia do Dia',
+          content: 'Agora vamos criar seu plano de ataque. Acesse a aba de Planejamento.',
+          view: 'planejamento',
+          action: () => setActiveView('planejamento'),
+          position: 'right'
+      },
+      {
+          targetId: 'tour-plan-generate',
+          title: 'Gerador Rítmico',
+          content: 'Configure quantos jogadores e agentes você tem, depois clique em GERAR. O sistema criará valores inteligentes baseados no perfil de cada jogador.',
+          view: 'planejamento',
+          position: 'top'
+      },
+      {
+          targetId: 'controle',
+          title: 'Execução',
+          content: 'Após gerar o plano, você enviará os lotes para cá. Aqui é o Controle Diário, onde você registra os resultados reais.',
+          view: 'controle',
+          action: () => setActiveView('controle'),
+          position: 'right'
+      },
+      {
+          targetId: 'tour-daily-table',
+          title: 'Livro Caixa',
+          content: 'Seus registros aparecerão aqui. Edite os valores conforme necessário. Se estiver em um Squad, você pode enviar o reporte direto para seu líder.',
+          view: 'controle',
+          position: 'top'
+      }
+  ];
 
   const notify = (message: string, type: 'success' | 'error' | 'info') => {
     const id = Date.now();
@@ -879,6 +950,25 @@ function App() {
             
             {/* RENDERIZA SLOTS PARA TODOS */}
             {activeView === 'slots' && <SlotsRadar notify={notify} isAdmin={isAdmin} currentUserKey={currentUserKey} userName={state.config.userName} />}
+
+            {/* --- RESTORED TOUR GUIDE COMPONENT --- */}
+            {!isDemoMode && !spectatingData && (
+                <TourGuide 
+                    steps={tourSteps}
+                    isOpen={tourOpen}
+                    currentStepIndex={tourStepIndex}
+                    setCurrentStepIndex={setTourStepIndex}
+                    onClose={() => setTourOpen(false)}
+                    onComplete={() => {
+                        setTourOpen(false);
+                        updateState({ onboarding: { ...state.onboarding, dismissed: true } });
+                    }}
+                    onSkip={() => {
+                        setTourOpen(false);
+                        updateState({ onboarding: { ...state.onboarding, dismissed: true } });
+                    }}
+                />
+            )}
 
         </main>
       </div>

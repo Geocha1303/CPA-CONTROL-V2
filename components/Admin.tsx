@@ -123,7 +123,8 @@ const Admin: React.FC<Props> = ({ notify }) => {
           return;
       }
       
-      const targetUser = onlineUsers.find(u => u.device_id === broadcastTarget);
+      // Correção: Busca segura usando device_id OU key como fallback
+      const targetUser = onlineUsers.find(u => (u.device_id || u.key) === broadcastTarget);
       let targetName = 'Destino Desconhecido';
       
       if (broadcastTarget === 'ALL') {
@@ -168,7 +169,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
               payload: { 
                   title: broadcastTitle, 
                   message: broadcastMsg,
-                  target: broadcastTarget,
+                  target: broadcastTarget, // O alvo pode ser ID ou Key
                   timestamp: Date.now()
               }
           });
@@ -423,15 +424,15 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         >
                                             <option value="ALL">📢 TODOS OS USUÁRIOS ({allConnections.length})</option>
                                             
-                                            {/* MAPEA TODOS OS USUÁRIOS SEM LÓGICA DE SESSÃO */}
+                                            {/* CORREÇÃO: Usa DeviceID OU Key como valor do option */}
                                             {onlineUsers
                                                 .filter(u => u.key !== 'ADMIN-PANEL')
                                                 .sort((a,b) => a.user.localeCompare(b.user)) // Ordena por nome
                                                 .map((u) => {
                                                     const type = u.key === 'TROPA-FREE' ? ' [Free]' : ' [Licenciado]';
-                                                    
+                                                    const val = u.device_id || u.key;
                                                     return (
-                                                        <option key={u.device_id} value={u.device_id}>
+                                                        <option key={val} value={val}>
                                                             👤 {u.user}{type}
                                                         </option>
                                                     );
@@ -566,7 +567,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                                 </div>
                                                 <div className="flex items-center gap-3 mt-1.5">
                                                     <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono bg-black/20 px-2 py-0.5 rounded border border-white/5 group-hover:border-white/10 transition-colors">
-                                                        <Cpu size={10} /> {user.device_id.substring(0, 16)}...
+                                                        <Cpu size={10} /> {(user.device_id || 'UNKNOWN').substring(0, 16)}...
                                                     </div>
                                                     <span className="text-[10px] text-gray-500 font-mono">
                                                         Login: {new Date(user.online_at).toLocaleTimeString()}
@@ -578,7 +579,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         <div className="flex items-center gap-4">
                                             <button 
                                                 onClick={() => {
-                                                    setBroadcastTarget(user.device_id); // Alvo agora é o DEVICE ID específico
+                                                    setBroadcastTarget(user.device_id || user.key); // Alvo agora é o DEVICE ID específico OU KEY
                                                     setBroadcastTitle('Mensagem Privada do Admin');
                                                     document.querySelector('input')?.focus();
                                                 }}
@@ -598,9 +599,8 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 </div>
             </div>
         ) : (
-            // --- ABA DE GESTÃO DE CHAVES ---
+            // --- ABA DE GESTÃO DE CHAVES (Mantida Original) ---
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-                {/* (Conteúdo da Gestão de Chaves mantido igual...) */}
                 {/* Coluna 1: GERADOR */}
                 <div className="space-y-8">
                     <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5 shadow-2xl shadow-amber-900/10">

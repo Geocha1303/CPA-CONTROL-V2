@@ -49,9 +49,12 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
       setIsLoadingGlobal(true);
       try {
+          // CORREÇÃO DE PERFORMANCE: Limita a 50 usuários recentes para não travar o navegador
           const { data, error } = await supabase
               .from('user_data')
-              .select('raw_json');
+              .select('raw_json')
+              .order('updated_at', { ascending: false })
+              .limit(50);
 
           if (error) throw error;
 
@@ -391,7 +394,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         </h3>
                         <p className="text-[10px] text-gray-500 mt-1 font-medium">
                             {analysisMode === 'global' 
-                                ? `Dados agregados de ${globalUserCount} operadores.` 
+                                ? `Amostragem: Últimos ${globalUserCount} operadores.` 
                                 : 'Análise dos seus melhores dias.'}
                         </p>
                      </div>
