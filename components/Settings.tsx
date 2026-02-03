@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { AppState } from '../types';
 import { mergeDeep } from '../utils'; // Importado de utils
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash } from 'lucide-react';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle } from 'lucide-react';
 
 interface Props {
   state: AppState;
@@ -30,6 +30,17 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
     updateState({
         config: { ...state.config, userName: val }
     });
+  };
+
+  const handleResetTutorial = () => {
+      if(confirm("Deseja ver o guia de introdução novamente?")) {
+          // Reseta a flag 'dismissed' para false e recarrega a página para acionar o Tour
+          updateState({
+              onboarding: { ...state.onboarding, dismissed: false }
+          });
+          notify("Tutorial reativado! O guia iniciará em instantes.", "success");
+          setTimeout(() => window.location.reload(), 1000);
+      }
   };
 
   // --- FUNÇÕES DE BACKUP ---
@@ -187,12 +198,16 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                     </div>
                 </div>
 
-                {/* Reset */}
-                <div className="glass-card rounded-2xl overflow-hidden border border-rose-500/20 bg-rose-500/5">
-                    <div className="p-6 border-b border-rose-500/10">
-                        <h3 className="font-bold text-rose-400 flex items-center gap-2"><AlertTriangle size={18} /> Zona de Perigo</h3>
+                {/* Reset & Tutorial Reset */}
+                <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
+                    <div className="p-6 border-b border-white/5 bg-white/5">
+                        <h3 className="font-bold text-gray-300 flex items-center gap-2"><AlertTriangle size={18} /> Sistema</h3>
                     </div>
-                    <div className="p-6">
+                    <div className="p-6 space-y-3">
+                        <button onClick={handleResetTutorial} className="w-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                            <PlayCircle size={18} /> Reiniciar Tutorial (Tour)
+                        </button>
+                        
                         <button onClick={handleClearData} className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                             <Trash2 size={18} /> Format Factory (Resetar Tudo)
                         </button>

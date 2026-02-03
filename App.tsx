@@ -84,7 +84,7 @@ const initialState: AppState = {
           sentLot: false,
           addedExpense: false
       },
-      dismissed: false
+      dismissed: false // SE ISTO FOR FALSE, O TUTORIAL ABRE
   }
 };
 
@@ -555,9 +555,23 @@ function App() {
 
   }, [state, isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode]);
 
+  // --- GARANTIA DE INTEGRIDADE (AUTO-FIX) ---
   useEffect(() => {
+    if (!isLoaded) return;
+
+    // 1. Gera Tag se não existir
     if(!state.config.userTag) {
         setState(prev => ({ ...prev, config: { ...prev.config, userTag: generateUserTag() } }));
+    }
+
+    // 2. REPARA O ESTADO DE ONBOARDING SE ELE SUMIU DO JSON ANTIGO
+    // Se o usuário tem um JSON antigo (pré-tutorial), 'onboarding' pode estar undefined.
+    // Isso garante que ele receba a configuração padrão (dismissed: false) e veja o tutorial.
+    if (!state.onboarding) {
+         setState(prev => ({ 
+             ...prev, 
+             onboarding: initialState.onboarding 
+         }));
     }
   }, [isLoaded]);
 
@@ -593,7 +607,8 @@ function App() {
   // --- TOUR GUIDE LOGIC ---
   useEffect(() => {
       // Inicia o Tour apenas se o estado indicar que não foi dispensado
-      if (isAuthenticated && isLoaded && state.onboarding?.dismissed === false && !tourOpen) {
+      // Adicionada verificação extra "&& state.onboarding" para evitar crash se o useEffect de reparo ainda não rodou
+      if (isAuthenticated && isLoaded && state.onboarding && state.onboarding.dismissed === false && !tourOpen) {
           setTourOpen(true);
       }
   }, [isAuthenticated, isLoaded, state.onboarding]);
@@ -726,7 +741,7 @@ function App() {
         onDemo={() => {
             setIsDemoMode(true);
             setState(generateDemoState(initialState.config));
-            setCurrentUserKey('DEMO-USER-KEY'); // Chave dummy para evitar crash
+            setCurrentUserKey('DEMO-USER-KEY'); // Garante que a chave seja dummy
             setActiveView('dashboard'); // Força a view inicial
             setIsAuthenticated(true);
             setIsLoaded(true);
