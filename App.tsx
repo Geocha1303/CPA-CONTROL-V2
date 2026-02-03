@@ -39,6 +39,7 @@ import {
   Globe,
   Loader2,
   Gamepad2, // Icone para Slots
+  ShoppingBag, // Icone Loja
   Link as LinkIcon // Renomeado para evitar conflitos
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
@@ -55,6 +56,7 @@ import Goals from './components/Goals';
 import Admin from './components/Admin';
 import Squad from './components/Squad';
 import SlotsRadar from './components/SlotsRadar'; 
+import Store from './components/Store'; // Import Store
 import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
@@ -847,6 +849,7 @@ function App() {
              <div className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
                  {[
                      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag }, // NEW STORE ITEM
                      { id: 'planejamento', label: 'Planejamento', icon: Target },
                      { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
                      { id: 'despesas', label: 'Despesas', icon: Receipt },
@@ -955,6 +958,7 @@ function App() {
 
             {/* Render Views */}
             {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
+            {activeView === 'store' && <Store />}
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
