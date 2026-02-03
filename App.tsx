@@ -95,57 +95,6 @@ const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master';
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
 
-// --- COMPONENTE MODAL DE IDENTIDADE OBRIGATÓRIA ---
-const IdentityModal = ({ onSave }: { onSave: (name: string) => void }) => {
-    const [name, setName] = useState('');
-
-    return (
-        <div className="fixed inset-0 z-[10000] bg-[#02000f]/95 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-[#0a0a0a] border border-primary/50 rounded-2xl w-full max-w-md p-8 shadow-[0_0_50px_rgba(112,0,255,0.3)] relative overflow-hidden text-center">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent"></div>
-                
-                <div className="mb-6 flex justify-center">
-                    <div className="p-4 bg-primary/10 rounded-full border border-primary/20 shadow-[0_0_20px_rgba(112,0,255,0.15)]">
-                        <Fingerprint size={40} className="text-primary" />
-                    </div>
-                </div>
-
-                <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Quem está no comando?</h2>
-                <p className="text-gray-400 text-sm mb-8 leading-relaxed">
-                    Para iniciar as operações e registrar métricas no Squad, precisamos saber como te chamar.
-                </p>
-
-                <div className="space-y-4">
-                    <div className="relative group text-left">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Nome de Operador</label>
-                        <input 
-                            type="text" 
-                            autoFocus
-                            placeholder="Ex: Pedro, Ana, Fox..."
-                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-lg text-white font-bold focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-all placeholder:text-gray-700 text-center"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && name.trim().length > 2 && onSave(name)}
-                        />
-                    </div>
-
-                    <button 
-                        onClick={() => onSave(name)}
-                        disabled={name.trim().length < 2}
-                        className={`w-full py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg
-                            ${name.trim().length < 2 
-                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-                                : 'bg-primary hover:bg-primary-glow text-white shadow-primary/20 transform hover:-translate-y-1 active:scale-95'}
-                        `}
-                    >
-                        Confirmar Identidade <ArrowRight size={16} />
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- LOGIN COMPONENT (PROFESSIONAL DESIGN) ---
 const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: string, isAdmin: boolean, ownerName: string) => void, onDemo: () => void, autoLoginCheck: boolean }) => {
     const [inputKey, setInputKey] = useState('');
@@ -752,9 +701,6 @@ function App() {
   // Chave paga = não é TROPA-FREE e não começa com FREE-
   const isVip = isAdmin || (isAuthenticated && currentUserKey !== 'TROPA-FREE' && !currentUserKey.startsWith('FREE-'));
 
-  // --- CHECK FOR DEFAULT NAME (OPERADOR) ---
-  const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && (!state.config.userName || state.config.userName.toUpperCase() === 'OPERADOR');
-
   if (!isAuthenticated) {
     return <LoginScreen 
         onLogin={async (key, admin, ownerName) => {
@@ -785,12 +731,9 @@ function App() {
                     finalState = mergeDeep(finalState, restoredState);
                 }
                 
-                // IMPORTANTE: NÃO forçar ownerName aqui se já existir um nome salvo diferente de OPERADOR.
-                // Apenas se for nulo ou OPERADOR, usamos o ownerName da chave.
+                // Garante que o nome do usuário seja preservado
                 if (!finalState.config.userName || finalState.config.userName === 'OPERADOR') {
-                    if (ownerName && ownerName !== 'Operador') {
-                        finalState.config.userName = ownerName;
-                    }
+                    finalState.config.userName = ownerName;
                 }
                 
                 return finalState;
@@ -815,19 +758,6 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden relative font-sans text-gray-200">
       
-      {/* IDENTITY MODAL (BLOCKER) */}
-      {showIdentityCheck && (
-          <IdentityModal onSave={(name) => {
-              updateState({ config: { ...state.config, userName: name } });
-              notify("Identidade definida com sucesso!", "success");
-              // Força o início do tutorial após definir o nome
-              if (state.onboarding) {
-                  updateState({ onboarding: { ...state.onboarding, dismissed: false } });
-                  setTourOpen(true);
-              }
-          }} />
-      )}
-
       {/* Background Grids */}
       <div className="fixed inset-0 pointer-events-none z-0">
           <div className="absolute inset-0 bg-mesh opacity-30"></div>
