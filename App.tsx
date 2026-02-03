@@ -267,6 +267,7 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
                                 {/* BOTÃO DEMONSTRAÇÃO RESTAURADO E DESTACADO */}
                                 <button 
                                     onClick={onDemo}
+                                    type="button"
                                     className="w-full group bg-gradient-to-r from-white/5 to-white/10 hover:from-white/10 hover:to-white/20 text-gray-300 hover:text-white font-bold py-3 rounded-xl transition-all border border-white/5 hover:border-white/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wide"
                                 >
                                     <Eye size={16} className="text-amber-400 group-hover:scale-110 transition-transform" /> MODO DEMONSTRAÇÃO
@@ -517,7 +518,8 @@ function App() {
 
   // --- CLOUD SYNC & AUTO-SAVE (COM DEBOUNCE OTIMIZADO) ---
   useEffect(() => {
-    if (!isAuthenticated || !isLoaded || isDemoMode) return;
+    // PREVENÇÃO CRÍTICA: NUNCA SALVAR SE ESTIVER EM MODO DEMO OU SE A CHAVE FOR DUMMY
+    if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
     
     // Save to LocalStorage immediately on change
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -620,7 +622,6 @@ function App() {
             
             // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS ---
             // 1. Tenta pegar dados LOCAIS (Chrome) primeiro
-            // Isso garante que o usuário free recupere os dados salvos no navegador
             const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
             let restoredState = localString ? JSON.parse(localString) : null;
 
@@ -631,14 +632,15 @@ function App() {
                 // Base: Estado Inicial
                 let finalState = initialState;
 
-                // Merge 1: Dados Locais (prioridade inicial)
-                if (restoredState) {
-                    finalState = mergeDeep(finalState, restoredState);
-                }
-
-                // Merge 2: Dados da Nuvem (se existirem e forem válidos, sobrepõem/complementam)
+                // Merge 1: Nuvem (Base de backup)
                 if (cloudData) {
                     finalState = mergeDeep(finalState, cloudData);
+                }
+
+                // Merge 2: Local (PRIORIDADE TOTAL PARA DADOS RECENTES NO NAVEGADOR)
+                // Isso garante que o que estava na tela antes do logout seja restaurado exatamente
+                if (restoredState) {
+                    finalState = mergeDeep(finalState, restoredState);
                 }
                 
                 // Garante que o nome do usuário seja preservado
@@ -653,6 +655,8 @@ function App() {
         onDemo={() => {
             setIsDemoMode(true);
             setState(generateDemoState(initialState.config));
+            setCurrentUserKey('DEMO-USER-KEY'); // Chave dummy para evitar crash
+            setActiveView('dashboard'); // Força a view inicial
             setIsAuthenticated(true);
             setIsLoaded(true);
             notify('Modo Demonstração Ativado', 'info');
@@ -786,13 +790,14 @@ function App() {
 
              {/* Footer Info */}
              <div className="p-4 border-t border-white/5 hidden lg:block">
-                 {/* DEMO BUTTON ADDED HERE */}
-                 {!isDemoMode && (
+                 {/* DEMO BUTTON / SAIR DEMO */}
+                 {!isDemoMode ? (
                      <button 
                         onClick={() => {
                             if(confirm("Entrar no Modo Demonstração? (Seus dados atuais serão mantidos a salvo, mas a visualização mudará)")) {
                                 setIsDemoMode(true);
                                 setState(generateDemoState(initialState.config));
+                                setCurrentUserKey('DEMO-USER-KEY'); // Garante que a chave seja dummy
                                 setActiveView('dashboard');
                             }
                         }}
@@ -800,6 +805,17 @@ function App() {
                      >
                          <Eye size={14} className="group-hover:text-amber-400 transition-colors" />
                          Modo Demonstração
+                     </button>
+                 ) : (
+                     <button 
+                        onClick={() => {
+                            setIsDemoMode(false);
+                            window.location.reload(); 
+                        }}
+                        className="w-full mb-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-red-400 hover:text-white transition-all group uppercase tracking-wide"
+                     >
+                         <LogOut size={14} />
+                         Sair do Demo
                      </button>
                  )}
 

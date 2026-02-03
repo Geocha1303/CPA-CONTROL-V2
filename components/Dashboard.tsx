@@ -64,24 +64,19 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                   if (!userData || !userData.dailyRecords) return;
                   
                   userCount++;
-                  // Opcional: Validar se o usuário é "ativo" antes de somar
-
+                  
                   Object.entries(userData.dailyRecords).forEach(([date, record]) => {
                       if (!aggregated[date]) {
                           aggregated[date] = { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
                       }
                       
-                      // Clonar contas para não mutar e normalizar para cálculo
-                      // Assumimos que para inteligência global, queremos saber o volume bruto/lucro bruto
-                      // Independente se o usuário usa modo manual ou auto
                       const bonusVal = userData.config?.valorBonus || 20;
                       const manualMode = userData.config?.manualBonusMode;
 
                       const accountsClone = record.accounts.map(acc => ({
                           ...acc,
-                          // Normaliza para valor monetário se necessário para agregação simples
                           ciclos: manualMode ? acc.ciclos : (acc.ciclos * bonusVal),
-                          id: Math.random() // Random ID para evitar colisão
+                          id: Math.random() 
                       }));
 
                       aggregated[date].accounts.push(...accountsClone);
@@ -94,7 +89,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
           }
       } catch (err) {
           console.error("Erro ao buscar dados globais:", err);
-          alert("Não foi possível acessar a inteligência global no momento (Verifique conexão).");
+          alert("Não foi possível acessar a inteligência global no momento.");
       } finally {
           setIsLoadingGlobal(false);
       }
@@ -106,8 +101,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     const pastAndPresentDates = allDates.filter(d => d <= hojeISO);
 
     let totalDespGeral = 0;
-    
-    // ADJUSTED LOGIC: Bonus Multiplier
     const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
 
     let totalDepositos = 0;
@@ -142,7 +135,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
     const cleanChartData = chartData.filter(item => item.hasActivity || item.fullDate === hojeISO);
 
-    // Totais Gerais
     if (Array.isArray(state.generalExpenses)) {
         state.generalExpenses.forEach(e => {
             const val = parseFloat(String(e.valor));
@@ -162,7 +154,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     const lucroLiquido = totalLucro - totalDespGeral;
     const totalInvestimentoReal = totalInv + totalDespGeral;
     
-    // PIE CHART
     const pieData = [
         { name: 'Depósitos', value: totalDepositos, color: '#6366f1' }, // Indigo
         { name: 'Redepósitos', value: totalRedepositos, color: '#a855f7' }, // Purple
@@ -181,7 +172,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         ? (lucroLiquido / totalRet) * 100 
         : 0;
 
-    // RECENT ACTIVITY
     const allAccounts: any[] = [];
     Object.entries(state.dailyRecords).forEach(([date, record]) => {
         const dayRecord = record as DayRecord;
@@ -212,14 +202,10 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
   // --- HEATMAP LOGIC ---
   const intelligenceData = useMemo(() => {
-      // 0 = Dom, 6 = Sab
       const dayStats: Record<number, { profit: number; count: number }> = { 0: {profit:0, count:0}, 1: {profit:0, count:0}, 2: {profit:0, count:0}, 3: {profit:0, count:0}, 4: {profit:0, count:0}, 5: {profit:0, count:0}, 6: {profit:0, count:0} };
       const dayNames = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
       
       const activeRecords = analysisMode === 'global' ? globalAggregatedData : state.dailyRecords;
-      
-      // No global, já normalizamos para valor manual (multiplier = 1) no fetch
-      // No local, respeitamos o config do usuário
       const bonusMultiplier = analysisMode === 'global' 
         ? 1 
         : (state.config.manualBonusMode ? 1 : (state.config.valorBonus || 20));
@@ -227,7 +213,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
       Object.keys(activeRecords).forEach(date => {
           const m = calculateDayMetrics(activeRecords[date], bonusMultiplier);
           const dayIndex = new Date(date).getDay();
-          // Considera apenas dias positivos para o "Melhor Dia"
           if(m.lucro > 0) {
               dayStats[dayIndex].profit += m.lucro;
               dayStats[dayIndex].count += 1;
@@ -238,7 +223,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
       const heatmapData = Object.keys(dayStats).map(key => {
           const k = parseInt(key);
           const total = dayStats[k].profit;
-          const avg = dayStats[k].count > 0 ? total / dayStats[k].count : 0; // Média por dia
+          const avg = dayStats[k].count > 0 ? total / dayStats[k].count : 0;
           if (avg > maxProfit) maxProfit = avg;
           return { day: dayNames[k], profit: avg, index: k, rawTotal: total };
       });
@@ -248,7 +233,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
           if(d.profit > bestDay.profit && d.profit > 0) bestDay = { name: d.day, profit: d.profit };
       });
 
-      // Simple Calendar Advice
       const today = new Date();
       const currentDay = today.getDate();
       let alertMsg = "";
@@ -302,59 +286,113 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   return (
     <div className="space-y-6 animate-fade-in pb-10">
         
-        {/* --- HEADER COM SAUDAÇÃO (NOVO) --- */}
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-bold bg-white/10 text-white px-2 py-0.5 rounded border border-white/5 uppercase tracking-wider flex items-center gap-1">
-                    <ShieldCheck size={10} className="text-emerald-400" /> Sistema Operacional
+        {/* --- HEADER COM SAUDAÇÃO (ESTÉTICA APRIMORADA) --- */}
+        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2 bg-gradient-to-r from-[#0a0516] to-[#02000f] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden">
+          
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none"></div>
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+                <span className="text-[9px] font-bold bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/5 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm">
+                    <ShieldCheck size={10} className="text-emerald-400" /> Operacional Ativo
                 </span>
-                {privacyMode && <span className="bg-amber-500/20 text-amber-500 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 uppercase tracking-widest flex items-center gap-1"><Lock size={10}/> Oculto</span>}
+                {privacyMode && <span className="bg-amber-500/10 text-amber-500 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm"><Lock size={10}/> Modo Privado</span>}
             </div>
-            <h1 className="text-3xl font-black text-white tracking-tight">
+            <h1 className="text-4xl font-black text-white tracking-tighter leading-none mb-1">
                {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">{state.config.userName || 'Operador'}</span>
             </h1>
-            <p className="text-gray-400 text-xs font-medium mt-1 flex items-center gap-2">
-                <Clock size={12} className="text-gray-500" />
+            <p className="text-gray-500 text-xs font-medium flex items-center gap-2 mt-1">
+                <Clock size={12} className="text-gray-600" />
                 {currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}
-                <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-                {currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit', second: '2-digit'})}
+                <span className="w-1 h-1 rounded-full bg-gray-700"></span>
+                {currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
             </p>
           </div>
           
-          <div className="flex gap-3">
-               <div className="px-4 py-2 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 rounded-xl text-right backdrop-blur-sm group hover:border-emerald-500/20 transition-all">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-emerald-400 transition-colors">
+          <div className="flex gap-3 relative z-10">
+               <div className="px-5 py-3 bg-white/[0.03] border border-white/5 rounded-xl text-right backdrop-blur-md group hover:bg-white/[0.05] transition-all">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-emerald-400 transition-colors">
                        ROI <InfoTooltip text="Retorno sobre Investimento" />
                    </p>
-                   <p className={`text-lg font-black font-mono leading-none ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                   <p className={`text-xl font-black font-mono leading-none ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                        {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
                    </p>
                </div>
-               <div className="px-4 py-2 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 rounded-xl text-right backdrop-blur-sm group hover:border-blue-500/20 transition-all">
-                   <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-blue-400 transition-colors">
+               <div className="px-5 py-3 bg-white/[0.03] border border-white/5 rounded-xl text-right backdrop-blur-md group hover:bg-white/[0.05] transition-all">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-blue-400 transition-colors">
                        Margem <InfoTooltip text="Porcentagem de Lucro Real" />
                    </p>
-                   <p className="text-lg font-black text-blue-400 font-mono leading-none">{metrics.margin.toFixed(0)}%</p>
+                   <p className="text-xl font-black text-blue-400 font-mono leading-none">{metrics.margin.toFixed(0)}%</p>
                </div>
           </div>
+        </div>
+
+        {/* --- KPI CARDS (VISUAL GLASS CYBER) --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* CARD 1: LUCRO */}
+            <div className="p-6 rounded-2xl relative overflow-hidden group border border-emerald-500/10 hover:border-emerald-500/30 transition-all bg-[#0a0610] shadow-lg">
+                <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/5 rounded-full blur-[50px] group-hover:bg-emerald-500/10 transition-all"></div>
+                <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                            <Wallet size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-emerald-200 transition-colors">Lucro Líquido</span>
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                        {formatVal(metrics.lucroLiquido)}
+                    </div>
+                </div>
+            </div>
+
+            {/* CARD 2: FATURAMENTO */}
+            <div className="p-6 rounded-2xl relative overflow-hidden group border border-indigo-500/10 hover:border-indigo-500/30 transition-all bg-[#0a0610] shadow-lg">
+                 <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/5 rounded-full blur-[50px] group-hover:bg-indigo-500/10 transition-all"></div>
+                <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                            <TrendingUp size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-indigo-200 transition-colors">Volume Total</span>
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                        {formatVal(metrics.totalRet)}
+                    </div>
+                </div>
+            </div>
+
+            {/* CARD 3: CUSTOS */}
+            <div className="p-6 rounded-2xl relative overflow-hidden group border border-rose-500/10 hover:border-rose-500/30 transition-all bg-[#0a0610] shadow-lg">
+                 <div className="absolute -right-10 -top-10 w-40 h-40 bg-rose-500/5 rounded-full blur-[50px] group-hover:bg-rose-500/10 transition-all"></div>
+                <div className="relative z-10">
+                     <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-rose-500/10 text-rose-400 rounded-xl border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                            <Filter size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-rose-200 transition-colors">Investimento</span>
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                        {formatVal(metrics.totalInv)}
+                    </div>
+                </div>
+            </div>
         </div>
 
         {/* --- GLOBAL INTELLIGENCE WIDGET --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
             {/* WIDGET 1: HEATMAP */}
-            <div className="gateway-card p-5 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0614] via-[#0d081a] to-transparent relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-                 <div className="flex justify-between items-start mb-4">
+            <div className="p-5 rounded-2xl border border-white/10 bg-[#08050e] relative overflow-hidden group hover:border-indigo-500/30 transition-all shadow-xl">
+                 <div className="flex justify-between items-start mb-6">
                      <div>
                         <h3 className="text-white font-bold text-sm flex items-center gap-2">
                             <Flame size={16} className={analysisMode === 'global' ? 'text-blue-500' : 'text-orange-500'} /> 
-                            {analysisMode === 'global' ? 'Inteligência Global' : 'Performance Pessoal'}
+                            {analysisMode === 'global' ? 'Inteligência Global' : 'Performance Semanal'}
                         </h3>
-                        <p className="text-[10px] text-gray-500 mt-0.5">
+                        <p className="text-[10px] text-gray-500 mt-1 font-medium">
                             {analysisMode === 'global' 
-                                ? `Dados de ${globalUserCount} operadores.` 
-                                : 'Seus melhores dias da semana.'}
+                                ? `Dados agregados de ${globalUserCount} operadores.` 
+                                : 'Análise dos seus melhores dias.'}
                         </p>
                      </div>
                      
@@ -372,7 +410,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                  </div>
                  
                  {/* Visualização de Barras (Heatmap) */}
-                 <div className="flex items-end justify-between h-24 gap-1 pt-2">
+                 <div className="flex items-end justify-between h-28 gap-2 pt-2">
                      {intelligenceData.heatmapData.map((d) => {
                          const intensity = intelligenceData.maxProfit > 0 ? (d.profit / intelligenceData.maxProfit) : 0;
                          const isBest = d.day === intelligenceData.bestDay.name;
@@ -380,24 +418,23 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                          return (
                              <div key={d.day} className="flex-1 flex flex-col items-center gap-2 group/bar relative">
                                  {isBest && (
-                                     <div className="absolute -top-6 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 animate-bounce">
+                                     <div className="absolute -top-7 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 animate-bounce shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                                          TOP
                                      </div>
                                  )}
-                                 <div className="w-full bg-white/5 rounded-t-sm relative h-full flex items-end overflow-hidden">
+                                 <div className="w-full bg-white/5 rounded-md relative h-full flex items-end overflow-hidden border border-white/5">
                                      <div 
                                         className={`w-full transition-all duration-1000 ${
                                             analysisMode === 'global' 
-                                                ? (isBest ? 'bg-blue-400' : 'bg-blue-600/60') 
-                                                : (isBest ? 'bg-emerald-400' : 'bg-emerald-600/60')
+                                                ? (isBest ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' : 'bg-blue-500/40') 
+                                                : (isBest ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' : 'bg-emerald-500/40')
                                         }`}
                                         style={{ height: `${Math.max(5, intensity * 100)}%` }}
                                      ></div>
                                  </div>
                                  <span className={`text-[10px] font-bold uppercase ${isBest ? 'text-white' : 'text-gray-600'}`}>{d.day}</span>
                                  
-                                 {/* Tooltip Hover */}
-                                 <div className="absolute bottom-full mb-1 opacity-0 group-hover/bar:opacity-100 bg-black/90 text-white text-[9px] px-2 py-1 rounded pointer-events-none whitespace-nowrap z-20 border border-white/10">
+                                 <div className="absolute bottom-full mb-2 opacity-0 group-hover/bar:opacity-100 bg-black/90 text-white text-[10px] px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap z-20 border border-white/10 shadow-xl transition-opacity">
                                      Média: {privacyMode && analysisMode !== 'global' ? '****' : formatVal(d.profit)}
                                  </div>
                              </div>
@@ -407,29 +444,29 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
 
             {/* WIDGET 2: RADAR & ALERTS */}
-            <div className="gateway-card p-5 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a0614] to-transparent relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Calendar size={100} /></div>
+            <div className="p-5 rounded-2xl border border-white/10 bg-[#08050e] relative overflow-hidden shadow-xl">
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transform rotate-12"><Calendar size={120} /></div>
                 
                 <div className="relative z-10 h-full flex flex-col justify-between">
                      <div>
                         <h3 className="text-white font-bold text-sm flex items-center gap-2">
                             <Sparkles size={16} className="text-purple-400" /> Radar de Oportunidades
                         </h3>
-                        <p className="text-[10px] text-gray-500 mt-0.5">Sugestões baseadas no calendário.</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Sugestões baseadas no calendário comercial.</p>
                      </div>
 
                      <div className="space-y-3 mt-4">
-                         <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-start gap-3 hover:bg-white/10 transition-colors cursor-default">
-                             <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400 shrink-0">
-                                 <Calendar size={18} />
+                         <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4 flex items-start gap-4 hover:bg-white/[0.05] transition-colors cursor-default backdrop-blur-sm">
+                             <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 shrink-0 border border-purple-500/20">
+                                 <Calendar size={20} />
                              </div>
                              <div>
-                                 <p className="text-white font-bold text-xs leading-tight">{intelligenceData.alertMsg}</p>
-                                 <p className="text-[10px] text-gray-500 mt-1">Dia {new Date().getDate()} do mês.</p>
+                                 <p className="text-white font-bold text-xs leading-tight mb-1">{intelligenceData.alertMsg}</p>
+                                 <p className="text-[10px] text-gray-500">Dia {new Date().getDate()} do mês vigente.</p>
                              </div>
                          </div>
                          
-                         <div className="flex items-center gap-2 text-[10px] text-gray-400 bg-black/20 p-2 rounded-lg border border-white/5">
+                         <div className="flex items-center gap-2 text-[10px] text-gray-400 bg-black/30 p-2.5 rounded-xl border border-white/5">
                              <Users size={12} className="text-gray-500"/>
                              <span>Melhor dia da Comunidade: <span className="text-blue-400 font-bold">{intelligenceData.bestDay.name}</span></span>
                          </div>
@@ -438,101 +475,48 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
         </div>
 
-        {/* --- KPI CARDS (VISUAL MELHORADO) --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* CARD 1: LUCRO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-emerald-500/20 hover:border-emerald-500/40 transition-all bg-gradient-to-br from-emerald-950/20 via-[#02000f] to-[#02000f]">
-                <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl group-hover:bg-emerald-500/30 transition-all"></div>
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-transparent opacity-50"></div>
-                <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20">
-                            <Wallet size={18} />
-                        </div>
-                        <span className="text-xs font-bold text-emerald-100/70 uppercase tracking-widest">Lucro Líquido</span>
-                    </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-lg">
-                        {formatVal(metrics.lucroLiquido)}
-                    </div>
-                </div>
-            </div>
-
-            {/* CARD 2: FATURAMENTO */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-indigo-500/20 hover:border-indigo-500/40 transition-all bg-gradient-to-br from-indigo-950/20 via-[#02000f] to-[#02000f]">
-                 <div className="absolute -right-6 -top-6 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl group-hover:bg-indigo-500/30 transition-all"></div>
-                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-transparent opacity-50"></div>
-                <div className="relative z-10">
-                     <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/20">
-                            <TrendingUp size={18} />
-                        </div>
-                        <span className="text-xs font-bold text-indigo-100/70 uppercase tracking-widest">Volume Total</span>
-                    </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-lg">
-                        {formatVal(metrics.totalRet)}
-                    </div>
-                </div>
-            </div>
-
-            {/* CARD 3: CUSTOS */}
-            <div className="gateway-card p-6 rounded-2xl relative overflow-hidden group border-rose-500/20 hover:border-rose-500/40 transition-all bg-gradient-to-br from-rose-950/20 via-[#02000f] to-[#02000f]">
-                 <div className="absolute -right-6 -top-6 w-24 h-24 bg-rose-500/20 rounded-full blur-2xl group-hover:bg-rose-500/30 transition-all"></div>
-                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-transparent opacity-50"></div>
-                <div className="relative z-10">
-                     <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/20">
-                            <Filter size={18} />
-                        </div>
-                        <span className="text-xs font-bold text-rose-100/70 uppercase tracking-widest">Investimento</span>
-                    </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-lg">
-                        {formatVal(metrics.totalInv)}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {/* --- MAIN CHART (COM AREA GLOW) --- */}
+        {/* --- MAIN CHART --- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
-            <div className="xl:col-span-2 gateway-card rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[400px] border border-white/5 bg-[#03000a]">
-                <div className="flex items-center justify-between mb-8">
+            <div className="xl:col-span-2 rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[400px] border border-white/10 bg-[#08050e] shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
+                <div className="flex items-center justify-between mb-8 relative z-10">
                      <div>
                         <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                             <BarChart3 size={18} className="text-gray-400"/> Evolução Financeira
+                             <BarChart3 size={18} className="text-indigo-400"/> Evolução Financeira
                         </h3>
                         <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mt-1">
-                            {metrics.hasData ? 'Últimos dias de atividade' : 'Sem dados registrados'}
+                            {metrics.hasData ? 'Análise de tendência' : 'Aguardando dados'}
                         </p>
                      </div>
                 </div>
                 
-                <div className="flex-1 w-full h-full min-h-[300px]">
+                <div className="flex-1 w-full h-full min-h-[300px] relative z-10">
                     {!metrics.hasData ? (
                         <div className="w-full h-full flex flex-col items-center justify-center text-center opacity-40">
                             <Activity size={48} className="text-indigo-400 mb-4" />
                             <h3 className="text-lg font-bold text-white">Gráfico Vazio</h3>
-                            <p className="text-sm text-gray-500">Registre operações para ver a mágica.</p>
+                            <p className="text-sm text-gray-500">Registre operações para visualizar dados.</p>
                         </div>
                     ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={metrics.chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.6}/>
-                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1}/>
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.8}/>
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2}/>
                                     </linearGradient>
                                     <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.2}/>
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.3}/>
                                         <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                                <XAxis dataKey="dateStr" stroke="none" tick={{fill: '#6b7280', fontSize: 10}} dy={10} minTickGap={20} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                <XAxis dataKey="dateStr" stroke="none" tick={{fill: '#6b7280', fontSize: 10, fontWeight: 600}} dy={10} minTickGap={20} />
                                 <YAxis stroke="none" tick={{fill: '#6b7280', fontSize: 10}} hide={privacyMode} />
                                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                <Bar dataKey="faturamento" name="Faturamento" fill="url(#barGradient)" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="faturamento" name="Faturamento" fill="url(#barGradient)" radius={[4, 4, 0, 0]} barSize={24} />
                                 <Area type="monotone" dataKey="lucro" stroke="none" fill="url(#areaGradient)" />
-                                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5, fill: '#10b981' }} />
+                                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
                             </ComposedChart>
                         </ResponsiveContainer>
                     )}
@@ -541,50 +525,50 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
             {/* DONUT & ACTIVITY */}
             <div className="flex flex-col gap-6 h-full">
-                <div className="gateway-card rounded-2xl p-6 border border-white/5 flex flex-col flex-1 min-h-[250px]">
-                    <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-2">
-                         <PieIcon size={14} className="text-gray-400" /> Distribuição de Capital
+                <div className="rounded-2xl p-6 border border-white/10 bg-[#08050e] flex flex-col flex-1 min-h-[250px] shadow-xl relative overflow-hidden">
+                    <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-2 relative z-10">
+                         <PieIcon size={14} className="text-indigo-400" /> Distribuição de Capital
                     </h3>
-                    <div className="flex-1 relative">
+                    <div className="flex-1 relative z-10">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={metrics.pieData}
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={45} 
-                                    outerRadius={65} 
+                                    innerRadius={50} 
+                                    outerRadius={70} 
                                     paddingAngle={5}
                                     dataKey="value"
                                     stroke="none"
                                 >
                                     {metrics.pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
                                     ))}
                                 </Pie>
-                                <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '10px'}}/>
+                                <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '10px', opacity: 0.7}}/>
                                 <Tooltip />
                             </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none pb-6">
-                            <span className="text-xs font-bold text-gray-500">Total</span>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="gateway-card rounded-2xl p-5 border border-white/5 flex-1 overflow-hidden">
+                <div className="rounded-2xl p-5 border border-white/10 bg-[#08050e] flex-1 overflow-hidden shadow-xl">
                      <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-                         <History size={14} className="text-gray-400" /> Recentes
+                         <History size={14} className="text-gray-400" /> Atividade Recente
                     </h3>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {metrics.recentActivity.length === 0 ? (
-                            <p className="text-[10px] text-gray-500 text-center py-4">Sem histórico recente.</p>
+                            <p className="text-[10px] text-gray-600 text-center py-8">Sem histórico recente.</p>
                         ) : (
                             metrics.recentActivity.map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 last:border-0 pb-2 last:pb-0 hover:bg-white/5 p-2 rounded transition-colors">
+                                <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 last:border-0 pb-2 last:pb-0 hover:bg-white/[0.03] p-2 rounded-lg transition-colors cursor-default">
                                     <div>
                                         <div className="text-gray-300 font-bold">{new Date(item.date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</div>
-                                        <div className="text-[9px] text-gray-600">ID #{item.id.toString().slice(-4)}</div>
+                                        <div className="text-[9px] text-gray-600 font-mono">ID #{item.id.toString().slice(-4)}</div>
                                     </div>
                                     <div className={`font-mono font-bold ${item.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                         {formatVal(item.profit)}
