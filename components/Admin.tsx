@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone } from 'lucide-react';
+import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -24,6 +24,13 @@ interface OnlineUser {
     device_id: string;
 }
 
+// Novo tipo para analytics
+interface StoreAnalyticsItem {
+    product_name: string;
+    count: number;
+    last_click: string;
+}
+
 const Admin: React.FC<Props> = ({ notify }) => {
   // States do Gerador
   const [generatedKey, setGeneratedKey] = useState('');
@@ -38,7 +45,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
 
   // States do Monitoramento (Realtime)
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  const [activeTab, setActiveTab] = useState<'monitor' | 'keys'>('keys');
+  const [activeTab, setActiveTab] = useState<'monitor' | 'keys' | 'store'>('keys'); // Adicionado 'store'
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'ERROR'>('CONNECTING');
   const channelRef = useRef<any>(null);
 
@@ -48,6 +55,10 @@ const Admin: React.FC<Props> = ({ notify }) => {
   const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou o DEVICE_ID do usuário
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   
+  // State Analytics
+  const [storeAnalytics, setStoreAnalytics] = useState<StoreAnalyticsItem[]>([]);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
@@ -60,6 +71,13 @@ const Admin: React.FC<Props> = ({ notify }) => {
           // O App.tsx precisa dele ativo para ESCUTAR. Se removermos aqui, matamos a escuta do próprio admin se ele estiver testando na mesma aba.
       };
   }, []);
+
+  // Busca analytics quando a aba muda
+  useEffect(() => {
+      if (activeTab === 'store') {
+          fetchStoreAnalytics();
+      }
+  }, [activeTab]);
 
   const connectRealtime = () => {
       if (channelRef.current) {
@@ -114,6 +132,45 @@ const Admin: React.FC<Props> = ({ notify }) => {
         
       // Keep reference to clean up both
       channelRef.current = globalPresenceChannel;
+  };
+
+  // --- ANALYTICS ---
+  const fetchStoreAnalytics = async () => {
+      setIsLoadingAnalytics(true);
+      try {
+          const { data, error } = await supabase
+              .from('store_tracking')
+              .select('product_name, clicked_at');
+
+          if (error) throw error;
+
+          if (data) {
+              const grouped: Record<string, {count: number, last: string}> = {};
+              
+              data.forEach((row: any) => {
+                  if (!grouped[row.product_name]) {
+                      grouped[row.product_name] = { count: 0, last: row.clicked_at };
+                  }
+                  grouped[row.product_name].count++;
+                  if (new Date(row.clicked_at) > new Date(grouped[row.product_name].last)) {
+                      grouped[row.product_name].last = row.clicked_at;
+                  }
+              });
+
+              const result: StoreAnalyticsItem[] = Object.keys(grouped).map(key => ({
+                  product_name: key,
+                  count: grouped[key].count,
+                  last_click: grouped[key].last
+              })).sort((a, b) => b.count - a.count);
+
+              setStoreAnalytics(result);
+          }
+      } catch (err: any) {
+          console.error("Erro analytics:", err);
+          // Se tabela não existir, falha silenciosa ou aviso
+      } finally {
+          setIsLoadingAnalytics(false);
+      }
   };
 
   // --- FUNÇÕES DE BROADCAST ---
@@ -393,6 +450,13 @@ const Admin: React.FC<Props> = ({ notify }) => {
                         <span className="bg-black/30 px-1.5 py-0.5 rounded text-[10px] ml-1 text-emerald-300">{allConnections.length}</span>
                     )}
                 </button>
+                {/* NOVA ABA STORE ANALYTICS */}
+                <button 
+                    onClick={() => setActiveTab('store')}
+                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'store' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                >
+                    <ShoppingBag size={16} /> Analytics Loja
+                </button>
             </div>
         </div>
 
@@ -596,6 +660,57 @@ const Admin: React.FC<Props> = ({ notify }) => {
                             )}
                         </div>
                     )}
+                </div>
+            </div>
+        ) : activeTab === 'store' ? (
+            // --- ABA DE ANALYTICS LOJA ---
+            <div className="animate-fade-in space-y-6">
+                <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
+                    <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                        <div>
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <ShoppingBag size={18} className="text-indigo-400" /> Ranking de Interesse (Cliques)
+                            </h3>
+                            <p className="text-gray-400 text-xs mt-1">Produtos mais acessados pelos usuários.</p>
+                        </div>
+                        <button onClick={fetchStoreAnalytics} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                             <RefreshCw size={16} className={isLoadingAnalytics ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+
+                    <div className="p-0">
+                        {storeAnalytics.length === 0 ? (
+                            <div className="py-20 text-center text-gray-600">
+                                <ShoppingBag size={40} className="mx-auto mb-4 opacity-50" />
+                                <p>Nenhum dado de clique registrado ainda.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left text-sm text-gray-400">
+                                <thead className="bg-black/20 text-xs uppercase font-bold text-gray-500 border-b border-white/5">
+                                    <tr>
+                                        <th className="px-6 py-4">Ranking</th>
+                                        <th className="px-6 py-4">Produto</th>
+                                        <th className="px-6 py-4 text-center">Total Cliques</th>
+                                        <th className="px-6 py-4 text-right">Último Acesso</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {storeAnalytics.map((item, index) => (
+                                        <tr key={index} className="hover:bg-white/[0.02]">
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${index === 0 ? 'bg-amber-500 text-black' : index === 1 ? 'bg-gray-300 text-black' : index === 2 ? 'bg-orange-700 text-white' : 'bg-white/10 text-gray-400'}`}>
+                                                    {index + 1}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-white font-medium">{item.product_name}</td>
+                                            <td className="px-6 py-4 text-center font-mono font-bold text-indigo-400 text-lg">{item.count}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-xs">{new Date(item.last_click).toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
         ) : (

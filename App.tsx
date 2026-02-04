@@ -56,7 +56,7 @@ import Goals from './components/Goals';
 import Admin from './components/Admin';
 import Squad from './components/Squad';
 import SlotsRadar from './components/SlotsRadar'; 
-import Store from './components/Store'; // Import Store
+import Store from './components/Store'; 
 import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
@@ -99,9 +99,10 @@ const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do
 const IdentityModal = ({ onSave, currentName }: { onSave: (name: string) => void, currentName?: string }) => {
     const [name, setName] = useState('');
     
-    // Lista de nomes inválidos
-    const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+    // Lista de nomes inválidos que forçam a troca
+    const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
 
+    // Validação: Nome deve ter tamanho > 2 e não pode estar na lista de inválidos
     const isValid = name.trim().length > 2 && !invalidNames.includes(name.trim().toUpperCase());
 
     return (
@@ -118,7 +119,7 @@ const IdentityModal = ({ onSave, currentName }: { onSave: (name: string) => void
                 <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Identificação Necessária</h2>
                 <p className="text-gray-400 text-sm mb-8 leading-relaxed">
                     {currentName && currentName.toUpperCase().includes('VISITANTE') 
-                        ? "O modo Visitante é temporário. Para salvar seu progresso e acessar o Squad, escolha um nome de operador."
+                        ? "O modo Visitante é temporário. Para salvar seu progresso e acessar o Squad, escolha um nome de operador único."
                         : "Detectamos que você está usando um nome padrão do sistema. Por favor, identifique-se para continuar."}
                 </p>
 
@@ -652,8 +653,9 @@ function App() {
                     title: data.title,
                     message: data.message
                 });
-                // Toca som de alerta
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                // Toca som de alerta (ATUALIZADO PARA CRYSTAL GLASS - MAIS DISCRETO)
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
+                audio.volume = 0.5;
                 audio.play().catch(()=>{});
             }
         })
@@ -761,7 +763,7 @@ function App() {
 
   // --- CHECK FOR DEFAULT NAME (OPERADOR / VISITANTE) ---
   // Atualizado para incluir 'Visitante Gratuito' e variantes, forçando a troca.
-  const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+  const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
                             (!state.config.userName || invalidNames.includes(state.config.userName.toUpperCase()));
 
@@ -837,6 +839,7 @@ function App() {
                     // RESETA O TUTORIAL: Força dismissed=false para garantir que o TourGuide abra assim que o modal fechar.
                     onboarding: { ...state.onboarding, dismissed: false }
                 });
+                setTourOpen(true);
                 notify("Identidade definida com sucesso! Iniciando tour...", "success");
             }} 
           />
@@ -852,7 +855,7 @@ function App() {
       {systemAlert && (
           <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
               <div className="bg-[#0f0a1e] border border-indigo-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-shimmer"></div>
+                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-shimmer"></div>
                   <div className="flex items-start gap-4 mb-4">
                       <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400 animate-pulse">
                           <Megaphone size={24} />
@@ -933,7 +936,7 @@ function App() {
              <div className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
                  {[
                      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag }, // NEW STORE ITEM
+                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag }, 
                      { id: 'planejamento', label: 'Planejamento', icon: Target },
                      { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
                      { id: 'despesas', label: 'Despesas', icon: Receipt },
@@ -1042,7 +1045,7 @@ function App() {
 
             {/* Render Views */}
             {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
-            {activeView === 'store' && <Store />}
+            {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}

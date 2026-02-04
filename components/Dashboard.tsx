@@ -3,13 +3,14 @@ import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL, getHojeISO } from '../utils';
 import { 
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell, Legend, AreaChart
 } from 'recharts';
 import { 
-  TrendingUp, Activity, Zap, ArrowDownRight,
-  Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
-  MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown,
-  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock, Users, Clock, ShieldCheck
+  TrendingUp, Activity, ArrowDownRight,
+  Filter, PieChart as PieIcon, History, ArrowUpRight,
+  Wallet, HelpCircle, BarChart3,
+  Flame, Sparkles, Globe, User, RefreshCw, Lock, Clock, HeartPulse,
+  Zap, Target, ChevronUp, Cpu, Wifi
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -49,7 +50,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
       setIsLoadingGlobal(true);
       try {
-          // CORREÇÃO DE PERFORMANCE: Limita a 50 usuários recentes para não travar o navegador
           const { data, error } = await supabase
               .from('user_data')
               .select('raw_json')
@@ -175,6 +175,15 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         ? (lucroLiquido / totalRet) * 100 
         : 0;
 
+    // PROJEÇÃO MENSAL
+    const currentMonthKey = hojeISO.substring(0, 7); // YYYY-MM
+    const currentMonthData = chartData.filter(d => d.fullDate.startsWith(currentMonthKey));
+    const currentMonthProfit = currentMonthData.reduce((acc, curr) => acc + curr.lucro, 0);
+    const daysPassed = new Date().getDate();
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    const dailyAvg = daysPassed > 0 ? currentMonthProfit / daysPassed : 0;
+    const projectedProfit = dailyAvg * daysInMonth;
+
     const allAccounts: any[] = [];
     Object.entries(state.dailyRecords).forEach(([date, record]) => {
         const dayRecord = record as DayRecord;
@@ -199,7 +208,8 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         roi: isNaN(roi) ? 0 : roi,
         margin: isNaN(margin) ? 0 : margin,
         recentActivity,
-        hasData
+        hasData,
+        projectedProfit: isNaN(projectedProfit) ? 0 : projectedProfit
     };
   }, [state.dailyRecords, state.generalExpenses, state.config]);
 
@@ -258,15 +268,15 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     if (active && payload && payload.length) {
       if (privacyMode) return null;
       return (
-        <div className="bg-[#050510]/95 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-          <p className="text-gray-400 text-[10px] font-bold uppercase mb-2 tracking-widest">{label}</p>
+        <div className="bg-[#050510]/95 border border-white/10 p-4 rounded-xl shadow-2xl backdrop-blur-md min-w-[200px]">
+          <p className="text-gray-400 text-[10px] font-bold uppercase mb-3 tracking-widest border-b border-white/10 pb-2">{label}</p>
           {payload.map((entry: any) => (
-            <div key={entry.name} className="flex items-center gap-4 text-xs mb-1 last:mb-0">
-                <div className="flex items-center gap-2 w-24">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.stroke || entry.fill }}></div>
-                    <span className="text-gray-300 capitalize">{entry.name}</span>
+            <div key={entry.name} className="flex justify-between items-center text-xs mb-2 last:mb-0">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: entry.stroke || entry.fill, color: entry.stroke || entry.fill }}></div>
+                    <span className="text-gray-300 font-medium capitalize">{entry.name}</span>
                 </div>
-                <span className={`font-mono font-bold ${entry.dataKey === 'lucro' ? 'text-emerald-400' : 'text-white'}`}>
+                <span className={`font-mono font-bold text-sm ${entry.dataKey === 'lucro' ? 'text-emerald-400' : 'text-white'}`}>
                     {formatVal(entry.value)}
                 </span>
             </div>
@@ -287,157 +297,212 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
+    <div className="space-y-8 animate-fade-in pb-10">
         
-        {/* --- HEADER COM SAUDAÇÃO (ESTÉTICA APRIMORADA) --- */}
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2 bg-gradient-to-r from-[#0a0516] to-[#02000f] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden">
-          
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none"></div>
-
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2">
-                <span className="text-[9px] font-bold bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/5 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm">
-                    <ShieldCheck size={10} className="text-emerald-400" /> Operacional Ativo
-                </span>
-                {privacyMode && <span className="bg-amber-500/10 text-amber-500 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm"><Lock size={10}/> Modo Privado</span>}
+        {/* --- TOP TICKER STATUS --- */}
+        <div className="flex items-center justify-between bg-white/[0.02] border-y border-white/5 py-1 px-4 -mx-4 md:-mx-8 mb-4 overflow-hidden">
+            <div className="flex items-center gap-6 animate-marquee whitespace-nowrap text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+                <span className="flex items-center gap-2"><Wifi size={10} className="text-emerald-500"/> SYSTEM ONLINE</span>
+                <span className="flex items-center gap-2"><Cpu size={10} className="text-indigo-500"/> LATENCY: 24MS</span>
+                <span className="flex items-center gap-2"><Lock size={10} className="text-amber-500"/> ENCRYPTION: AES-256</span>
+                <span className="flex items-center gap-2"><Globe size={10} className="text-blue-500"/> REGION: SA-EAST-1</span>
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tighter leading-none mb-1">
-               {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">{state.config.userName || 'Operador'}</span>
-            </h1>
-            <p className="text-gray-500 text-xs font-medium flex items-center gap-2 mt-1">
-                <Clock size={12} className="text-gray-600" />
-                {currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}
-                <span className="w-1 h-1 rounded-full bg-gray-700"></span>
-                {currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
-            </p>
-          </div>
-          
-          <div className="flex gap-3 relative z-10">
-               <div className="px-5 py-3 bg-white/[0.03] border border-white/5 rounded-xl text-right backdrop-blur-md group hover:bg-white/[0.05] transition-all">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-emerald-400 transition-colors">
-                       ROI <InfoTooltip text="Retorno sobre Investimento" />
-                   </p>
-                   <p className={`text-xl font-black font-mono leading-none ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                       {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
-                   </p>
-               </div>
-               <div className="px-5 py-3 bg-white/[0.03] border border-white/5 rounded-xl text-right backdrop-blur-md group hover:bg-white/[0.05] transition-all">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1 group-hover:text-blue-400 transition-colors">
-                       Margem <InfoTooltip text="Porcentagem de Lucro Real" />
-                   </p>
-                   <p className="text-xl font-black text-blue-400 font-mono leading-none">{metrics.margin.toFixed(0)}%</p>
-               </div>
-          </div>
+            <div className="hidden md:flex items-center gap-2 text-[10px] font-mono text-gray-600">
+                <span>V3.9.2-STABLE</span>
+            </div>
         </div>
 
-        {/* --- KPI CARDS (VISUAL GLASS CYBER) --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* --- HEADER HOLOGRÁFICO --- */}
+        <div className="relative rounded-3xl overflow-hidden p-8 border border-white/10 shadow-2xl bg-[#0a0516] group">
+            {/* Background Effects */}
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-indigo-600/10 to-purple-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-emerald-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-6">
+                <div>
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white border border-white/10 uppercase tracking-wider flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#34d399]"></div>
+                            Operacional
+                        </span>
+                        {privacyMode && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider flex items-center gap-1"><Lock size={10}/> Privado</span>}
+                    </div>
+                    <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight leading-none mb-2 drop-shadow-xl">
+                        {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">{state.config.userName || 'Comandante'}</span>
+                    </h1>
+                    <div className="flex items-center gap-4 text-sm text-gray-400 font-medium">
+                        <span className="flex items-center gap-1.5"><Clock size={14}/> {currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}</span>
+                        <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                        <span className="font-mono text-gray-500">{currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <div className="text-right">
+                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">ROI Atual</p>
+                        <p className={`text-3xl font-black font-mono leading-none drop-shadow-lg ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
+                        </p>
+                    </div>
+                    <div className="w-px bg-white/10 h-10 self-center"></div>
+                    <div className="text-right">
+                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Margem Líq.</p>
+                        <p className="text-3xl font-black text-blue-400 font-mono leading-none drop-shadow-lg">
+                            {metrics.margin.toFixed(0)}%
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* --- KPI CARDS COM SPARKLINES --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* CARD 1: LUCRO */}
-            <div className="p-6 rounded-2xl relative overflow-hidden group border border-emerald-500/10 hover:border-emerald-500/30 transition-all bg-[#0a0610] shadow-lg">
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/5 rounded-full blur-[50px] group-hover:bg-emerald-500/10 transition-all"></div>
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-emerald-500/20 hover:border-emerald-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                {/* Mini Chart Background */}
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="lucro" stroke="#10b981" fill="#10b981" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                        <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                             <Wallet size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-emerald-200 transition-colors">Lucro Líquido</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido</span>
                     </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-emerald-50 transition-colors">
                         {formatVal(metrics.lucroLiquido)}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded w-fit border border-emerald-500/10">
+                        <TrendingUp size={12} />
+                        <span>PROJEÇÃO: {formatVal(metrics.projectedProfit)}</span>
                     </div>
                 </div>
             </div>
 
             {/* CARD 2: FATURAMENTO */}
-            <div className="p-6 rounded-2xl relative overflow-hidden group border border-indigo-500/10 hover:border-indigo-500/30 transition-all bg-[#0a0610] shadow-lg">
-                 <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/5 rounded-full blur-[50px] group-hover:bg-indigo-500/10 transition-all"></div>
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="faturamento" stroke="#6366f1" fill="#6366f1" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
                 <div className="relative z-10">
-                     <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-                            <TrendingUp size={20} />
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                            <Activity size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-indigo-200 transition-colors">Volume Total</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume Total</span>
                     </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-indigo-50 transition-colors">
                         {formatVal(metrics.totalRet)}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500/80 bg-indigo-500/5 px-2 py-1 rounded w-fit border border-indigo-500/10">
+                        <ArrowUpRight size={12} />
+                        <span>ENTRADAS + BÔNUS</span>
                     </div>
                 </div>
             </div>
 
             {/* CARD 3: CUSTOS */}
-            <div className="p-6 rounded-2xl relative overflow-hidden group border border-rose-500/10 hover:border-rose-500/30 transition-all bg-[#0a0610] shadow-lg">
-                 <div className="absolute -right-10 -top-10 w-40 h-40 bg-rose-500/5 rounded-full blur-[50px] group-hover:bg-rose-500/10 transition-all"></div>
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-rose-500/20 hover:border-rose-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="investimento" stroke="#f43f5e" fill="#f43f5e" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
                 <div className="relative z-10">
-                     <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2.5 bg-rose-500/10 text-rose-400 rounded-xl border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
                             <Filter size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest group-hover:text-rose-200 transition-colors">Investimento</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Investimento</span>
                     </div>
-                    <div className="text-3xl font-black text-white font-mono tracking-tight drop-shadow-md">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-rose-50 transition-colors">
                         {formatVal(metrics.totalInv)}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-rose-500/80 bg-rose-500/5 px-2 py-1 rounded w-fit border border-rose-500/10">
+                        <ArrowDownRight size={12} />
+                        <span>DEPÓSITOS + CUSTOS</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* --- GLOBAL INTELLIGENCE WIDGET --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* --- GLOBAL INTELLIGENCE & ALERTS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* WIDGET 1: HEATMAP */}
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#08050e] relative overflow-hidden group hover:border-indigo-500/30 transition-all shadow-xl">
+            {/* HEATMAP */}
+            <div className="p-6 rounded-3xl border border-white/10 bg-[#08050e] relative overflow-hidden group hover:border-indigo-500/30 transition-all shadow-xl">
                  <div className="flex justify-between items-start mb-6">
                      <div>
-                        <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                            <Flame size={16} className={analysisMode === 'global' ? 'text-blue-500' : 'text-orange-500'} /> 
-                            {analysisMode === 'global' ? 'Inteligência Global' : 'Performance Semanal'}
+                        <h3 className="text-white font-bold text-base flex items-center gap-2">
+                            <Flame size={18} className={analysisMode === 'global' ? 'text-blue-500' : 'text-orange-500'} /> 
+                            {analysisMode === 'global' ? 'Rede Neural Global' : 'Performance Semanal'}
                         </h3>
-                        <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                        <p className="text-xs text-gray-500 mt-1 font-medium">
                             {analysisMode === 'global' 
-                                ? `Amostragem: Últimos ${globalUserCount} operadores.` 
-                                : 'Análise dos seus melhores dias.'}
+                                ? `Analisando dados de ${globalUserCount} operadores.` 
+                                : 'Seus melhores dias de operação.'}
                         </p>
                      </div>
                      
                      <button 
                         onClick={handleToggleMode}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all ${
                             analysisMode === 'global' 
                             ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/20' 
                             : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
                         }`}
                      >
                         {isLoadingGlobal ? <RefreshCw className="animate-spin" size={12} /> : (analysisMode === 'global' ? <Globe size={12} /> : <User size={12} />)}
-                        {analysisMode === 'global' ? 'MUNDO' : 'VOCÊ'}
+                        {analysisMode === 'global' ? 'REDE GLOBAL' : 'MEUS DADOS'}
                      </button>
                  </div>
                  
-                 {/* Visualização de Barras (Heatmap) */}
-                 <div className="flex items-end justify-between h-28 gap-2 pt-2">
+                 <div className="flex items-end justify-between h-32 gap-3 pt-2">
                      {intelligenceData.heatmapData.map((d) => {
                          const intensity = intelligenceData.maxProfit > 0 ? (d.profit / intelligenceData.maxProfit) : 0;
                          const isBest = d.day === intelligenceData.bestDay.name;
                          
                          return (
-                             <div key={d.day} className="flex-1 flex flex-col items-center gap-2 group/bar relative">
+                             <div key={d.day} className="flex-1 flex flex-col items-center gap-3 group/bar relative">
                                  {isBest && (
-                                     <div className="absolute -top-7 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 animate-bounce shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                                     <div className="absolute -top-8 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 animate-bounce shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                                          TOP
                                      </div>
                                  )}
-                                 <div className="w-full bg-white/5 rounded-md relative h-full flex items-end overflow-hidden border border-white/5">
+                                 <div className="w-full bg-white/5 rounded-lg relative h-full flex items-end overflow-hidden border border-white/5">
                                      <div 
-                                        className={`w-full transition-all duration-1000 ${
+                                        className={`w-full transition-all duration-1000 rounded-t-sm ${
                                             analysisMode === 'global' 
-                                                ? (isBest ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' : 'bg-blue-500/40') 
-                                                : (isBest ? 'bg-emerald-500 shadow-[0_0_15px_#10b981]' : 'bg-emerald-500/40')
+                                                ? (isBest ? 'bg-blue-500 shadow-[0_0_20px_#3b82f6]' : 'bg-blue-500/40') 
+                                                : (isBest ? 'bg-emerald-500 shadow-[0_0_20px_#10b981]' : 'bg-emerald-500/40')
                                         }`}
                                         style={{ height: `${Math.max(5, intensity * 100)}%` }}
                                      ></div>
                                  </div>
                                  <span className={`text-[10px] font-bold uppercase ${isBest ? 'text-white' : 'text-gray-600'}`}>{d.day}</span>
                                  
-                                 <div className="absolute bottom-full mb-2 opacity-0 group-hover/bar:opacity-100 bg-black/90 text-white text-[10px] px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap z-20 border border-white/10 shadow-xl transition-opacity">
+                                 <div className="absolute bottom-full mb-2 opacity-0 group-hover/bar:opacity-100 bg-black/90 text-white text-[10px] px-3 py-1.5 rounded-lg pointer-events-none whitespace-nowrap z-20 border border-white/10 shadow-xl transition-opacity transform translate-y-2 group-hover/bar:translate-y-0 duration-200">
                                      Média: {privacyMode && analysisMode !== 'global' ? '****' : formatVal(d.profit)}
                                  </div>
                              </div>
@@ -446,80 +511,80 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                  </div>
             </div>
 
-            {/* WIDGET 2: RADAR & ALERTS */}
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#08050e] relative overflow-hidden shadow-xl">
-                <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transform rotate-12"><Calendar size={120} /></div>
+            {/* RADAR & ALERTS */}
+            <div className="p-6 rounded-3xl border border-white/10 bg-[#08050e] relative overflow-hidden shadow-xl flex flex-col">
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transform rotate-12"><Clock size={120} /></div>
                 
-                <div className="relative z-10 h-full flex flex-col justify-between">
+                <div className="relative z-10 flex flex-col h-full justify-between">
                      <div>
-                        <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                            <Sparkles size={16} className="text-purple-400" /> Radar de Oportunidades
+                        <h3 className="text-white font-bold text-base flex items-center gap-2">
+                            <Sparkles size={18} className="text-purple-400" /> Radar de Oportunidades
                         </h3>
-                        <p className="text-[10px] text-gray-500 mt-1">Sugestões baseadas no calendário comercial.</p>
+                        <p className="text-xs text-gray-500 mt-1">Sugestões baseadas no calendário comercial.</p>
                      </div>
 
-                     <div className="space-y-3 mt-4">
-                         <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4 flex items-start gap-4 hover:bg-white/[0.05] transition-colors cursor-default backdrop-blur-sm">
-                             <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 shrink-0 border border-purple-500/20">
-                                 <Calendar size={20} />
+                     <div className="space-y-4 mt-6">
+                         <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-5 flex items-start gap-4 hover:border-purple-500/40 transition-colors cursor-default backdrop-blur-sm">
+                             <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 shrink-0 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                                 <Clock size={20} />
                              </div>
                              <div>
-                                 <p className="text-white font-bold text-xs leading-tight mb-1">{intelligenceData.alertMsg}</p>
-                                 <p className="text-[10px] text-gray-500">Dia {new Date().getDate()} do mês vigente.</p>
+                                 <p className="text-white font-bold text-sm leading-tight mb-1">{intelligenceData.alertMsg}</p>
+                                 <p className="text-[10px] text-gray-400 font-medium">Análise baseada no dia {new Date().getDate()}.</p>
                              </div>
                          </div>
                          
-                         <div className="flex items-center gap-2 text-[10px] text-gray-400 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                             <Users size={12} className="text-gray-500"/>
-                             <span>Melhor dia da Comunidade: <span className="text-blue-400 font-bold">{intelligenceData.bestDay.name}</span></span>
+                         <div className="flex items-center gap-3 text-xs text-gray-400 bg-black/40 p-4 rounded-xl border border-white/5">
+                             <User size={14} className="text-gray-500"/>
+                             <span>Melhor dia da Comunidade: <span className="text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">{intelligenceData.bestDay.name}</span></span>
                          </div>
                      </div>
                 </div>
             </div>
         </div>
 
-        {/* --- MAIN CHART --- */}
+        {/* --- MAIN CHART SECTION --- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-full">
-            <div className="xl:col-span-2 rounded-2xl p-6 flex flex-col relative overflow-hidden min-h-[400px] border border-white/10 bg-[#08050e] shadow-2xl">
+            <div className="xl:col-span-2 rounded-3xl p-8 flex flex-col relative overflow-hidden min-h-[450px] border border-white/10 bg-[#08050e] shadow-2xl">
                 <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
                 <div className="flex items-center justify-between mb-8 relative z-10">
                      <div>
-                        <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                             <BarChart3 size={18} className="text-indigo-400"/> Evolução Financeira
+                        <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                             <BarChart3 size={20} className="text-indigo-400"/> Evolução Financeira
                         </h3>
-                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mt-1">
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mt-1">
                             {metrics.hasData ? 'Análise de tendência' : 'Aguardando dados'}
                         </p>
                      </div>
                 </div>
                 
-                <div className="flex-1 w-full h-full min-h-[300px] relative z-10">
+                <div className="flex-1 w-full h-full min-h-[350px] relative z-10">
                     {!metrics.hasData ? (
                         <div className="w-full h-full flex flex-col items-center justify-center text-center opacity-40">
-                            <Activity size={48} className="text-indigo-400 mb-4" />
-                            <h3 className="text-lg font-bold text-white">Gráfico Vazio</h3>
-                            <p className="text-sm text-gray-500">Registre operações para visualizar dados.</p>
+                            <Activity size={64} className="text-indigo-400 mb-6" />
+                            <h3 className="text-xl font-bold text-white">Gráfico Vazio</h3>
+                            <p className="text-sm text-gray-500 mt-2">Registre operações para visualizar dados.</p>
                         </div>
                     ) : (
                         <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={metrics.chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                            <ComposedChart data={metrics.chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor="#6366f1" stopOpacity={0.8}/>
-                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2}/>
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1}/>
                                     </linearGradient>
                                     <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.3}/>
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.4}/>
                                         <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                <XAxis dataKey="dateStr" stroke="none" tick={{fill: '#6b7280', fontSize: 10, fontWeight: 600}} dy={10} minTickGap={20} />
-                                <YAxis stroke="none" tick={{fill: '#6b7280', fontSize: 10}} hide={privacyMode} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                                <XAxis dataKey="dateStr" stroke="none" tick={{fill: '#6b7280', fontSize: 11, fontWeight: 600}} dy={15} minTickGap={30} />
+                                <YAxis stroke="none" tick={{fill: '#6b7280', fontSize: 11}} hide={privacyMode} />
                                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                <Bar dataKey="faturamento" name="Faturamento" fill="url(#barGradient)" radius={[4, 4, 0, 0]} barSize={24} />
+                                <Bar dataKey="faturamento" name="Faturamento" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={32} />
                                 <Area type="monotone" dataKey="lucro" stroke="none" fill="url(#areaGradient)" />
-                                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
+                                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 8, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
                             </ComposedChart>
                         </ResponsiveContainer>
                     )}
@@ -528,9 +593,9 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
             {/* DONUT & ACTIVITY */}
             <div className="flex flex-col gap-6 h-full">
-                <div className="rounded-2xl p-6 border border-white/10 bg-[#08050e] flex flex-col flex-1 min-h-[250px] shadow-xl relative overflow-hidden">
-                    <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-2 flex items-center gap-2 relative z-10">
-                         <PieIcon size={14} className="text-indigo-400" /> Distribuição de Capital
+                <div className="rounded-3xl p-8 border border-white/10 bg-[#08050e] flex flex-col flex-1 min-h-[300px] shadow-xl relative overflow-hidden">
+                    <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-2 flex items-center gap-2 relative z-10">
+                         <PieIcon size={16} className="text-indigo-400" /> Distribuição de Capital
                     </h3>
                     <div className="flex-1 relative z-10">
                         <ResponsiveContainer width="100%" height="100%">
@@ -539,41 +604,50 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                                     data={metrics.pieData}
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={50} 
-                                    outerRadius={70} 
-                                    paddingAngle={5}
+                                    innerRadius={60} 
+                                    outerRadius={85} 
+                                    paddingAngle={6}
                                     dataKey="value"
                                     stroke="none"
                                 >
                                     {metrics.pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" strokeWidth={3} />
                                     ))}
                                 </Pie>
-                                <Legend verticalAlign="bottom" height={36} iconSize={8} wrapperStyle={{fontSize: '10px', opacity: 0.7}}/>
+                                <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{fontSize: '11px', opacity: 0.8, fontWeight: 600}}/>
                                 <Tooltip />
                             </PieChart>
                         </ResponsiveContainer>
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none pb-6">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total</span>
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none pb-8">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Total Investido</span>
+                            <span className="text-white font-bold text-xs">{formatVal(metrics.totalInv)}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="rounded-2xl p-5 border border-white/10 bg-[#08050e] flex-1 overflow-hidden shadow-xl">
-                     <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-                         <History size={14} className="text-gray-400" /> Atividade Recente
+                <div className="rounded-3xl p-6 border border-white/10 bg-[#08050e] flex-1 overflow-hidden shadow-xl">
+                     <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                         <History size={16} className="text-gray-400" /> Atividade Recente
                     </h3>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {metrics.recentActivity.length === 0 ? (
-                            <p className="text-[10px] text-gray-600 text-center py-8">Sem histórico recente.</p>
+                            <div className="text-center py-8 opacity-50">
+                                <History className="mx-auto mb-2 text-gray-600" size={24} />
+                                <p className="text-[10px] text-gray-500">Sem histórico recente.</p>
+                            </div>
                         ) : (
                             metrics.recentActivity.map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center text-xs border-b border-white/5 last:border-0 pb-2 last:pb-0 hover:bg-white/[0.03] p-2 rounded-lg transition-colors cursor-default">
-                                    <div>
-                                        <div className="text-gray-300 font-bold">{new Date(item.date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</div>
-                                        <div className="text-[9px] text-gray-600 font-mono">ID #{item.id.toString().slice(-4)}</div>
+                                <div key={item.id} className="flex justify-between items-center text-xs border border-white/5 hover:border-white/10 bg-white/[0.02] hover:bg-white/[0.05] p-3 rounded-xl transition-all cursor-default group">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${item.profit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                            {item.profit >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                                        </div>
+                                        <div>
+                                            <div className="text-gray-200 font-bold">{new Date(item.date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</div>
+                                            <div className="text-[9px] text-gray-600 font-mono group-hover:text-gray-500 transition-colors">ID #{item.id.toString().slice(-4)}</div>
+                                        </div>
                                     </div>
-                                    <div className={`font-mono font-bold ${item.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    <div className={`font-mono font-bold text-sm ${item.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                         {formatVal(item.profit)}
                                     </div>
                                 </div>
