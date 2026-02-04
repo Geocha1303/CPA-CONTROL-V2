@@ -122,5 +122,5 @@ export interface SquadMember {
   is_online?: boolean;
 }
 
-// Adicionado 'slots' e 'store'
-export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store';
+// Adicionado 'slots', 'store' e 'sms'
+export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store' | 'sms';
