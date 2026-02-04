@@ -120,5 +120,5 @@ export interface SquadMember {
   is_online?: boolean;
 }
 
-// REMOVIDO 'sms' E MANTIDO O RESTO
+// REMOVIDO 'sms' - AQUI ESTÁ O ESTADO LIMPO
 export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store';
