@@ -1,7 +1,6 @@
 import React, { useState, useRef, MouseEvent, useMemo } from 'react';
 import { ShoppingBag, ExternalLink, Search, Zap, Filter, Tag, Shield, Layers, ArrowRight, Sparkles, CheckCircle2, LayoutGrid, Box } from 'lucide-react';
 import { formatarBRL } from '../utils';
-import { supabase } from '../supabaseClient'; // IMPORT SUPABASE
 
 interface Product {
     id: number;
@@ -266,7 +265,7 @@ const STORE_DATA: Section[] = [
 ];
 
 // --- COMPONENTE DE CARTÃO TILT 3D (CORRIGIDO PARA CLIQUE ÚNICO) ---
-const TiltCard: React.FC<{ product: Product, currentUserKey?: string }> = ({ product, currentUserKey }) => {
+const TiltCard: React.FC<{ product: Product }> = ({ product }) => {
     const cardRef = useRef<HTMLDivElement>(null);
     const [rotation, setRotation] = useState({ x: 0, y: 0 });
     const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
@@ -296,21 +295,6 @@ const TiltCard: React.FC<{ product: Product, currentUserKey?: string }> = ({ pro
         setGlare(prev => ({ ...prev, opacity: 0 }));
     };
 
-    // --- TRACKING CLICK ---
-    const handleTrackClick = async () => {
-        try {
-            // Tenta registrar o clique no banco de dados
-            await supabase.from('store_tracking').insert({
-                product_name: product.name,
-                user_key: currentUserKey || 'ANONYMOUS',
-                clicked_at: new Date().toISOString()
-            });
-        } catch (error) {
-            console.error("Erro ao registrar clique:", error);
-            // Falha silenciosa para não atrapalhar o usuário
-        }
-    };
-
     return (
         <div 
             ref={cardRef}
@@ -324,7 +308,6 @@ const TiltCard: React.FC<{ product: Product, currentUserKey?: string }> = ({ pro
                 href={product.link}
                 target="_blank"
                 rel="noreferrer"
-                onClick={handleTrackClick} // ADICIONADO O RASTREAMENTO
                 className="block h-full w-full transition-transform duration-100 ease-out focus:outline-none"
                 style={{
                     transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) scale3d(1.0, 1.0, 1.0)`,
@@ -407,11 +390,7 @@ const TiltCard: React.FC<{ product: Product, currentUserKey?: string }> = ({ pro
     );
 };
 
-interface StoreProps {
-    currentUserKey?: string;
-}
-
-const Store: React.FC<StoreProps> = ({ currentUserKey }) => {
+const Store: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<string>('todos'); // 'todos' ou o ID da section
 
@@ -558,7 +537,7 @@ const Store: React.FC<StoreProps> = ({ currentUserKey }) => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5">
                             {section.products.map(product => (
                                 <div key={product.id} className="h-full">
-                                    <TiltCard product={product} currentUserKey={currentUserKey} />
+                                    <TiltCard product={product} />
                                 </div>
                             ))}
                         </div>

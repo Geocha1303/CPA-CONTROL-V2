@@ -147,10 +147,10 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify, privacyMod
                 return newFeed.slice(0, 100); // Mantém apenas os últimos 100 logs para não pesar
             });
             
-            // Som de notificação (SUBSTITUÍDO POR TOM DISCRETO CRYSTAL GLASS)
+            // Som de notificação
             if(msg.type !== 'info') {
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
-                audio.volume = 0.2; // Volume discreto
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.2;
                 audio.play().catch(()=>{});
             }
         })

@@ -9,7 +9,7 @@ import {
   TrendingUp, Activity, Zap, ArrowDownRight,
   Filter, PieChart as PieIcon, History, CheckCircle2, ArrowUpRight,
   MoreHorizontal, Wallet, CalendarOff, HelpCircle, BarChart3, TrendingDown,
-  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock, Users, Clock, ShieldCheck, HeartPulse
+  Calendar, Flame, Sparkles, Globe, User, RefreshCw, Lock, Users, Clock, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -49,6 +49,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
       setIsLoadingGlobal(true);
       try {
+          // CORREÇÃO DE PERFORMANCE: Limita a 50 usuários recentes para não travar o navegador
           const { data, error } = await supabase
               .from('user_data')
               .select('raw_json')
@@ -289,14 +290,14 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     <div className="space-y-6 animate-fade-in pb-10">
         
         {/* --- HEADER COM SAUDAÇÃO (ESTÉTICA APRIMORADA) --- */}
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2 bg-gradient-to-r from-[#0a0516] to-[#02000f] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group">
+        <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2 bg-gradient-to-r from-[#0a0516] to-[#02000f] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden">
           
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none transition-all duration-700 group-hover:bg-primary/10"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none"></div>
 
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                    <ShieldCheck size={10} /> Operacional Ativo
+                <span className="text-[9px] font-bold bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/5 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm">
+                    <ShieldCheck size={10} className="text-emerald-400" /> Operacional Ativo
                 </span>
                 {privacyMode && <span className="bg-amber-500/10 text-amber-500 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-widest flex items-center gap-1 backdrop-blur-sm"><Lock size={10}/> Modo Privado</span>}
             </div>
@@ -580,17 +581,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         )}
                     </div>
                 </div>
-            </div>
-        </div>
-
-        {/* --- SYSTEM HEALTH BAR --- */}
-        <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono mt-6 pt-4 border-t border-white/5">
-            <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><HeartPulse size={12} className="text-emerald-500" /> SYSTEM NORMAL</span>
-                <span>Latency: 24ms</span>
-            </div>
-            <div>
-                v3.7.2 (Stable)
             </div>
         </div>
     </div>
