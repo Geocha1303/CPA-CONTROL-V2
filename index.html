@@ -29,7 +29,8 @@
               accent: {
                 cyan: '#00F0FF',
                 pink: '#FF007A',
-                emerald: '#10B981'
+                emerald: '#10B981',
+                amber: '#F59E0B'
               }
             },
             backgroundImage: {
@@ -39,11 +40,17 @@
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'float': 'float 6s ease-in-out infinite',
+              'shimmer': 'shimmer 2s linear infinite',
+              'fade-in': 'fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
             },
             keyframes: {
               float: {
                 '0%, 100%': { transform: 'translateY(0)' },
                 '50%': { transform: 'translateY(-10px)' },
+              },
+              shimmer: {
+                '0%': { transform: 'translateX(-100%)' },
+                '100%': { transform: 'translateX(100%)' }
               }
             }
           },
@@ -51,7 +58,7 @@
       }
     </script>
     <style>
-      /* Custom Scrollbar */
+      /* --- CYBERPUNK SCROLLBAR --- */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -60,76 +67,61 @@
         background: #02000f; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #2d1b4e; 
+        background: #331f55; 
         border-radius: 3px;
+        border: 1px solid rgba(255,255,255,0.05);
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #7000FF; 
+        box-shadow: 0 0 10px #7000FF;
       }
       
+      /* --- GLOBAL STYLES --- */
       body {
         background-color: #02000f;
         color: #E2E8F0;
-        /* Advanced Dynamic Background */
-        background: radial-gradient(circle at 50% 0%, #1a0b2e 0%, #02000f 60%);
         min-height: 100vh;
+        overflow-x: hidden;
       }
-      
-      /* Subtle Grid Overlay */
-      body::before {
-        content: "";
+
+      /* Noise Texture Overlay */
+      .bg-noise {
         position: fixed;
         top: 0;
         left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: 
-          linear-gradient(rgba(112, 0, 255, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(112, 0, 255, 0.03) 1px, transparent 1px);
-        background-size: 40px 40px;
+        width: 100vw;
+        height: 100vh;
         pointer-events: none;
-        z-index: -1;
+        z-index: 0;
+        opacity: 0.03;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      }
+      
+      /* Selection Highlight */
+      ::selection {
+        background: rgba(112, 0, 255, 0.3);
+        color: #fff;
+        text-shadow: 0 0 5px rgba(112, 0, 255, 0.8);
       }
 
-      /* Glow Spots */
-      body::after {
-        content: "";
-        position: fixed;
-        top: -20%;
-        right: -10%;
-        width: 60vw;
-        height: 60vw;
-        background: radial-gradient(circle, rgba(112,0,255,0.07) 0%, transparent 70%);
-        border-radius: 50%;
-        pointer-events: none;
-        z-index: -1;
-        animation: pulse-glow 8s infinite alternate;
-      }
-
-      @keyframes pulse-glow {
-        0% { opacity: 0.5; transform: scale(1); }
-        100% { opacity: 0.8; transform: scale(1.1); }
-      }
-
-      /* Gateway Components */
+      /* --- UTILITIES --- */
       .gateway-card {
-        background: rgba(10, 5, 22, 0.6);
-        backdrop-filter: blur(25px);
-        -webkit-backdrop-filter: blur(25px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: rgba(12, 8, 24, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
       }
 
       .gateway-card:hover {
-        border-color: rgba(112, 0, 255, 0.2);
-        box-shadow: 0 10px 40px -10px rgba(112, 0, 255, 0.15);
-        transform: translateY(-2px);
+        border-color: rgba(112, 0, 255, 0.3);
+        box-shadow: 0 12px 40px -10px rgba(112, 0, 255, 0.15);
       }
 
       .gateway-input {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
         transition: all 0.3s ease;
       }
@@ -137,49 +129,44 @@
       .gateway-input:focus {
         border-color: #7000FF;
         background: rgba(112, 0, 255, 0.05);
-        box-shadow: 0 0 0 2px rgba(112, 0, 255, 0.1);
+        box-shadow: 0 0 0 1px rgba(112, 0, 255, 0.2);
         outline: none;
       }
 
-      .gateway-btn-primary {
-        background: linear-gradient(135deg, #5c00d2 0%, #8a2be2 100%);
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.1);
-        transition: all 0.3s ease;
-      }
-      
-      .gateway-btn-primary:hover {
-        box-shadow: 0 0 25px rgba(138, 43, 226, 0.4);
-        transform: translateY(-1px);
-        filter: brightness(1.1);
+      .glass-card {
+        background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
 
       .text-glow {
-        text-shadow: 0 0 20px rgba(112, 0, 255, 0.4);
-      }
-      
-      .glass-panel {
-        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
-        border: 1px solid rgba(255,255,255,0.05);
-        backdrop-filter: blur(10px);
+        text-shadow: 0 0 20px rgba(112, 0, 255, 0.5);
       }
 
-      /* Animation Utilities */
       @keyframes fade-in-up {
-        from { opacity: 0; transform: translateY(20px); }
+        from { opacity: 0; transform: translateY(15px); }
         to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in {
-        animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
       
       @keyframes slide-in-right {
-        from { opacity: 0; transform: translateX(30px); }
+        from { opacity: 0; transform: translateX(20px); }
         to { opacity: 1; transform: translateX(0); }
       }
       .animate-slide-in-right {
-        animation: slide-in-right 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      
+      /* Utility for custom scrollbars in containers */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
     </style>
   <script type="importmap">
@@ -190,13 +177,16 @@
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="text-gray-200 antialiased overflow-hidden selection:bg-primary/40 selection:text-white">
+  <body class="antialiased selection:bg-primary/30 selection:text-white">
+    <div class="bg-noise"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

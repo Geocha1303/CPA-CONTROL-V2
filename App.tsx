@@ -704,7 +704,7 @@ function App() {
       {
           targetId: 'tour-settings-bonus-toggle',
           title: 'Modo de Trabalho',
-          content: 'Escolha se prefere digitar o valor exato (R$) ganho em cada operação ou se prefere que o sistema calcule baseado em ciclos (telas).',
+          content: 'Escolha se prefere digitar o valor exato (R$) ganho em cada operação ou se prefere que o sistema calcule automaticamente (Ciclos x Valor).',
           view: 'configuracoes',
           position: 'bottom'
       },
@@ -1011,7 +1011,7 @@ function App() {
         {/* Main Content Area */}
         <main 
             ref={mainContentRef}
-            className="flex-1 overflow-y-auto overflow-x-hidden bg-background relative scroll-smooth p-4 lg:p-8"
+            className="flex-1 overflow-y-auto overflow-x-hidden bg-transparent relative scroll-smooth p-4 lg:p-8"
         >
             {spectatingData && (
                 <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 px-4 py-3 rounded-xl mb-6 flex justify-between items-center animate-fade-in">
