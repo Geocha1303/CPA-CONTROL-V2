@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Smartphone, RefreshCw, LogIn, Lock, Mail, Server, Search, ShoppingCart, Trash2, Copy, MessageSquare, AlertTriangle, CheckCircle2, Clock, XCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { Smartphone, RefreshCw, LogIn, Lock, Mail, Server, Search, ShoppingCart, Trash2, Copy, MessageSquare, AlertTriangle, CheckCircle2, Clock, XCircle, ChevronRight, Loader2, Wifi, WifiOff, Globe, Settings2, ShieldAlert, ExternalLink } from 'lucide-react';
 import { formatarBRL } from '../utils';
 
 interface Props {
@@ -26,12 +26,16 @@ interface Activation {
     expire_at?: number; // Calculado localmente
 }
 
-// --- CONFIGURAÇÃO DE PROXY (BYPASS CORS) ---
-// O 'corsproxy.io' é usado para contornar o bloqueio de "Failed to fetch" que ocorre
-// quando navegadores tentam acessar APIs que não possuem cabeçalhos CORS configurados para o frontend.
-const PROXY_URL = 'https://corsproxy.io/?';
+// --- CONFIGURAÇÃO DE PROXIES ---
+const PROXIES = {
+    corsanywhere: { label: 'Proxy Beta (Mais Estável - Requer Clique)', url: 'https://cors-anywhere.herokuapp.com/' },
+    corsproxy: { label: 'Proxy Alpha (Rápido)', url: 'https://corsproxy.io/?' },
+    codetabs: { label: 'Proxy Gamma (CodeTabs)', url: 'https://api.codetabs.com/v1/proxy?quest=' },
+    thingproxy: { label: 'Proxy Delta (ThingProxy)', url: 'https://thingproxy.freeboard.io/fetch/' },
+    direct: { label: 'Conexão Direta (Requer Extensão)', url: '' }
+};
+
 const TARGET_API = 'https://api.smsrush.com.br/api/v1';
-const SMS_API_BASE = `${PROXY_URL}${encodeURIComponent(TARGET_API)}`;
 
 const SmsRush: React.FC<Props> = ({ notify }) => {
     // --- ESTADOS DE AUTENTICAÇÃO ---
@@ -39,6 +43,10 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
+    
+    // Configuração de Conexão
+    const [selectedProxy, setSelectedProxy] = useState<keyof typeof PROXIES>('corsanywhere');
+    const [showUnlockHelp, setShowUnlockHelp] = useState(false);
 
     // --- ESTADOS DA LOJA ---
     const [server, setServer] = useState<number>(1);
@@ -60,24 +68,62 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         audioRef.current.volume = 0.3; // Volume baixo/sutil
     }, []);
 
+    // Helper para construir URL
+    const getApiUrl = (endpoint: string) => {
+        const proxyBase = PROXIES[selectedProxy].url;
+        const targetUrl = `${TARGET_API}${endpoint}`;
+        
+        if (selectedProxy === 'direct') return targetUrl;
+        
+        // CorsProxy: prefere URL crua depois do ?
+        if (selectedProxy === 'corsproxy') {
+             return `${proxyBase}${encodeURIComponent(targetUrl)}`;
+        }
+        
+        // CorsAnywhere e outros geralmente funcionam concatenando direto
+        return `${proxyBase}${targetUrl}`;
+    };
+
     // --- AUTENTICAÇÃO ---
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoggingIn(true);
+        setShowUnlockHelp(false);
+
         try {
-            // Nota: O endpoint de login é concatenado com o proxy
-            const res = await fetch(`${SMS_API_BASE}/auth/login`, {
+            const url = getApiUrl('/auth/login');
+            console.log('Tentando login via:', selectedProxy, url);
+
+            const res = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    // Alguns proxies rejeitam headers customizados, mantemos o básico
+                },
                 body: JSON.stringify({ email, password })
+            }).catch(err => {
+                throw new Error("Falha na conexão. Se estiver usando o Proxy Beta, verifique se desbloqueou o acesso.");
             });
             
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Erro API: ${errorText}`);
+            // Verifica status 403 (Comum no CorsAnywhere se não ativado)
+            if (res.status === 403 && selectedProxy === 'corsanywhere') {
+                setShowUnlockHelp(true);
+                throw new Error("Acesso bloqueado pelo Proxy. Clique no botão de desbloqueio acima.");
             }
 
-            const json = await res.json();
+            const text = await res.text();
+            let json;
+            try {
+                json = JSON.parse(text);
+            } catch (e) {
+                console.error("Resposta não-JSON:", text);
+                throw new Error(`O Proxy retornou um erro não legível. Tente outra opção.`);
+            }
+
+            if (!res.ok) {
+                throw new Error(json.message || json.error || 'Credenciais inválidas ou erro na API');
+            }
             
             if (json.data && json.data.token) {
                 setToken(json.data.token);
@@ -87,7 +133,13 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 throw new Error(json.message || 'Falha no login');
             }
         } catch (err: any) {
-            notify(err.message, 'error');
+            console.error(err);
+            notify(`${err.message}`, 'error');
+            
+            // Se falhar no CorsAnywhere, sugere desbloqueio
+            if (selectedProxy === 'corsanywhere') {
+                setShowUnlockHelp(true);
+            }
         } finally {
             setIsLoggingIn(false);
         }
@@ -104,26 +156,26 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         if (!token) return;
         setLoadingServices(true);
         try {
-            const res = await fetch(`${SMS_API_BASE}/services?country_id=73&server_id=${server}`, {
+            const url = getApiUrl(`/services?country_id=73&server_id=${server}`);
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            });
+            }).catch(() => { throw new Error("Erro de conexão"); });
             
             if (!res.ok) throw new Error('Falha ao buscar serviços');
             
             const json = await res.json();
             
             if (json.data) {
-                // A API pode retornar array ou objeto dependendo do endpoint, ajustamos conforme padrão comum
                 const list = Array.isArray(json.data) ? json.data : Object.values(json.data);
                 setServices(list as Service[]);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            notify('Erro ao carregar serviços.', 'error');
+            notify(`Erro serviços: ${err.message}`, 'error');
         } finally {
             setLoadingServices(false);
         }
-    }, [token, server]);
+    }, [token, server, selectedProxy]);
 
     useEffect(() => {
         if (token) {
@@ -137,7 +189,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         if (!token) return;
         
         try {
-            const res = await fetch(`${SMS_API_BASE}/virtual-numbers`, {
+            const url = getApiUrl('/virtual-numbers');
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -169,7 +222,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 navigator.clipboard.writeText(json.data.number);
                 notify(`Número ${json.data.number} copiado!`, 'success');
             } else {
-                // Tratamento de erro específico (Ex: Sem saldo)
                 throw new Error(json.message || 'Erro na compra');
             }
         } catch (err: any) {
@@ -181,14 +233,13 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     const fetchActivations = async () => {
         if (!token) return;
         try {
-            const res = await fetch(`${SMS_API_BASE}/virtual-numbers/activations`, {
+            const url = getApiUrl('/virtual-numbers/activations');
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const json = await res.json();
             if (json.data) {
-                // Mapeia para o nosso formato interno se necessário
-                // A API retorna a lista oficial, útil para sync inicial
-                // Simplificamos aqui assumindo que o estado local é prioritário para UI imediata
+                // Aqui poderíamos sincronizar com o estado local se necessário
             }
         } catch (err) {
             console.error("Erro sync ativações", err);
@@ -208,7 +259,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             
             for (const act of waiting) {
                 try {
-                    const res = await fetch(`${SMS_API_BASE}/virtual-numbers/${act.id}/status`, {
+                    const url = getApiUrl(`/virtual-numbers/${act.id}/status`);
+                    const res = await fetch(url, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     const json = await res.json();
@@ -244,7 +296,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
             setIsPolling(false);
         };
-    }, [activations, token]);
+    }, [activations, token, selectedProxy]);
 
 
     // --- CANCELAMENTO ---
@@ -253,12 +305,12 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         if (!confirm('Deseja cancelar este número?')) return;
 
         try {
-            const res = await fetch(`${SMS_API_BASE}/virtual-numbers/${id}`, {
+            const url = getApiUrl(`/virtual-numbers/${id}`);
+            const res = await fetch(url, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            // A API pode retornar 200 (OK) ou erro (Ex: Regra de 2 min)
             if (res.ok) {
                 setActivations(prev => prev.filter(a => a.id !== id));
                 notify('Número cancelado e reembolsado.', 'info');
@@ -284,29 +336,70 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     // --- RENDER LOGIN ---
     if (!token) {
         return (
-            <div className="flex flex-col items-center justify-center h-full animate-fade-in p-6">
-                <div className="bg-[#0c0818] border border-white/10 rounded-2xl p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-                        <Smartphone size={100} />
-                    </div>
+            <div className="flex flex-col items-center justify-center h-full animate-fade-in p-6 relative">
+                
+                {/* Background Decor */}
+                <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px]"></div>
+                    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-[100px]"></div>
+                </div>
+
+                <div className="bg-[#0c0818]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-10 w-full max-w-md shadow-2xl relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                     
                     <div className="text-center mb-8 relative z-10">
-                        <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-900/20">
-                            <MessageSquare size={32} className="text-white" />
+                        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-900/40 rotate-3 transform group-hover:rotate-6 transition-transform duration-500">
+                            <MessageSquare size={40} className="text-white" />
                         </div>
-                        <h2 className="text-2xl font-black text-white">SMS RUSH</h2>
-                        <p className="text-sm text-gray-400">Integração Direta V1</p>
+                        <h2 className="text-3xl font-black text-white tracking-tight mb-2">SMS RUSH</h2>
+                        
+                        {/* SELETOR DE PROXY */}
+                        <div className="relative group/proxy w-full max-w-xs mx-auto">
+                            <label className="text-[9px] font-bold text-gray-500 uppercase mb-1 block">Método de Conexão</label>
+                            <div className="relative">
+                                <Globe size={14} className="absolute left-3 top-3 text-emerald-500 z-10" />
+                                <select 
+                                    className="w-full bg-black/60 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs font-bold text-gray-300 focus:border-emerald-500 focus:outline-none appearance-none cursor-pointer hover:bg-white/5 transition-colors"
+                                    value={selectedProxy}
+                                    onChange={(e) => {
+                                        setSelectedProxy(e.target.value as keyof typeof PROXIES);
+                                        setShowUnlockHelp(false);
+                                    }}
+                                >
+                                    {Object.entries(PROXIES).map(([key, config]) => (
+                                        <option key={key} value={key}>{config.label}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-3 pointer-events-none text-gray-500">
+                                    <Settings2 size={12} />
+                                </div>
+                            </div>
+                            
+                            {/* ALERTA DE DESBLOQUEIO CORS-ANYWHERE */}
+                            {selectedProxy === 'corsanywhere' && (
+                                <div className="mt-2 text-center">
+                                    <a 
+                                        href="https://cors-anywhere.herokuapp.com/corsdemo" 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border transition-all ${showUnlockHelp ? 'bg-amber-500 text-black border-amber-500 animate-pulse' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'}`}
+                                    >
+                                        <ExternalLink size={10} /> {showUnlockHelp ? 'CLIQUE AQUI PARA DESBLOQUEAR' : 'Desbloquear Acesso (Obrigatório)'}
+                                    </a>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-4 relative z-10">
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">E-mail</label>
-                            <div className="relative group">
-                                <Mail className="absolute left-3 top-3 text-gray-500 group-focus-within:text-emerald-400 transition-colors" size={18} />
+                    <form onSubmit={handleLogin} className="space-y-5 relative z-10">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1 tracking-wider">E-mail de Acesso</label>
+                            <div className="relative group/input">
+                                <Mail className="absolute left-4 top-3.5 text-gray-500 group-focus-within/input:text-emerald-400 transition-colors" size={18} />
                                 <input 
                                     type="email" 
                                     required
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:border-emerald-500 outline-none transition-all"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all placeholder:text-gray-600"
                                     placeholder="seu@email.com"
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
@@ -314,14 +407,14 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                             </div>
                         </div>
                         
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Senha</label>
-                            <div className="relative group">
-                                <Lock className="absolute left-3 top-3 text-gray-500 group-focus-within:text-emerald-400 transition-colors" size={18} />
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1 tracking-wider">Senha</label>
+                            <div className="relative group/input">
+                                <Lock className="absolute left-4 top-3.5 text-gray-500 group-focus-within/input:text-emerald-400 transition-colors" size={18} />
                                 <input 
                                     type="password" 
                                     required
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:border-emerald-500 outline-none transition-all"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all placeholder:text-gray-600"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
@@ -332,15 +425,17 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                         <button 
                             type="submit" 
                             disabled={isLoggingIn}
-                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 mt-2"
+                            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 mt-4 active:scale-[0.98]"
                         >
                             {isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : <LogIn size={20} />}
                             ACESSAR PAINEL
                         </button>
                         
-                        <p className="text-center text-[10px] text-gray-600 mt-4">
-                            Utilize suas credenciais do smsrush.com.br
-                        </p>
+                        <div className="text-center mt-6">
+                            <p className="text-[10px] text-gray-600">
+                                Utilize suas credenciais oficiais do smsrush.com.br
+                            </p>
+                        </div>
                     </form>
                 </div>
             </div>
