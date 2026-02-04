@@ -1,5 +1,3 @@
-
-
 export interface Account {
   id: number;
   deposito: number;
@@ -122,5 +120,5 @@ export interface SquadMember {
   is_online?: boolean;
 }
 
-// Adicionado 'slots', 'store' e 'sms'
-export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store' | 'sms';
+// REMOVIDO 'sms' E MANTIDO O RESTO
+export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store';
