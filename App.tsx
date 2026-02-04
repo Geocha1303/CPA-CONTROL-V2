@@ -39,6 +39,7 @@ import {
   Loader2,
   Gamepad2, // Icone para Slots
   ShoppingBag, // Icone Loja
+  Smartphone, // SMS Icon
   Link as LinkIcon // Renomeado para evitar conflitos
 } from 'lucide-react';
 import { AppState, ViewType, Notification, DayRecord } from './types';
@@ -56,6 +57,7 @@ import Admin from './components/Admin';
 import Squad from './components/Squad';
 import SlotsRadar from './components/SlotsRadar'; 
 import Store from './components/Store'; 
+import SmsRush from './components/SmsRush';
 import TourGuide, { TourStep } from './components/TourGuide';
 
 // Initial State definition
@@ -752,6 +754,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('sms_rush_token'); // Limpa token do SMS Rush para segurança
     window.location.reload();
   };
 
@@ -943,7 +946,10 @@ function App() {
                      // MOSTRA BOTÃO SLOTS PARA TODOS (AGORA LIBERADO)
                      { id: 'slots', label: 'Slots Radar', icon: Gamepad2 },
                      { id: 'squad', label: 'Squad', icon: Users },
-                     ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }] : []),
+                     ...(isAdmin ? [
+                        { id: 'admin', label: 'Admin Panel', icon: ShieldCheck },
+                        { id: 'sms', label: 'SMS Studio I.A', icon: Smartphone }
+                     ] : []),
                      { id: 'configuracoes', label: 'Ajustes', icon: SettingsIcon },
                  ].map(item => (
                      <button
@@ -1045,6 +1051,10 @@ function App() {
             {/* Render Views */}
             {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
             {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
+            
+            {/* SMS RUSH - SOMENTE ADMIN */}
+            {activeView === 'sms' && isAdmin && <SmsRush notify={notify} />}
+            
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}

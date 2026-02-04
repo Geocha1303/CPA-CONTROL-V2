@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/sms-rush/:path*",
+      "destination": "https://api.smsrush.com.br/api/v1/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
