@@ -99,9 +99,10 @@ const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do
 const IdentityModal = ({ onSave, currentName }: { onSave: (name: string) => void, currentName?: string }) => {
     const [name, setName] = useState('');
     
-    // Lista de nomes inválidos
-    const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+    // Lista de nomes inválidos que forçam a troca
+    const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
 
+    // Validação: Nome deve ter tamanho > 2 e não pode estar na lista de inválidos
     const isValid = name.trim().length > 2 && !invalidNames.includes(name.trim().toUpperCase());
 
     return (
@@ -118,7 +119,7 @@ const IdentityModal = ({ onSave, currentName }: { onSave: (name: string) => void
                 <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Identificação Necessária</h2>
                 <p className="text-gray-400 text-sm mb-8 leading-relaxed">
                     {currentName && currentName.toUpperCase().includes('VISITANTE') 
-                        ? "O modo Visitante é temporário. Para salvar seu progresso e acessar o Squad, escolha um nome de operador."
+                        ? "O modo Visitante é temporário. Para salvar seu progresso e acessar o Squad, escolha um nome de operador único."
                         : "Detectamos que você está usando um nome padrão do sistema. Por favor, identifique-se para continuar."}
                 </p>
 
@@ -652,8 +653,9 @@ function App() {
                     title: data.title,
                     message: data.message
                 });
-                // Toca som de alerta
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                // Toca som de alerta (ATUALIZADO PARA CRYSTAL GLASS - MAIS DISCRETO)
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
+                audio.volume = 0.5;
                 audio.play().catch(()=>{});
             }
         })
@@ -761,7 +763,7 @@ function App() {
 
   // --- CHECK FOR DEFAULT NAME (OPERADOR / VISITANTE) ---
   // Atualizado para incluir 'Visitante Gratuito' e variantes, forçando a troca.
-  const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN'];
+  const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
                             (!state.config.userName || invalidNames.includes(state.config.userName.toUpperCase()));
 
@@ -837,6 +839,7 @@ function App() {
                     // RESETA O TUTORIAL: Força dismissed=false para garantir que o TourGuide abra assim que o modal fechar.
                     onboarding: { ...state.onboarding, dismissed: false }
                 });
+                setTourOpen(true);
                 notify("Identidade definida com sucesso! Iniciando tour...", "success");
             }} 
           />
@@ -1042,7 +1045,7 @@ function App() {
 
             {/* Render Views */}
             {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
-            {activeView === 'store' && <Store />}
+            {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
