@@ -20,7 +20,6 @@ import {
   ShieldCheck,
   Lock,
   Terminal,
-  MonitorX,
   Fingerprint,
   Activity,
   Eye,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, CloudUpload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorX, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag } from 'lucide-react';
+import { Key, Copy, Check, Database, Upload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorOff, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag } from 'lucide-react';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -586,7 +586,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                 <div className="glass-card rounded-2xl overflow-hidden border border-white/5 min-h-[400px]">
                     <div className="p-5 bg-white/[0.02] border-b border-white/5 flex items-center justify-between">
                          <h3 className="font-bold text-white flex items-center gap-2">
-                             <MonitorX size={18} className="text-emerald-400" /> Monitoramento de Sessões
+                             <MonitorOff size={18} className="text-emerald-400" /> Monitoramento de Sessões
                          </h3>
                          {connectionStatus === 'CONNECTED' && <span className="text-[9px] text-emerald-500/50 uppercase font-bold tracking-widest animate-pulse">Atualizando...</span>}
                     </div>
@@ -747,7 +747,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                 </button>
                                 <button onClick={saveKeyToSupabase} disabled={!generatedKey || isSavingKey} className={`w-full font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
                                         !generatedKey ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/20' }`}>
-                                    {isSavingKey ? <RefreshCw className="animate-spin" size={18}/> : <CloudUpload size={18} />} SALVAR
+                                    {isSavingKey ? <RefreshCw className="animate-spin" size={18}/> : <Upload size={18} />} SALVAR
                                 </button>
                             </div>
                         </div>
@@ -868,7 +868,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                                 className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 rounded-lg transition-colors border border-blue-500/20"
                                                 title="Liberar chave para novo PC (Resetar Vínculo)"
                                             >
-                                                <MonitorX size={14} />
+                                                <MonitorOff size={14} />
                                             </button>
                                         )}
                                         
