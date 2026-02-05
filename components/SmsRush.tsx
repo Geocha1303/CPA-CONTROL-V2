@@ -149,8 +149,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         tokenRef.current = token;
     }, [token]);
 
-    // Timers Reference for Force Update
-    const [, setTick] = useState(0);
+    // Timers Reference for Force Update UI (Tick suave de 1s para o cronômetro)
+    const [, setTimerTick] = useState(0);
 
     // Salvar favoritos
     useEffect(() => {
@@ -358,7 +358,9 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                     service_id: service.id,
                     status: 'WAITING',
                     server_id: selectedServer,
-                    purchase_time: Date.now()
+                    purchase_time: Date.now(),
+                    // REGRA DE RETENÇÃO MÍNIMA: Bloqueia cancelamento por 120 segundos
+                    cancelUnlockTime: Date.now() + 120000 
                 };
                 
                 setActiveNumbers(prev => [newNum, ...prev]);
@@ -379,21 +381,51 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     };
 
     const cancelNumber = async (id: string) => {
+        const num = activeNumbers.find(n => n.id === id);
+        if (!num) return;
+
+        // VERIFICAÇÃO DUPLA DE TEMPO (Preventivo)
+        const timeDiff = Date.now() - num.purchase_time;
+        if (timeDiff < 120000) {
+            const remaining = Math.ceil((120000 - timeDiff) / 1000);
+            notify(`Aguarde ${remaining}s para cancelar (Regra da Operadora).`, "info");
+            // Atualiza visualmente se estiver desincronizado
+            setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + (120000 - timeDiff) } : n));
+            return;
+        }
+
+        // VERIFICAÇÃO DE CÓDIGO RECEBIDO
+        if (num.status === 'RECEIVED' || num.code) {
+            notify("Impossível cancelar: SMS já recebido e cobrado.", "error");
+            return;
+        }
+
         // ATUALIZA UI IMEDIATAMENTE
-        setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
         setCancellingIds(prev => [...prev, id]);
         
         try {
             const res = await requestBridge(`virtual-numbers/${id}`, 'DELETE');
+            const data = await res.json();
             
-            if (res.ok) {
+            // Sucesso se status for success OU se a mensagem indicar que já foi cancelado
+            if (res.ok || (data.message && data.message.includes('already'))) {
+                setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
                 notify("Cancelado e reembolsado.", "success");
                 fetchBalance();
             } else {
-                console.warn("Cancel API Warning");
+                // Se der erro de tempo, reconecta o timer
+                console.warn("Cancel API Warning:", data);
+                if(data.message && (data.message.includes('time') || data.message.includes('wait'))) {
+                     notify("A API exigiu mais tempo de retenção.", "info");
+                     setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + 30000 } : n)); // +30s retry
+                } else {
+                     // Assume cancelado se for outro erro obscuro para limpar a UI
+                     setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
+                }
             }
         } catch (err: any) {
-            notify("Erro ao cancelar na API (UI atualizada localmente)", "info");
+            notify("Erro de conexão (Número marcado como cancelado localmente)", "info");
+            setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
         } finally {
             setCancellingIds(prev => prev.filter(cid => cid !== id));
         }
@@ -437,7 +469,15 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         return <Landmark size={16} />;
     };
 
-    // POLLING OTIMIZADO
+    // UI TIMER TICK (1s) - Apenas visual para o cronômetro de retenção
+    useEffect(() => {
+        const timerInterval = setInterval(() => {
+            setTimerTick(t => t + 1);
+        }, 1000);
+        return () => clearInterval(timerInterval);
+    }, []);
+
+    // POLLING OTIMIZADO (4s) - Para buscar SMS
     useEffect(() => {
         if (!token) return;
         
@@ -800,11 +840,11 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                             <Copy size={18} />
                                                         </button>
                                                         
-                                                        {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 10s em erro) */}
+                                                        {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 120s) */}
                                                         {num.status === 'WAITING' && (
                                                             isLocked ? (
-                                                                <div className="p-2.5 bg-red-500/5 rounded-xl text-red-400 border border-red-500/20 flex items-center gap-2 font-mono font-bold text-xs cursor-not-allowed w-[100px] justify-center">
-                                                                    <Timer size={14} className="animate-pulse" /> {remainingTime}s
+                                                                <div className="p-2.5 bg-amber-500/5 rounded-xl text-amber-400 border border-amber-500/20 flex items-center gap-2 font-mono font-bold text-xs cursor-not-allowed w-[120px] justify-center" title="Regra da Operadora: Mínimo 120s para cancelar">
+                                                                    <Timer size={14} className="animate-pulse" /> Retenção: {remainingTime}s
                                                                 </div>
                                                             ) : (
                                                                 <button 
