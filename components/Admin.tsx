@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Key, Copy, Check, Database, Upload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorOff, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag } from 'lucide-react';
@@ -67,8 +68,6 @@ const Admin: React.FC<Props> = ({ notify }) => {
       return () => {
           clearTimeout(timer);
           if (channelRef.current) supabase.removeChannel(channelRef.current);
-          // IMPORTANTE: Não removemos o canal 'system_global_alerts' aqui.
-          // O App.tsx precisa dele ativo para ESCUTAR. Se removermos aqui, matamos a escuta do próprio admin se ele estiver testando na mesma aba.
       };
   }, []);
 
@@ -80,21 +79,14 @@ const Admin: React.FC<Props> = ({ notify }) => {
   }, [activeTab]);
 
   const connectRealtime = () => {
+      // 1. Limpeza de canal anterior
       if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
       }
       setConnectionStatus('CONNECTING');
 
-      // Use a unique name for the admin channel to avoid conflicts
-      const channel = supabase.channel('admin_monitor_room', {
-          config: {
-              presence: { key: 'admin-monitor' },
-          }
-      });
-      channelRef.current = channel;
-
-      // Subscribe to the global 'online_users' channel to see everyone
+      // 2. Conectar APENAS ao canal global onde os usuários reportam presença
       const globalPresenceChannel = supabase.channel('online_users');
 
       const updatePresenceList = () => {
@@ -110,8 +102,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
             });
         });
         
-        // Remove duplicatas baseadas no device_id (para não mostrar o mesmo user 2x se a conexão oscilar)
-        // Se device_id for null/undefined (versões antigas), usa a key como fallback
+        // Remove duplicatas baseadas no device_id
         const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id || item.key, item])).values());
         setOnlineUsers(uniqueUsers);
       };
@@ -123,14 +114,20 @@ const Admin: React.FC<Props> = ({ notify }) => {
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 setConnectionStatus('CONNECTED');
-                // Admin doesn't necessarily need to broadcast presence to users, 
-                // but needs to listen.
+                // Admin apenas escuta, não precisa transmitir presença aqui necessariamente
+                // Mas para debug, pode se registrar como 'ADMIN-MONITOR'
+                await globalPresenceChannel.track({
+                    user: 'ADMIN-MONITOR',
+                    key: 'ADMIN-PANEL',
+                    is_admin: true,
+                    online_at: new Date().toISOString(),
+                    device_id: 'ADMIN-CONSOLE'
+                });
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 setConnectionStatus('ERROR');
             }
         });
         
-      // Keep reference to clean up both
       channelRef.current = globalPresenceChannel;
   };
 

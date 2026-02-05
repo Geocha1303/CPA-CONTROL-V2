@@ -127,7 +127,22 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     const [activeTab, setActiveTab] = useState<'catalog' | 'vault'>('catalog');
     
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeNumbers, setActiveNumbers] = useState<ActiveNumber[]>([]);
+    
+    // PERSISTÊNCIA PARA NÚMEROS ATIVOS (CORREÇÃO DE REFRESH F5)
+    const [activeNumbers, setActiveNumbers] = useState<ActiveNumber[]>(() => {
+        try {
+            const saved = localStorage.getItem('sms_active_numbers');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            return [];
+        }
+    });
+
+    // EFFECT PARA SALVAR AUTOMATICAMENTE
+    useEffect(() => {
+        localStorage.setItem('sms_active_numbers', JSON.stringify(activeNumbers));
+    }, [activeNumbers]);
+
     const [isLoadingServices, setIsLoadingServices] = useState(false);
     const [isBuying, setIsBuying] = useState(false);
     
