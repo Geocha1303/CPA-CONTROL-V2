@@ -25,7 +25,6 @@ interface OnlineUser {
     device_id: string;
 }
 
-// Novo tipo para analytics
 interface StoreAnalyticsItem {
     product_name: string;
     count: number;
@@ -46,848 +45,625 @@ const Admin: React.FC<Props> = ({ notify }) => {
 
   // States do Monitoramento (Realtime)
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
-  const [activeTab, setActiveTab] = useState<'monitor' | 'keys' | 'store'>('keys'); // Adicionado 'store'
+  const [activeTab, setActiveTab] = useState<'monitor' | 'keys' | 'store'>('keys');
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'ERROR'>('CONNECTING');
   const channelRef = useRef<any>(null);
 
   // States do Broadcast
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL'); // 'ALL' ou o DEVICE_ID do usuário
+  const [broadcastTarget, setBroadcastTarget] = useState<string>('ALL');
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   
   // State Analytics
   const [storeAnalytics, setStoreAnalytics] = useState<StoreAnalyticsItem[]>([]);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
-  // --- EFEITOS ---
-  useEffect(() => {
-      fetchKeys();
-      const timer = setTimeout(() => connectRealtime(), 500);
+  // --- FUNCTIONS ---
 
-      return () => {
-          clearTimeout(timer);
-          if (channelRef.current) supabase.removeChannel(channelRef.current);
-      };
-  }, []);
-
-  // Busca analytics quando a aba muda
-  useEffect(() => {
-      if (activeTab === 'store') {
-          fetchStoreAnalytics();
+  const fetchKeys = async () => {
+      setIsLoadingKeys(true);
+      try {
+          const { data, error } = await supabase
+              .from('access_keys')
+              .select('*')
+              .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          setKeysList(data || []);
+      } catch (err: any) {
+          console.error("Erro ao buscar chaves:", err);
+          notify(`Erro ao buscar chaves: ${err.message}`, 'error');
+      } finally {
+          setIsLoadingKeys(false);
       }
-  }, [activeTab]);
+  };
+
+  const fetchStoreAnalytics = async () => {
+      setIsLoadingAnalytics(true);
+      try {
+          // Fetch store tracking data
+          const { data, error } = await supabase
+              .from('store_tracking')
+              .select('*')
+              .order('clicked_at', { ascending: false })
+              .limit(500); // Limit to recent 500 for performance
+
+          if (error) throw error;
+
+          if (data) {
+              const agg: Record<string, { count: number, last: string }> = {};
+              data.forEach((row: any) => {
+                  const name = row.product_name || 'Desconhecido';
+                  if (!agg[name]) {
+                      agg[name] = { count: 0, last: row.clicked_at };
+                  }
+                  agg[name].count++;
+                  if (new Date(row.clicked_at) > new Date(agg[name].last)) {
+                      agg[name].last = row.clicked_at;
+                  }
+              });
+
+              const result: StoreAnalyticsItem[] = Object.entries(agg).map(([name, val]) => ({
+                  product_name: name,
+                  count: val.count,
+                  last_click: val.last
+              })).sort((a,b) => b.count - a.count);
+
+              setStoreAnalytics(result);
+          }
+      } catch (err: any) {
+          console.error("Erro analytics:", err);
+          // notify('Erro ao carregar analytics', 'error');
+      } finally {
+          setIsLoadingAnalytics(false);
+      }
+  };
 
   const connectRealtime = () => {
-      // 1. Limpeza de canal anterior
       if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
       }
       setConnectionStatus('CONNECTING');
 
-      // 2. Conectar APENAS ao canal global onde os usuários reportam presença
-      const globalPresenceChannel = supabase.channel('online_users');
+      // CORREÇÃO CRÍTICA: Adicionada config de Presence Key para alinhar com App.tsx
+      const channel = supabase.channel('online_users', {
+          config: {
+              presence: {
+                  key: 'ADMIN-MONITOR',
+              },
+          },
+      });
+      
+      channelRef.current = channel;
 
-      const updatePresenceList = () => {
-        const newState = globalPresenceChannel.presenceState();
-        const users: OnlineUser[] = [];
-        
-        Object.values(newState).forEach((presences: any) => {
-            presences.forEach((p: any) => {
-                // Filter out invalid presence data
-                if (p.user && p.key) {
-                    users.push(p as OnlineUser);
-                }
-            });
-        });
-        
-        // Remove duplicatas baseadas no device_id
-        const uniqueUsers = Array.from(new Map(users.map(item => [item.device_id || item.key, item])).values());
-        setOnlineUsers(uniqueUsers);
-      };
-
-      globalPresenceChannel
-        .on('presence', { event: 'sync' }, updatePresenceList)
-        .on('presence', { event: 'join' }, updatePresenceList)
-        .on('presence', { event: 'leave' }, updatePresenceList)
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                setConnectionStatus('CONNECTED');
-                // Admin apenas escuta, não precisa transmitir presença aqui necessariamente
-                // Mas para debug, pode se registrar como 'ADMIN-MONITOR'
-                await globalPresenceChannel.track({
-                    user: 'ADMIN-MONITOR',
-                    key: 'ADMIN-PANEL',
-                    is_admin: true,
-                    online_at: new Date().toISOString(),
-                    device_id: 'ADMIN-CONSOLE'
-                });
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                setConnectionStatus('ERROR');
-            }
-        });
-        
-      channelRef.current = globalPresenceChannel;
-  };
-
-  // --- ANALYTICS ---
-  const fetchStoreAnalytics = async () => {
-      setIsLoadingAnalytics(true);
-      try {
-          const { data, error } = await supabase
-              .from('store_tracking')
-              .select('product_name, clicked_at');
-
-          if (error) throw error;
-
-          if (data) {
-              const grouped: Record<string, {count: number, last: string}> = {};
+      channel
+          .on('presence', { event: 'sync' }, () => {
+              const newState = channel.presenceState();
+              const users: OnlineUser[] = [];
               
-              data.forEach((row: any) => {
-                  if (!grouped[row.product_name]) {
-                      grouped[row.product_name] = { count: 0, last: row.clicked_at };
-                  }
-                  grouped[row.product_name].count++;
-                  if (new Date(row.clicked_at) > new Date(grouped[row.product_name].last)) {
-                      grouped[row.product_name].last = row.clicked_at;
-                  }
-              });
-
-              const result: StoreAnalyticsItem[] = Object.keys(grouped).map(key => ({
-                  product_name: key,
-                  count: grouped[key].count,
-                  last_click: grouped[key].last
-              })).sort((a, b) => b.count - a.count);
-
-              setStoreAnalytics(result);
-          }
-      } catch (err: any) {
-          console.error("Erro analytics:", err);
-          // Se tabela não existir, falha silenciosa ou aviso
-      } finally {
-          setIsLoadingAnalytics(false);
-      }
-  };
-
-  // --- FUNÇÕES DE BROADCAST ---
-  const handleSendBroadcast = async () => {
-      if (!broadcastTitle || !broadcastMsg) {
-          notify('Preencha título e mensagem.', 'error');
-          return;
-      }
-      
-      // Correção: Busca segura usando device_id OU key como fallback
-      const targetUser = onlineUsers.find(u => (u.device_id || u.key) === broadcastTarget);
-      let targetName = 'Destino Desconhecido';
-      
-      if (broadcastTarget === 'ALL') {
-          targetName = `TODOS (${onlineUsers.length} conexões)`;
-      } else if (targetUser) {
-          targetName = `${targetUser.user}`;
-      }
-
-      if(!confirm(`ENVIAR ALERTA?\n\nDestino: ${targetName}\n\nIsso aparecerá na tela deste usuário.`)) return;
-
-      setIsSendingBroadcast(true);
-      
-      // TIMEOUT DE SEGURANÇA (5 SEGUNDOS)
-      // Se a rede falhar, o botão destrava sozinho.
-      const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão.')), 5000)
-      );
-
-      try {
-          // Obtém o canal global (Singleton do Supabase)
-          const channel = supabase.channel('system_global_alerts');
-          
-          // Garante que está conectado antes de enviar
-          const connectionPromise = new Promise((resolve, reject) => {
-              if (channel.state === 'joined') {
-                  resolve(true);
-              } else {
-                  channel.subscribe((status) => {
-                      if (status === 'SUBSCRIBED') resolve(true);
-                      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject(new Error('Falha na conexão do canal.'));
+              Object.values(newState).forEach((presences: any) => {
+                  presences.forEach((p: any) => {
+                      if (p.user && p.key) { 
+                          users.push({
+                              user: p.user,
+                              key: p.key,
+                              online_at: p.online_at,
+                              is_admin: p.is_admin,
+                              device_id: p.device_id || 'unknown'
+                          });
+                      }
                   });
+              });
+              setOnlineUsers(users);
+              setConnectionStatus('CONNECTED');
+          })
+          .subscribe(async (status) => {
+              if (status === 'SUBSCRIBED') {
+                  setConnectionStatus('CONNECTED');
+                  // Admin também se registra como presente para "ativar" o canal bidirecional se necessário
+                  await channel.track({
+                      user: 'ADMINISTRADOR',
+                      key: 'MASTER',
+                      is_admin: true,
+                      online_at: new Date().toISOString(),
+                      device_id: 'ADMIN-CONSOLE'
+                  });
+              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                  setConnectionStatus('ERROR');
               }
           });
-
-          // Aguarda conexão (ou timeout)
-          await Promise.race([connectionPromise, timeoutPromise]);
-
-          // Envia a mensagem (com timeout também)
-          const sendPromise = channel.send({
-              type: 'broadcast',
-              event: 'sys_alert',
-              payload: { 
-                  title: broadcastTitle, 
-                  message: broadcastMsg,
-                  target: broadcastTarget, // O alvo pode ser ID ou Key
-                  timestamp: Date.now()
-              }
-          });
-
-          await Promise.race([sendPromise, timeoutPromise]);
-
-          notify('Mensagem enviada com sucesso!', 'success');
-          setBroadcastMsg('');
-          setBroadcastTitle('');
-
-      } catch (e: any) {
-          console.error(e);
-          notify(`Erro: ${e.message || 'Falha no envio'}`, 'error');
-      } finally {
-          setIsSendingBroadcast(false);
-      }
   };
 
-  // --- FUNÇÕES DO SUPABASE (CRUD) ---
-  const fetchKeys = async () => {
-      setIsLoadingKeys(true);
-      try {
-          const { data, error } = await supabase
-            .from('access_keys')
-            .select('*')
-            .order('id', { ascending: false });
+  // --- EFEITOS ---
+  useEffect(() => {
+      fetchKeys();
+      // Delay maior para garantir que o componente montou antes de conectar
+      const timer = setTimeout(() => {
+          if (activeTab === 'monitor') connectRealtime();
+      }, 500);
 
-          if (error) throw error;
-          if (data) setKeysList(data);
-      } catch (err: any) {
-          console.error("Erro ao buscar chaves:", err);
-      } finally {
-          setIsLoadingKeys(false);
+      return () => {
+          clearTimeout(timer);
+          if (channelRef.current) supabase.removeChannel(channelRef.current);
+      };
+  }, [activeTab]);
+
+  useEffect(() => {
+      if (activeTab === 'store') {
+          fetchStoreAnalytics();
       }
-  };
+  }, [activeTab]);
 
-  const toggleKeyStatus = async (id: number, currentStatus: boolean) => {
-      try {
-          const { error } = await supabase
-            .from('access_keys')
-            .update({ active: !currentStatus })
-            .eq('id', id);
+  // --- HANDLERS ---
 
-          if (error) throw error;
-          
-          setKeysList(prev => prev.map(k => k.id === id ? { ...k, active: !currentStatus } : k));
-          notify(currentStatus ? 'Chave DESATIVADA (Usuário será expulso).' : 'Chave ATIVADA.', 'info');
-      } catch (err: any) {
-          notify(`Erro ao atualizar: ${err.message}`, 'error');
-      }
-  };
-
-  const resetHWID = async (id: number) => {
-      if(!confirm("⚠️ ATENÇÃO: Isso permite que a chave seja usada em um NOVO computador. Confirmar reset?")) return;
-      
-      try {
-          const { error } = await supabase
-            .from('access_keys')
-            .update({ hwid: null })
-            .eq('id', id);
-
-          if (error) throw error;
-
-          setKeysList(prev => prev.map(k => k.id === id ? { ...k, hwid: null } : k));
-          notify('Dispositivo desvinculado! A chave pode ser usada novamente.', 'success');
-      } catch (err: any) {
-          notify(`Erro ao resetar: ${err.message}`, 'error');
-      }
-  };
-
-  const deleteKey = async (id: number) => {
-      if (!confirm('Tem certeza? Essa chave será excluída permanentemente e o usuário expulso.')) return;
-
-      try {
-          const { error } = await supabase
-            .from('access_keys')
-            .delete()
-            .eq('id', id);
-
-          if (error) throw error;
-
-          setKeysList(prev => prev.filter(k => k.id !== id));
-          notify('Chave excluída do banco de dados.', 'success');
-      } catch (err: any) {
-          notify(`Erro ao deletar: ${err.message}`, 'error');
-      }
-  };
-
-  // --- GERADOR DE CHAVES ---
-  const generateNewKey = () => {
-      const prefix = "CPA";
+  const generateKey = () => {
+      const prefix = 'CPA';
       const part1 = Math.random().toString(36).substring(2, 6).toUpperCase();
       const part2 = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const newKey = `${prefix}-${part1}-${part2}`;
-      setGeneratedKey(newKey);
+      const part3 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      setGeneratedKey(`${prefix}-${part1}-${part2}-${part3}`);
       setCopied(false);
-      setOwnerNameInput('');
   };
 
-  const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      notify('Copiado para a área de transferência!', 'info');
-  };
-
-  const handleCopyGenerated = () => {
-      copyToClipboard(generatedKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-  };
-
-  const saveKeyToSupabase = async () => {
-      if (!generatedKey) return;
+  const saveKey = async () => {
+      if (!generatedKey || !ownerNameInput) {
+          notify('Preencha o nome e gere uma chave.', 'error');
+          return;
+      }
       setIsSavingKey(true);
-      
       try {
-          const { error } = await supabase
-            .from('access_keys')
-            .insert([
-                { 
-                    key: generatedKey, 
-                    active: true, 
-                    is_admin: false,
-                    owner_name: ownerNameInput || 'Cliente Novo',
-                    hwid: null // Começa sem dispositivo (VIRGEM)
-                }
-            ]);
-
+          const { error } = await supabase.from('access_keys').insert({
+              key: generatedKey,
+              owner_name: ownerNameInput,
+              active: true,
+              is_admin: false
+          });
           if (error) throw error;
           
-          notify('Chave criada! Aguardando primeiro uso.', 'success');
-          setGeneratedKey(''); 
+          notify('Chave gerada e salva com sucesso!', 'success');
+          setGeneratedKey('');
           setOwnerNameInput('');
-          fetchKeys(); 
-
+          setCopied(false);
+          fetchKeys();
       } catch (err: any) {
-          console.error("Supabase Error:", err);
-          if (err.code === '42501' || err.message?.includes('permission')) {
-             notify('ERRO DE PERMISSÃO: Configure as Políticas (RLS) no Supabase.', 'error');
-          } else {
-             notify(`Erro ao salvar: ${err.message}`, 'error');
-          }
+          notify(err.message, 'error');
       } finally {
           setIsSavingKey(false);
       }
   };
 
+  const copyKey = () => {
+      if (generatedKey) {
+          navigator.clipboard.writeText(generatedKey);
+          setCopied(true);
+          notify('Chave copiada para a área de transferência.', 'info');
+      }
+  };
+
+  const toggleStatus = async (id: number, currentStatus: boolean) => {
+      try {
+          const { error } = await supabase
+              .from('access_keys')
+              .update({ active: !currentStatus })
+              .eq('id', id);
+          
+          if (error) throw error;
+          setKeysList(prev => prev.map(k => k.id === id ? { ...k, active: !currentStatus } : k));
+          notify(`Status alterado para ${!currentStatus ? 'Ativo' : 'Inativo'}.`, 'success');
+      } catch (err: any) {
+          notify(err.message, 'error');
+      }
+  };
+
+  const resetHWID = async (id: number) => {
+      try {
+          const { error } = await supabase
+              .from('access_keys')
+              .update({ hwid: null })
+              .eq('id', id);
+          
+          if (error) throw error;
+          setKeysList(prev => prev.map(k => k.id === id ? { ...k, hwid: null } : k));
+          notify('Vínculo de dispositivo (HWID) resetado.', 'success');
+      } catch (err: any) {
+          notify(err.message, 'error');
+      }
+  };
+
+  const deleteKey = async (id: number) => {
+      if (!window.confirm("ATENÇÃO: Isso excluirá permanentemente a chave. Deseja continuar?")) return;
+      try {
+          const { error } = await supabase
+              .from('access_keys')
+              .delete()
+              .eq('id', id);
+          
+          if (error) throw error;
+          setKeysList(prev => prev.filter(k => k.id !== id));
+          notify('Chave excluída do sistema.', 'success');
+      } catch (err: any) {
+          notify(err.message, 'error');
+      }
+  };
+
+  const sendBroadcast = async () => {
+      if (!broadcastTitle || !broadcastMsg) {
+          notify('Preencha título e mensagem.', 'error');
+          return;
+      }
+      setIsSendingBroadcast(true);
+      try {
+          const channel = supabase.channel('system_global_alerts');
+          const status = await new Promise((resolve) => {
+              channel.subscribe((status) => {
+                  if(status === 'SUBSCRIBED') resolve(status);
+              });
+          });
+
+          if (status === 'SUBSCRIBED') {
+              await channel.send({
+                  type: 'broadcast',
+                  event: 'sys_alert',
+                  payload: {
+                      title: broadcastTitle,
+                      message: broadcastMsg,
+                      target: broadcastTarget
+                  }
+              });
+              notify('Broadcast enviado com sucesso!', 'success');
+              setBroadcastTitle('');
+              setBroadcastMsg('');
+              supabase.removeChannel(channel);
+          } else {
+              throw new Error("Falha ao conectar no canal de alerta.");
+          }
+      } catch (err: any) {
+          notify(err.message, 'error');
+      } finally {
+          setIsSendingBroadcast(false);
+      }
+  };
+
+  // --- RENDER ---
   const filteredKeys = keysList.filter(k => 
-      (k.owner_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (k.key || '').toLowerCase().includes(searchTerm.toLowerCase())
+      k.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      k.key.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const allConnections = onlineUsers;
-  const freeUsersOnline = allConnections.filter(u => u.key === 'TROPA-FREE');
-  const paidUsersOnline = allConnections.filter(u => u.key !== 'TROPA-FREE' && !u.is_admin);
-  const adminsOnline = allConnections.filter(u => u.is_admin);
-
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
+    <div className="max-w-[1600px] mx-auto animate-fade-in pb-20">
         
-        {/* HEADER MINIMALISTA */}
-        <div className="flex items-end justify-between border-b border-white/5 pb-6 mb-8">
-            <div className="flex items-center gap-4">
-                <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-lg shadow-amber-900/10">
-                    <ShieldCheck size={28} className="text-amber-400" />
-                </div>
-                <div>
-                    <h2 className="text-3xl font-black text-white tracking-tight">Painel Admin</h2>
-                    <p className="text-gray-400 text-sm font-medium">Gestão de Licenças e Radar</p>
-                </div>
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+            <div className="p-4 bg-gradient-to-br from-red-600 to-rose-700 rounded-2xl shadow-lg shadow-red-900/30 border border-red-500/30">
+                <ShieldCheck size={32} className="text-white" />
             </div>
-
-            {/* STATUS DO RADAR */}
-            {activeTab === 'monitor' && (
-                <div className={`
-                    flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition-all
-                    ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
-                      connectionStatus === 'CONNECTING' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-                      'bg-white/5 border-white/10 text-gray-500'}
-                `}>
-                    {connectionStatus === 'CONNECTED' && (
-                        <>
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                            <span>LIVE</span>
-                        </>
-                    )}
-                    {connectionStatus === 'CONNECTING' && (
-                        <>
-                            <RefreshCw size={10} className="animate-spin" />
-                            <span>SYNC...</span>
-                        </>
-                    )}
-                    {connectionStatus === 'ERROR' && (
-                        <>
-                            <WifiOff size={10} />
-                            <span>OFFLINE</span>
-                            <button onClick={connectRealtime} className="ml-1 hover:text-white underline decoration-dotted">Retry</button>
-                        </>
-                    )}
-                </div>
-            )}
+            <div>
+                <h2 className="text-3xl font-black text-white tracking-tight">Painel Administrativo</h2>
+                <p className="text-gray-400 text-sm font-medium">Gestão de Chaves e Monitoramento de Rede.</p>
+            </div>
         </div>
 
-        {/* TABS DE NAVEGAÇÃO */}
-        <div className="flex justify-center mb-6">
-            <div className="bg-black/40 p-1.5 rounded-2xl border border-white/10 flex gap-2 backdrop-blur-sm">
+        {/* Navigation */}
+        <div className="flex justify-center mb-8">
+             <div className="bg-black/40 p-1.5 rounded-xl border border-white/10 flex gap-2 shadow-inner">
                 <button 
                     onClick={() => setActiveTab('keys')}
-                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'keys' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'keys' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                 >
                     <Key size={16} /> Gestão de Chaves
                 </button>
                 <button 
                     onClick={() => setActiveTab('monitor')}
-                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'monitor' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'monitor' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                 >
-                    <Activity size={16} /> Radar Ao Vivo
-                    {allConnections.length > 0 && (
-                        <span className="bg-black/30 px-1.5 py-0.5 rounded text-[10px] ml-1 text-emerald-300">{allConnections.length}</span>
-                    )}
+                    <Activity size={16} /> Monitoramento Realtime
                 </button>
-                {/* NOVA ABA STORE ANALYTICS */}
                 <button 
                     onClick={() => setActiveTab('store')}
-                    className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'store' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'store' ? 'bg-pink-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                 >
-                    <ShoppingBag size={16} /> Analytics Loja
+                    <ShoppingBag size={16} /> Loja Analytics
                 </button>
-            </div>
+             </div>
         </div>
 
-        {activeTab === 'monitor' ? (
-            // --- ABA DE MONITORAMENTO EM TEMPO REAL ---
-            <div className="space-y-6 animate-fade-in">
+        {activeTab === 'keys' && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 
-                {/* --- ÁREA DE BROADCAST --- */}
-                <div className="glass-card p-6 rounded-2xl border border-indigo-500/30 bg-indigo-900/10 relative overflow-hidden">
-                    <div className="flex items-start gap-6 relative z-10">
-                        <div className="p-4 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/30">
-                            <Megaphone size={32} className="text-white animate-pulse-slow" />
-                        </div>
-                        <div className="flex-1">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="text-xl font-bold text-white mb-1">Centro de Transmissão</h3>
-                                    <p className="text-sm text-indigo-300 mb-4">Envie alertas em tempo real. Ideal para avisar sobre atualizações.</p>
-                                </div>
-                                
-                                {/* SELETOR DE DESTINO */}
-                                <div className="flex flex-col items-end">
-                                    <label className="text-[10px] font-bold text-indigo-300 uppercase mb-1">Destinatário</label>
-                                    <div className="relative">
-                                        <select 
-                                            className="appearance-none bg-black/40 border border-indigo-500/30 rounded-lg py-2 pl-3 pr-8 text-xs font-bold text-white focus:outline-none focus:border-indigo-400 cursor-pointer min-w-[200px]"
-                                            value={broadcastTarget}
-                                            onChange={(e) => setBroadcastTarget(e.target.value)}
-                                        >
-                                            <option value="ALL">📢 TODOS OS USUÁRIOS ({allConnections.length})</option>
-                                            
-                                            {/* CORREÇÃO: Usa DeviceID OU Key como valor do option */}
-                                            {onlineUsers
-                                                .filter(u => u.key !== 'ADMIN-PANEL')
-                                                .sort((a,b) => a.user.localeCompare(b.user)) // Ordena por nome
-                                                .map((u) => {
-                                                    const type = u.key === 'TROPA-FREE' ? ' [Free]' : ' [Licenciado]';
-                                                    const val = u.device_id || u.key;
-                                                    return (
-                                                        <option key={val} value={val}>
-                                                            👤 {u.user}{type}
-                                                        </option>
-                                                    );
-                                                })
-                                            }
-                                        </select>
-                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-indigo-300">
-                                            {broadcastTarget === 'ALL' ? <Globe size={12}/> : <Lock size={12}/>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                                <div className="md:col-span-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Título (Ex: Atualização Importante)" 
-                                        className="w-full bg-black/40 border border-indigo-500/30 rounded-lg px-4 py-3 text-white focus:border-indigo-400 outline-none"
-                                        value={broadcastTitle}
-                                        onChange={e => setBroadcastTitle(e.target.value)}
-                                    />
-                                </div>
-                                <div className="md:col-span-6">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Mensagem (Ex: Corrigimos o erro X, atualize a página!)" 
-                                        className="w-full bg-black/40 border border-indigo-500/30 rounded-lg px-4 py-3 text-white focus:border-indigo-400 outline-none"
-                                        value={broadcastMsg}
-                                        onChange={e => setBroadcastMsg(e.target.value)}
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <button 
-                                        onClick={handleSendBroadcast}
-                                        disabled={isSendingBroadcast}
-                                        className={`w-full h-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-900/20 ${isSendingBroadcast ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isSendingBroadcast ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />} 
-                                        ENVIAR
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Métricas e Lista de Usuários */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* TOTAL */}
-                    <div className="glass-card p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Radio size={80} /></div>
-                        <h4 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total Conectado</h4>
-                        <div className="text-5xl font-black text-white">{allConnections.length}</div>
-                        <div className="flex items-center gap-2 mt-2">
-                             <div className={`h-1.5 w-1.5 rounded-full ${allConnections.length > 0 ? 'bg-emerald-500 shadow-[0_0_5px_#10b981]' : 'bg-gray-600'}`}></div>
-                             <span className="text-xs text-gray-500 font-bold uppercase">Sessões Ativas</span>
-                        </div>
-                    </div>
-
-                    {/* ADMINS */}
-                    <div className="glass-card p-6 rounded-2xl border border-amber-500/10 bg-amber-500/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Crown size={80} /></div>
-                        <h4 className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">Admins Online</h4>
-                        <div className="text-5xl font-black text-white">{adminsOnline.length}</div>
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Gestores Ativos</p>
-                    </div>
-
-                    {/* LICENCIADOS */}
-                    <div className="glass-card p-6 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Zap size={80} /></div>
-                         <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-1">Licenciados (VIP)</h4>
-                        <div className="text-5xl font-black text-white">{paidUsersOnline.length}</div>
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chaves Pagas</p>
-                    </div>
-
-                    {/* FREE */}
-                    <div className="glass-card p-6 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 relative overflow-hidden group">
-                         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><User size={80} /></div>
-                         <h4 className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">Visitantes (Free)</h4>
-                        <div className="text-5xl font-black text-white">{freeUsersOnline.length}</div>
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">Chave: TROPA-FREE</p>
-                    </div>
-                </div>
-
-                {/* Lista de Usuários */}
-                <div className="glass-card rounded-2xl overflow-hidden border border-white/5 min-h-[400px]">
-                    <div className="p-5 bg-white/[0.02] border-b border-white/5 flex items-center justify-between">
-                         <h3 className="font-bold text-white flex items-center gap-2">
-                             <MonitorOff size={18} className="text-emerald-400" /> Monitoramento de Sessões
-                         </h3>
-                         {connectionStatus === 'CONNECTED' && <span className="text-[9px] text-emerald-500/50 uppercase font-bold tracking-widest animate-pulse">Atualizando...</span>}
-                    </div>
-                    
-                    {connectionStatus === 'ERROR' && allConnections.length === 0 ? (
-                         <div className="flex flex-col items-center justify-center py-20 text-gray-600 opacity-60">
-                            <WifiOff size={48} className="mb-4 text-red-400/50" />
-                            <p className="text-lg font-bold">Conexão Realtime Indisponível</p>
-                            <p className="text-sm">Verifique sua rede ou proxy.</p>
-                            <button onClick={connectRealtime} className="mt-4 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-white border border-white/10">Tentar Novamente</button>
-                        </div>
-                    ) : (
-                        <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar">
-                            {allConnections.length === 0 ? (
-                                <div className="text-center py-20 text-gray-600">
-                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Radio size={32} className="opacity-40" />
-                                    </div>
-                                    <p className="text-sm font-bold">Radar Limpo</p>
-                                    <p className="text-xs">Nenhum usuário online no momento.</p>
-                                </div>
-                            ) : (
-                                allConnections.map((user, idx) => (
-                                    <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:bg-white/[0.02] group ${
-                                        user.is_admin ? 'bg-amber-500/[0.05] border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.05)]' :
-                                        user.key === 'TROPA-FREE' 
-                                        ? 'bg-emerald-500/[0.02] border-emerald-500/10' 
-                                        : 'bg-indigo-500/[0.02] border-indigo-500/10'
-                                    }`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                                user.is_admin ? 'bg-amber-500/20 text-amber-400' :
-                                                user.key === 'TROPA-FREE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400'
-                                            }`}>
-                                                {user.is_admin ? <Crown size={20} /> : <User size={20} />}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <h4 className="font-bold text-white text-sm">{user.user}</h4>
-                                                    {user.is_admin && <span className="text-[9px] bg-amber-500 text-black px-1.5 rounded font-bold">ADMIN</span>}
-                                                    {user.key === 'TROPA-FREE' && <span className="text-[9px] bg-emerald-500 text-black px-1.5 rounded font-bold">FREE</span>}
-                                                </div>
-                                                <div className="flex items-center gap-3 mt-1.5">
-                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-mono bg-black/20 px-2 py-0.5 rounded border border-white/5 group-hover:border-white/10 transition-colors">
-                                                        <Cpu size={10} /> {(user.device_id || 'UNKNOWN').substring(0, 16)}...
-                                                    </div>
-                                                    <span className="text-[10px] text-gray-500 font-mono">
-                                                        Login: {new Date(user.online_at).toLocaleTimeString()}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-4">
-                                            <button 
-                                                onClick={() => {
-                                                    setBroadcastTarget(user.device_id || user.key); // Alvo agora é o DEVICE ID específico OU KEY
-                                                    setBroadcastTitle('Mensagem Privada do Admin');
-                                                    document.querySelector('input')?.focus();
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold text-gray-300 border border-white/10"
-                                            >
-                                                Mandar MSG
-                                            </button>
-                                            <div className="text-right">
-                                                <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${user.is_admin ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`}></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        ) : activeTab === 'store' ? (
-            // --- ABA DE ANALYTICS LOJA ---
-            <div className="animate-fade-in space-y-6">
-                <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
-                    <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                        <div>
-                            <h3 className="font-bold text-white flex items-center gap-2">
-                                <ShoppingBag size={18} className="text-indigo-400" /> Ranking de Interesse (Cliques)
-                            </h3>
-                            <p className="text-gray-400 text-xs mt-1">Produtos mais acessados pelos usuários.</p>
-                        </div>
-                        <button onClick={fetchStoreAnalytics} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                             <RefreshCw size={16} className={isLoadingAnalytics ? 'animate-spin' : ''} />
-                        </button>
-                    </div>
-
-                    <div className="p-0">
-                        {storeAnalytics.length === 0 ? (
-                            <div className="py-20 text-center text-gray-600">
-                                <ShoppingBag size={40} className="mx-auto mb-4 opacity-50" />
-                                <p>Nenhum dado de clique registrado ainda.</p>
-                            </div>
-                        ) : (
-                            <table className="w-full text-left text-sm text-gray-400">
-                                <thead className="bg-black/20 text-xs uppercase font-bold text-gray-500 border-b border-white/5">
-                                    <tr>
-                                        <th className="px-6 py-4">Ranking</th>
-                                        <th className="px-6 py-4">Produto</th>
-                                        <th className="px-6 py-4 text-center">Total Cliques</th>
-                                        <th className="px-6 py-4 text-right">Último Acesso</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                    {storeAnalytics.map((item, index) => (
-                                        <tr key={index} className="hover:bg-white/[0.02]">
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-bold text-xs ${index === 0 ? 'bg-amber-500 text-black' : index === 1 ? 'bg-gray-300 text-black' : index === 2 ? 'bg-orange-700 text-white' : 'bg-white/10 text-gray-400'}`}>
-                                                    {index + 1}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-white font-medium">{item.product_name}</td>
-                                            <td className="px-6 py-4 text-center font-mono font-bold text-indigo-400 text-lg">{item.count}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-xs">{new Date(item.last_click).toLocaleString()}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-                </div>
-            </div>
-        ) : (
-            // --- ABA DE GESTÃO DE CHAVES (Mantida Original) ---
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-                {/* Coluna 1: GERADOR */}
+                {/* COLUMN 1: GENERATOR & BROADCAST */}
                 <div className="space-y-8">
-                    <div className="glass-card rounded-2xl overflow-hidden border border-amber-500/20 bg-amber-500/5 shadow-2xl shadow-amber-900/10">
-                        <div className="p-6 border-b border-amber-500/10 bg-gradient-to-r from-amber-900/20 to-transparent">
-                            <h3 className="font-bold text-amber-400 flex items-center gap-2">
-                                <Key size={18} /> Nova Licença (Uso Único)
-                            </h3>
-                            <p className="text-xs text-gray-400 mt-1">Gera uma chave que trava no primeiro PC que usar.</p>
-                        </div>
-                        <div className="p-6">
-                             <div className="mb-4">
-                                <label className="text-xs text-gray-500 font-bold uppercase mb-1 block">Nome do Cliente / Usuário</label>
-                                <input type="text" value={ownerNameInput} onChange={(e) => setOwnerNameInput(e.target.value)}
-                                    className="w-full bg-black/40 border border-amber-500/20 rounded-lg p-3 text-white font-medium focus:border-amber-500 outline-none transition-colors" placeholder="Ex: Cliente VIP 01" />
-                            </div>
-                            
-                            <div className="flex gap-2 mb-6">
-                                <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-4 text-white font-mono text-center font-bold tracking-widest text-lg select-all shadow-inner">
-                                    {generatedKey || '---- ---- ----'}
-                                </div>
-                                <button onClick={handleCopyGenerated} className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-4 rounded-xl transition-colors" disabled={!generatedKey} title="Copiar">
-                                    {copied ? <Check size={20} /> : <Copy size={20} />}
-                                </button>
+                    {/* KEY GENERATOR */}
+                    <div className="gateway-card rounded-2xl p-6 border border-indigo-500/20 bg-[#0a0614]">
+                        <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
+                            <Zap size={20} className="text-indigo-400" /> Gerador de Licenças
+                        </h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase ml-1 mb-1 block">Nome do Cliente</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                                    placeholder="Ex: João Silva"
+                                    value={ownerNameInput}
+                                    onChange={e => setOwnerNameInput(e.target.value)}
+                                />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={generateNewKey} className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold py-3 rounded-xl transition-all">
-                                    GERAR CÓDIGO
-                                </button>
-                                <button onClick={saveKeyToSupabase} disabled={!generatedKey || isSavingKey} className={`w-full font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
-                                        !generatedKey ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/20' }`}>
-                                    {isSavingKey ? <RefreshCw className="animate-spin" size={18}/> : <Upload size={18} />} SALVAR
-                                </button>
+                            <div className="p-4 bg-black/40 rounded-xl border border-white/5 text-center relative group">
+                                {generatedKey ? (
+                                    <>
+                                        <p className="font-mono text-xl font-bold text-white tracking-widest break-all">{generatedKey}</p>
+                                        <div className="flex justify-center gap-2 mt-3">
+                                            <button onClick={copyKey} className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                                {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Copiado' : 'Copiar'}
+                                            </button>
+                                            <button onClick={generateKey} className="text-xs bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                                <RefreshCw size={12} /> Regenerar
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="py-4 text-gray-500 text-sm flex flex-col items-center gap-2 cursor-pointer hover:text-indigo-400 transition-colors" onClick={generateKey}>
+                                        <Cpu size={24} />
+                                        <span>Clique para gerar hash único</span>
+                                    </div>
+                                )}
                             </div>
+
+                            <button 
+                                onClick={saveKey}
+                                disabled={isSavingKey || !generatedKey}
+                                className={`w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2 ${isSavingKey ? 'opacity-70 cursor-wait' : ''}`}
+                            >
+                                {isSavingKey ? <RefreshCw className="animate-spin" size={18} /> : <Database size={18} />}
+                                {isSavingKey ? 'Salvando...' : 'REGISTRAR LICENÇA'}
+                            </button>
                         </div>
                     </div>
-                    
-                    {/* Info Card */}
-                    <div className="glass-card p-6 rounded-2xl border border-white/5">
-                        <h4 className="text-gray-400 font-bold text-sm mb-2 flex items-center gap-2"><User size={16}/> Estatísticas de Acesso</h4>
-                        <div className="grid grid-cols-2 gap-4 mt-4">
-                            <div className="bg-black/40 p-3 rounded-lg border border-white/5">
-                                <span className="block text-2xl font-bold text-white">{keysList.length}</span>
-                                <span className="text-[10px] text-gray-500 uppercase font-bold">Total de Chaves</span>
-                            </div>
-                            <div className="bg-black/40 p-3 rounded-lg border border-white/5">
-                                <span className="block text-2xl font-bold text-indigo-400">{keysList.filter(k => k.hwid !== null).length}</span>
-                                <span className="text-[10px] text-gray-500 uppercase font-bold">Já Usadas</span>
+
+                    {/* SYSTEM BROADCAST */}
+                    <div className="gateway-card rounded-2xl p-6 border border-amber-500/20 bg-[#0f0a05]">
+                        <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
+                            <Megaphone size={20} className="text-amber-400" /> Alerta Global (Broadcast)
+                        </h3>
+                        
+                        <div className="space-y-3">
+                            <input 
+                                type="text" 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-all placeholder:text-gray-600"
+                                placeholder="Título do Alerta"
+                                value={broadcastTitle}
+                                onChange={e => setBroadcastTitle(e.target.value)}
+                            />
+                            <textarea 
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-all placeholder:text-gray-600 resize-none h-24"
+                                placeholder="Mensagem para todos os usuários online..."
+                                value={broadcastMsg}
+                                onChange={e => setBroadcastMsg(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                                <select 
+                                    className="bg-black/40 border border-white/10 rounded-xl px-3 text-xs text-gray-400 focus:border-amber-500 outline-none"
+                                    value={broadcastTarget}
+                                    onChange={e => setBroadcastTarget(e.target.value)}
+                                >
+                                    <option value="ALL">Todos</option>
+                                    {/* Future: Add specific user IDs */}
+                                </select>
+                                <button 
+                                    onClick={sendBroadcast}
+                                    disabled={isSendingBroadcast}
+                                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isSendingBroadcast ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />}
+                                    ENVIAR
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Coluna 2: LISTA DE GESTÃO */}
-                <div className="glass-card rounded-2xl overflow-hidden border border-white/5 flex flex-col h-[600px]">
-                    <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                         <div>
-                            <h3 className="font-bold text-white flex items-center gap-2">
-                                <Database size={18} className="text-blue-400" /> Banco de Chaves
+                {/* COLUMN 2 & 3: KEYS LIST */}
+                <div className="xl:col-span-2 gateway-card rounded-2xl p-6 border border-white/10 bg-[#05030a] flex flex-col h-[800px]">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                <List size={20} className="text-gray-400" /> Base de Usuários
                             </h3>
-                            <p className="text-[10px] text-gray-400 mt-1">Controle de uso único e bloqueios.</p>
-                         </div>
-                         <button onClick={fetchKeys} className="p-2 bg-white/5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
-                             <RefreshCw size={16} className={isLoadingKeys ? 'animate-spin' : ''} />
-                         </button>
-                    </div>
-
-                    {/* Barra de Busca */}
-                    <div className="p-4 bg-black/20 border-b border-white/5">
+                            <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded-full font-bold">{keysList.length}</span>
+                        </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
                             <input 
                                 type="text" 
-                                placeholder="Buscar por cliente ou chave..." 
-                                className="w-full bg-black/40 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"
+                                placeholder="Buscar chave ou nome..." 
+                                className="bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:border-indigo-500 outline-none w-64"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={e => setSearchTerm(e.target.value)}
                             />
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-                        {filteredKeys.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-500 opacity-60">
-                                <List size={40} className="mb-2" />
-                                <p className="text-sm">Nenhuma chave encontrada</p>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                        {isLoadingKeys ? (
+                            <div className="flex items-center justify-center h-40">
+                                <RefreshCw className="animate-spin text-indigo-500" size={32} />
                             </div>
                         ) : (
-                            filteredKeys.map((item) => (
-                                <div key={item.id} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors group">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="w-full">
+                            filteredKeys.map(key => (
+                                <div key={key.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-indigo-500/30 transition-all group flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-2 rounded-lg ${key.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            <Power size={18} />
+                                        </div>
+                                        <div>
                                             <div className="flex items-center gap-2">
-                                                <h4 className="font-bold text-white text-sm">{item.owner_name}</h4>
-                                                {item.is_admin && <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/30 font-bold">ADMIN</span>}
-                                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase ${
-                                                    item.active 
-                                                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                                                    : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
-                                                }`}>
-                                                    {item.active ? 'Ativo' : 'Bloqueado'}
-                                                </span>
+                                                <h4 className="font-bold text-white text-sm">{key.owner_name}</h4>
+                                                {key.is_admin && <span className="bg-amber-500/20 text-amber-400 text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 font-bold uppercase">Admin</span>}
                                             </div>
-                                            <div 
-                                                className="text-xs font-mono text-gray-400 mt-1 bg-black/30 px-2 py-1 rounded w-fit cursor-pointer hover:text-white hover:bg-black/50 transition-colors flex items-center gap-2 border border-white/5"
-                                                onClick={() => copyToClipboard(item.key)}
-                                                title="Clique para copiar"
-                                            >
-                                                {item.key} <Copy size={10} />
-                                            </div>
-                                            
-                                            {/* STATUS DE VÍNCULO (One Time Use) */}
-                                            <div className="mt-2 flex items-center gap-2 w-full">
-                                                {item.hwid ? (
-                                                    <div className="flex-1 bg-indigo-900/20 border border-indigo-500/20 rounded p-1.5 flex items-center gap-2 overflow-hidden">
-                                                        <div className="bg-indigo-500/20 p-1 rounded">
-                                                            <Link size={12} className="text-indigo-400" />
-                                                        </div>
-                                                        <div className="overflow-hidden">
-                                                            <span className="text-[8px] text-gray-400 font-bold uppercase block">ID do PC</span>
-                                                            <span className="text-[9px] text-indigo-300 font-mono font-bold truncate block w-32">{item.hwid}</span>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-[9px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20 flex items-center gap-1 font-bold animate-pulse">
-                                                        <Unlink size={10} /> AGUARDANDO USO
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <p className="text-xs text-gray-500 font-mono mt-0.5">{key.key}</p>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                                        {/* Botão de Bloqueio */}
-                                        <button 
-                                            onClick={() => toggleKeyStatus(item.id, item.active)}
-                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors border ${
-                                                item.active 
-                                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20' 
-                                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                                            }`}
-                                        >
-                                            <Power size={12} /> {item.active ? 'BLOQUEAR' : 'ATIVAR'}
-                                        </button>
 
-                                        {/* Botão de Reset (Permitir novo uso) */}
-                                        {item.hwid && (
-                                            <button 
-                                                onClick={() => resetHWID(item.id)}
-                                                className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 rounded-lg transition-colors border border-blue-500/20"
-                                                title="Liberar chave para novo PC (Resetar Vínculo)"
-                                            >
-                                                <MonitorOff size={14} />
-                                            </button>
+                                    <div className="flex items-center gap-4">
+                                        {key.hwid ? (
+                                            <div className="flex items-center gap-1 text-[10px] text-gray-500" title="Dispositivo Vinculado">
+                                                <MonitorOff size={12} /> <span className="hidden sm:inline">HWID OK</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1 text-[10px] text-amber-500" title="Sem vínculo">
+                                                <WifiOff size={12} /> <span className="hidden sm:inline">LIVRE</span>
+                                            </div>
                                         )}
                                         
-                                        {/* Botão de Excluir */}
-                                        <button 
-                                            onClick={() => deleteKey(item.id)}
-                                            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-rose-400 rounded-lg transition-colors border border-gray-700"
-                                            title="Excluir Definitivamente"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
+                                        <div className="flex gap-1">
+                                            <button 
+                                                onClick={() => toggleStatus(key.id, key.active)}
+                                                className={`p-2 rounded-lg border transition-all ${key.active ? 'bg-emerald-500/10 border-emerald-500/20 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 hover:text-emerald-400'}`}
+                                                title={key.active ? "Desativar" : "Ativar"}
+                                            >
+                                                <Power size={14} />
+                                            </button>
+                                            
+                                            <button 
+                                                onClick={() => resetHWID(key.id)}
+                                                className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-amber-400 hover:border-amber-500/30 transition-all"
+                                                title="Resetar HWID (Desvincular Dispositivo)"
+                                            >
+                                                <RotateCcw size={14} />
+                                            </button>
+
+                                            <button 
+                                                onClick={() => deleteKey(key.id)}
+                                                className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/30 transition-all"
+                                                title="Excluir Chave"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
                 </div>
+            </div>
+        )}
 
+        {activeTab === 'monitor' && (
+            <div className="grid grid-cols-1 gap-8 animate-slide-in-right">
+                <div className="gateway-card rounded-2xl p-8 border border-emerald-500/20 bg-[#030504] relative overflow-hidden min-h-[600px]">
+                    <div className="flex justify-between items-center mb-8 relative z-10">
+                        <div>
+                            <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                                <Globe size={24} className="text-emerald-400" /> Rede Neural (Realtime)
+                            </h3>
+                            <p className="text-gray-400 text-sm flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                                {connectionStatus === 'CONNECTED' ? 'Conexão Estabelecida' : 'Desconectado'}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-4xl font-black text-white">{onlineUsers.length}</span>
+                            <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Usuários Online</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 relative z-10">
+                        {onlineUsers.map((user, i) => (
+                            <div key={i} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 hover:border-emerald-500/30 transition-all group animate-fade-in">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-black rounded-full flex items-center justify-center border border-white/10 shadow-lg">
+                                        <User size={20} className="text-gray-300" />
+                                    </div>
+                                    <div className="overflow-hidden">
+                                        <h4 className="text-white font-bold text-sm truncate">{user.user}</h4>
+                                        <p className="text-[10px] text-gray-500 truncate font-mono">{user.key}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex justify-between items-center text-[10px] text-gray-600 border-t border-white/5 pt-2">
+                                    <span className="flex items-center gap-1">
+                                        <Cpu size={10} /> {user.device_id.substring(0, 8)}
+                                    </span>
+                                    <span className="text-emerald-500/70 font-bold">{new Date(user.online_at).toLocaleTimeString()}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Background Map Effect */}
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, #10b981 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'store' && (
+            <div className="grid grid-cols-1 gap-8 animate-slide-in-right">
+                <div className="gateway-card rounded-2xl p-8 border border-pink-500/20 bg-[#0a0508] min-h-[600px]">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                                <ShoppingBag size={24} className="text-pink-400" /> Analytics da Loja
+                            </h3>
+                            <p className="text-gray-400 text-sm mt-1">Produtos mais acessados pelos usuários.</p>
+                        </div>
+                        <button 
+                            onClick={fetchStoreAnalytics}
+                            className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                        >
+                            <RefreshCw size={18} className={isLoadingAnalytics ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-400">
+                            <thead className="bg-white/5 text-pink-300 uppercase text-xs font-bold">
+                                <tr>
+                                    <th className="px-6 py-4 rounded-tl-xl">Produto</th>
+                                    <th className="px-6 py-4 text-center">Cliques / Acessos</th>
+                                    <th className="px-6 py-4 text-right rounded-tr-xl">Último Acesso</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {isLoadingAnalytics ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center">
+                                            <RefreshCw className="animate-spin inline-block mr-2" /> Carregando dados...
+                                        </td>
+                                    </tr>
+                                ) : storeAnalytics.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center text-gray-600">
+                                            Nenhum dado de acesso registrado ainda.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    storeAnalytics.map((item, i) => (
+                                        <tr key={i} className="hover:bg-white/[0.02]">
+                                            <td className="px-6 py-4 font-bold text-white">{item.product_name}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className="bg-pink-500/10 text-pink-400 px-2 py-1 rounded font-mono font-bold border border-pink-500/20">
+                                                    {item.count}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono text-xs">
+                                                {new Date(item.last_click).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         )}
     </div>
   );
 };
-
 export default Admin;

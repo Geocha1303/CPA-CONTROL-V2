@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Smartphone, RefreshCw, Search, Copy, X, MessageSquare, LogIn, Globe, Wifi, ShieldOff, Activity, LayoutGrid, List, Wallet, Timer, CloudLightning, Server, CheckCircle2, XCircle, ShoppingBag, ArrowRight, Star, Zap, AlertTriangle, Trash2, Phone, Mail, Video, Hash, Camera, Send, DollarSign, Database, FileText, Download, Landmark, ExternalLink, Lock } from 'lucide-react';
+import { Smartphone, RefreshCw, Search, Copy, X, MessageSquare, LogIn, Globe, Wifi, ShieldOff, Activity, LayoutGrid, List, Wallet, Timer, CloudLightning, Server, CheckCircle2, XCircle, ShoppingBag, ArrowRight, Star, Zap, AlertTriangle, Trash2, Phone, Mail, Video, Hash, Camera, Send, DollarSign, Database, FileText, Download, Landmark, ExternalLink, Lock, ShieldCheck } from 'lucide-react';
 
 interface Props {
     notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -41,66 +41,68 @@ const BANK_KEYWORDS = [
     'nubank', 'picpay', 'pagbank', 'mercadopago', 'c6', 'inter', 'itau', 'bradesco', 
     'santander', 'caixa', 'neon', 'will', 'next', 'banco', 'infinitepay', 'ton', 
     'recargapay', '99pay', 'banqi', 'iti', 'agibank', 'sofisa', 'pan', 'original',
-    'safra', 'btg', 'digio', 'nomad', 'wise', 'bs2', 'crefisa', 'bmg', 'mercado'
+    'safra', 'btg', 'digio', 'nomad', 'wise', 'bs2', 'crefisa', 'bmg', 'mercado',
+    'ame', 'asaas', 'celcoin', 'astropay', 'paypal', 'coinbase', 'sicredi'
 ];
 
-// --- CATÁLOGO ESTÁTICO (DADOS REAIS F12) ---
+// --- CATÁLOGO ESTÁTICO (DADOS REAIS F12 - TABELA STUDIO I.A ATUALIZADA) ---
 const STATIC_DB: Record<number, Service[]> = {
     1: [
-        { id: 3, name: "99app", price: 0.8, quantity: 100 },
-        { id: 4, name: "Abastece-ai", price: 0.4, quantity: 100 },
-        { id: 5, name: "AGIBANK", price: 0.5, quantity: 100 },
-        { id: 6, name: "aiqfome", price: 0.5, quantity: 100 },
-        { id: 11, name: "Ame Digital", price: 0.55, quantity: 100 },
-        { id: 13, name: "ApostaGanha", price: 0.3, quantity: 100 },
-        { id: 15, name: "Asaas", price: 0.5, quantity: 100 },
-        { id: 16, name: "Astropay", price: 0.8, quantity: 100 },
-        { id: 19, name: "Banqi", price: 0.3, quantity: 100 },
-        { id: 20, name: "bet365", price: 0.5, quantity: 100 },
-        { id: 21, name: "Binance", price: 0.5, quantity: 100 },
-        { id: 25, name: "Bradesco", price: 0.4, quantity: 100 },
-        { id: 28, name: "C6 Bank", price: 0.55, quantity: 100 },
+        // Servidor 1 (Principal)
+        { id: 70, name: "Mercado Pago", price: 1.2, quantity: 100 },
+        { id: 88, name: "PicPay", price: 1.0, quantity: 100 },
+        { id: 83, name: "Nubank", price: 1.5, quantity: 100 },
         { id: 29, name: "CAIXA", price: 1.0, quantity: 100 },
-        { id: 30, name: "Casino/bet", price: 1.0, quantity: 100 },
-        { id: 59, name: "Itau", price: 0.6, quantity: 100 },
-        { id: 60, name: "Iti", price: 0.4, quantity: 100 },
-        { id: 70, name: "Mercado Pago", price: 1.3, quantity: 100 },
-        { id: 83, name: "Nubank", price: 1.2, quantity: 100 },
-        { id: 89, name: "PagBank", price: 0.4, quantity: 100 },
-        { id: 91, name: "Paypal", price: 0.3, quantity: 100 },
-        { id: 105, name: "Santander", price: 0.5, quantity: 100 },
-        { id: 154, name: "Mercado Livre", price: 0.5, quantity: 100 }
+        { id: 105, name: "Santander", price: 0.8, quantity: 100 },
+        { id: 5, name: "Agibank", price: 0.6, quantity: 100 },
+        { id: 59, name: "Itaú", price: 0.8, quantity: 100 },
+        { id: 60, name: "Iti (Itaú)", price: 0.6, quantity: 100 },
+        { id: 25, name: "Bradesco", price: 0.8, quantity: 100 },
+        { id: 89, name: "PagBank", price: 0.7, quantity: 100 },
+        { id: 28, name: "C6 Bank", price: 0.8, quantity: 100 },
+        { id: 78, name: "Neon", price: 0.8, quantity: 100 },
+        { id: 80, name: "Next", price: 0.8, quantity: 100 },
+        { id: 109, name: "Sicredi", price: 1.0, quantity: 100 },
+        { id: 135, name: "Will Bank", price: 1.0, quantity: 100 },
+        { id: 138, name: "Wise", price: 1.2, quantity: 100 },
+        { id: 16, name: "Astropay", price: 0.9, quantity: 100 },
+        { id: 91, name: "PayPal", price: 0.8, quantity: 100 },
+        { id: 32, name: "Coinbase", price: 1.0, quantity: 100 },
+        { id: 11, name: "Ame Digital", price: 0.6, quantity: 100 },
+        { id: 15, name: "Asaas", price: 0.7, quantity: 100 },
+        { id: 19, name: "Banqi", price: 0.5, quantity: 100 },
+        { id: 31, name: "Celcoin", price: 0.5, quantity: 100 },
+        { id: 34, name: "CrefisaMais", price: 0.6, quantity: 100 }
     ],
     2: [
-        { id: 5370, name: "bet365", price: 3.5, quantity: 100 },
-        { id: 5372, name: "Casino/bet", price: 1.9, quantity: 100 },
-        { id: 5363, name: "99app", price: 1.0, quantity: 100 },
-        { id: 5367, name: "Agibank", price: 1.3, quantity: 100 },
-        { id: 5382, name: "ApostaGanha", price: 1.0, quantity: 100 },
-        { id: 5374, name: "Bradesco", price: 1.5, quantity: 100 },
-        { id: 5360, name: "C6 Bank", price: 1.3, quantity: 100 },
-        { id: 5365, name: "Infinitepay", price: 1.5, quantity: 100 },
-        { id: 5366, name: "Itau", price: 1.5, quantity: 100 },
-        { id: 5383, name: "Iti", price: 0.5, quantity: 100 },
-        { id: 5300, name: "Mercado Livre", price: 1.4, quantity: 100 },
-        { id: 5364, name: "Neon", price: 1.3, quantity: 100 },
-        { id: 5359, name: "Nubank", price: 1.5, quantity: 100 },
-        { id: 5373, name: "PagBank", price: 1.0, quantity: 100 },
-        { id: 5358, name: "Picpay", price: 1.2, quantity: 100 },
-        { id: 5362, name: "Santander", price: 0.7, quantity: 100 },
-        { id: 5385, name: "Will Bank", price: 1.3, quantity: 100 },
-        { id: 5384, name: "Wise", price: 1.5, quantity: 100 }
+        // Servidor 2 (Premium/Alternativo)
+        { id: 5300, name: "Mercado Pago", price: 1.8, quantity: 100 },
+        { id: 5358, name: "PicPay", price: 1.5, quantity: 100 },
+        { id: 5359, name: "Nubank", price: 2.0, quantity: 100 },
+        { id: 5362, name: "Santander", price: 1.2, quantity: 100 },
+        { id: 5367, name: "Agibank", price: 1.0, quantity: 100 },
+        { id: 5366, name: "Itaú", price: 1.2, quantity: 100 },
+        { id: 5383, name: "Iti", price: 1.0, quantity: 100 },
+        { id: 5374, name: "Bradesco", price: 1.2, quantity: 100 },
+        { id: 5373, name: "PagBank", price: 1.2, quantity: 100 },
+        { id: 5360, name: "C6 Bank", price: 1.2, quantity: 100 },
+        { id: 5364, name: "Neon", price: 1.2, quantity: 100 },
+        { id: 5387, name: "Next", price: 1.2, quantity: 100 },
+        { id: 5385, name: "Will Bank", price: 1.5, quantity: 100 },
+        { id: 5384, name: "Wise", price: 1.8, quantity: 100 }
     ],
     3: [
-        { id: 2156, name: "AGIBANK", price: 0.5, quantity: 100 },
-        { id: 2163, name: "CAIXA", price: 0.5, quantity: 100 },
-        { id: 2155, name: "Cassino / bets", price: 1.0, quantity: 100 },
-        { id: 2165, name: "Celcoin", price: 0.5, quantity: 100 },
+        // Servidor 3 (Econômico/Fallback)
+        { id: 154, name: "Mercado Pago", price: 0.8, quantity: 100 },
+        { id: 1154, name: "PicPay", price: 0.8, quantity: 100 },
+        { id: 2163, name: "CAIXA", price: 0.8, quantity: 100 },
+        { id: 2158, name: "Santander", price: 0.7, quantity: 100 },
+        { id: 2156, name: "Agibank", price: 0.5, quantity: 100 },
         { id: 2164, name: "Iti", price: 0.5, quantity: 100 },
-        { id: 154, name: "Mercado Pago", price: 0.5, quantity: 100 },
-        { id: 1154, name: "PicPay", price: 0.7, quantity: 100 },
-        { id: 2161, name: "RecargaPay", price: 0.5, quantity: 100 },
-        { id: 2158, name: "Santander", price: 0.5, quantity: 100 }
+        { id: 2161, name: "RecargaPay", price: 0.6, quantity: 100 },
+        { id: 2160, name: "Astropay", price: 0.7, quantity: 100 },
+        { id: 2162, name: "PayPal", price: 0.7, quantity: 100 },
+        { id: 2166, name: "Coinbase", price: 0.9, quantity: 100 }
     ]
 };
 
@@ -128,7 +130,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     
     const [searchTerm, setSearchTerm] = useState('');
     
-    // PERSISTÊNCIA PARA NÚMEROS ATIVOS (CORREÇÃO DE REFRESH F5)
+    // PERSISTÊNCIA PARA NÚMEROS ATIVOS
     const [activeNumbers, setActiveNumbers] = useState<ActiveNumber[]>(() => {
         try {
             const saved = localStorage.getItem('sms_active_numbers');
@@ -138,7 +140,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         }
     });
 
-    // EFFECT PARA SALVAR AUTOMATICAMENTE
     useEffect(() => {
         localStorage.setItem('sms_active_numbers', JSON.stringify(activeNumbers));
     }, [activeNumbers]);
@@ -152,27 +153,21 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         return saved ? JSON.parse(saved) : [];
     });
     
-    // Cancellation State
     const [cancellingIds, setCancellingIds] = useState<string[]>([]);
-
     const [lastUpdate, setLastUpdate] = useState<string>('');
 
-    // Ref para garantir acesso ao valor mais atual do token em callbacks
     const tokenRef = useRef(token);
     
     useEffect(() => {
         tokenRef.current = token;
     }, [token]);
 
-    // Timers Reference for Force Update UI (Tick suave de 1s para o cronômetro)
     const [, setTimerTick] = useState(0);
 
-    // Salvar favoritos
     useEffect(() => {
         localStorage.setItem('sms_favorites', JSON.stringify(favorites));
     }, [favorites]);
 
-    // Salvar Pix Keys
     useEffect(() => {
         localStorage.setItem('sms_pix_keys', JSON.stringify(pixKeys));
     }, [pixKeys]);
@@ -248,12 +243,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             // USANDO CATÁLOGO ESTÁTICO COM FILTRO BANCÁRIO
             const staticData = STATIC_DB[serverId] || [];
             
-            // FILTRO RIGOROSO: Apenas serviços que contém palavras-chave de banco
-            const bankServices = staticData.filter(s => 
-                BANK_KEYWORDS.some(k => s.name.toLowerCase().includes(k))
-            );
-            
-            const sortedData = [...bankServices].sort((a: Service, b: Service) => {
+            const sortedData = [...staticData].sort((a: Service, b: Service) => {
                 const isFavA = favorites.includes(a.id);
                 const isFavB = favorites.includes(b.id);
                 if (isFavA && !isFavB) return -1;
@@ -276,7 +266,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         if (id === selectedServer) return;
         setSelectedServer(id);
         fetchServices(undefined, id); 
-        // notify(`Conectado ao Server ${id}`, 'info');
     };
 
     const refreshData = async () => {
@@ -347,46 +336,61 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         }
     }, [token]);
 
+    // --- HELPER FOR FALLBACK LOGIC ---
+    const findAlternativeService = (name: string, currentServer: number): { serverId: number, serviceId: number } | null => {
+        // Tenta Server 1 -> 2 -> 3 (Excluindo o atual)
+        const order = [1, 2, 3].filter(id => id !== currentServer);
+
+        for (const serverId of order) {
+            const match = STATIC_DB[serverId]?.find(s => s.name === name);
+            if (match) return { serverId, serviceId: match.id };
+        }
+        return null;
+    };
+
+    // --- PURCHASE LOGIC WITH FALLBACK ---
+    const attemptPurchase = async (serviceId: number, serverId: number, serviceName: string): Promise<any> => {
+        const res = await requestBridge('virtual-numbers', 'POST', {
+            service_id: serviceId,
+            country_id: 73,
+            server_id: serverId,
+            quantity: 1
+        });
+        const data = await res.json();
+        if (data.success === false) throw new Error(data.message || data.error || 'Erro na compra');
+        return data;
+    };
+
     const buyNumber = async (service: Service) => {
         if (isBuying) return;
         setIsBuying(true);
         
         try {
-            const res = await requestBridge('virtual-numbers', 'POST', {
-                service_id: service.id,
-                country_id: 73,
-                server_id: selectedServer,
-                quantity: 1
-            });
-            const data = await res.json();
-            
-            if (data.success === false) throw new Error(data.message || 'Erro na compra');
+            // Tenta o servidor atual primeiro
+            try {
+                const data = await attemptPurchase(service.id, selectedServer, service.name);
+                handleSuccessfulPurchase(data, service.name, service.id, selectedServer);
+            } catch (err: any) {
+                // VERIFICA SE É ERRO DE ESTOQUE (E004, NO STOCK, ETC)
+                const errorMsg = err.message ? err.message.toLowerCase() : '';
+                const isStockError = errorMsg.includes('stock') || errorMsg.includes('number') || errorMsg.includes('estoque') || errorMsg.includes('e004');
 
-            const id = data.id || data.data?.id;
-            const number = data.number || data.data?.number;
-
-            if (id || number) {
-                const newNum: ActiveNumber = {
-                    id: id,
-                    number: number,
-                    service_name: service.name,
-                    service_id: service.id,
-                    status: 'WAITING',
-                    server_id: selectedServer,
-                    purchase_time: Date.now(),
-                    // REGRA DE RETENÇÃO: Se for Server 1, libera instantâneo (0). Outros: 120s.
-                    cancelUnlockTime: selectedServer === 1 ? 0 : Date.now() + 120000 
-                };
-                
-                setActiveNumbers(prev => [newNum, ...prev]);
-                
-                if (number && navigator.clipboard) {
-                    navigator.clipboard.writeText(number);
-                    notify(`Número ${number} gerado (Server ${selectedServer})`, 'success');
+                if (isStockError) {
+                    // Tenta Fallback
+                    const fallback = findAlternativeService(service.name, selectedServer);
+                    if (fallback) {
+                        notify(`Server ${selectedServer} sem estoque. Tentando Server ${fallback.serverId} (Fallback Automático)...`, 'info');
+                        
+                        // Tenta o fallback
+                        const dataFallback = await attemptPurchase(fallback.serviceId, fallback.serverId, service.name);
+                        handleSuccessfulPurchase(dataFallback, service.name, fallback.serviceId, fallback.serverId);
+                        notify(`Conectado com sucesso ao Server ${fallback.serverId}!`, 'success');
+                    } else {
+                        throw new Error(`Sem estoque no Server ${selectedServer} e sem alternativas.`);
+                    }
+                } else {
+                    throw err; // Se não for estoque, lança o erro original
                 }
-                fetchBalance();
-            } else {
-                throw new Error("Resposta inválida da API.");
             }
         } catch (err: any) {
             notify(err.message, "error");
@@ -395,53 +399,78 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         }
     };
 
+    const handleSuccessfulPurchase = (data: any, serviceName: string, serviceId: number, serverId: number) => {
+        const id = data.id || data.data?.id;
+        const number = data.number || data.data?.number;
+
+        if (id || number) {
+            const newNum: ActiveNumber = {
+                id: id,
+                number: number,
+                service_name: serviceName,
+                service_id: serviceId,
+                status: 'WAITING',
+                server_id: serverId,
+                purchase_time: Date.now(),
+                // Regra de Retenção: Server 1 = 0s, Outros = 120s
+                cancelUnlockTime: serverId === 1 ? 0 : Date.now() + 120000 
+            };
+            
+            setActiveNumbers(prev => [newNum, ...prev]);
+            
+            if (number && navigator.clipboard) {
+                navigator.clipboard.writeText(number);
+                notify(`Número ${number} gerado (Server ${serverId})`, 'success');
+            }
+            
+            setTimeout(() => fetchBalance(), 500); 
+        } else {
+            throw new Error("Resposta inválida da API (ID não recebido).");
+        }
+    };
+
     const cancelNumber = async (id: string) => {
         const num = activeNumbers.find(n => n.id === id);
         if (!num) return;
 
-        // VERIFICAÇÃO DUPLA DE TEMPO (Preventivo)
-        // Só aplica a trava de 120s se NÃO for Server 1
+        // VERIFICAÇÃO DUPLA DE TEMPO
         const timeDiff = Date.now() - num.purchase_time;
         if (num.server_id !== 1 && timeDiff < 120000) {
             const remaining = Math.ceil((120000 - timeDiff) / 1000);
             notify(`Aguarde ${remaining}s para cancelar (Regra da Operadora).`, "info");
-            // Atualiza visualmente se estiver desincronizado
             setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + (120000 - timeDiff) } : n));
             return;
         }
 
-        // VERIFICAÇÃO DE CÓDIGO RECEBIDO
         if (num.status === 'RECEIVED' || num.code) {
             notify("Impossível cancelar: SMS já recebido e cobrado.", "error");
             return;
         }
 
-        // ATUALIZA UI IMEDIATAMENTE
         setCancellingIds(prev => [...prev, id]);
         
         try {
             const res = await requestBridge(`virtual-numbers/${id}`, 'DELETE');
             const data = await res.json();
             
-            // Sucesso se status for success OU se a mensagem indicar que já foi cancelado
             if (res.ok || (data.message && data.message.includes('already'))) {
                 setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
                 notify("Cancelado e reembolsado.", "success");
-                fetchBalance();
+                setTimeout(() => fetchBalance(), 500);
             } else {
-                // Se der erro de tempo, reconecta o timer
                 console.warn("Cancel API Warning:", data);
                 if(data.message && (data.message.includes('time') || data.message.includes('wait'))) {
                      notify("A API exigiu mais tempo de retenção.", "info");
-                     setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + 30000 } : n)); // +30s retry
+                     setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + 30000 } : n)); 
                 } else {
-                     // Assume cancelado se for outro erro obscuro para limpar a UI
                      setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
+                     fetchBalance();
                 }
             }
         } catch (err: any) {
             notify("Erro de conexão (Número marcado como cancelado localmente)", "info");
             setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
+            fetchBalance();
         } finally {
             setCancellingIds(prev => prev.filter(cid => cid !== id));
         }
@@ -606,13 +635,28 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
                 
                 <div className="flex items-center gap-5 relative z-10">
-                    <div className="p-3 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl shadow-lg shadow-indigo-900/30 border border-white/5">
-                        <Smartphone className="text-white" size={28} />
-                    </div>
+                    {/* AVATAR COM LINK SEGURO */}
+                    <a href="https://smsrush.com.br/" target="_blank" rel="noreferrer" className="group">
+                        <div className="p-1 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full shadow-lg shadow-indigo-900/30 border border-white/5 cursor-pointer group-hover:scale-105 transition-transform overflow-hidden w-14 h-14 relative">
+                            <img 
+                                src="https://instagram.fguz7-1.fna.fbcdn.net/v/t51.2885-19/515984726_18505314049053277_5074969620859834658_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby44MjguYzIifQ&_nc_ht=instagram.fguz7-1.fna.fbcdn.net&_nc_cat=101&_nc_oc=Q6cZ2QE9D-GF8zp2WqXLtQu8lHE16Te1wIPLbjlU0w6ifUGVRRDMC4ggQRq_wJUcnwkhIAbp_Gm4-W1XAnNCMbK84Pa_&_nc_ohc=4i4L_qfPYNoQ7kNvwHrRjc9&_nc_gid=LPdmvOZfLjwJAaVL2ktPJA&edm=AEYEu-QBAAAA&ccb=7-5&oh=00_AfvYn8TfSb_9e3d1P9TDCPrepsbYx_T1Iev5nnQAl8xy_A&oe=698AD6FB&_nc_sid=ead92" 
+                                alt="SMS Rush"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.src = 'https://cdn-icons-png.flaticon.com/512/724/724664.png'; }} // Fallback
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
+                        </div>
+                    </a>
+
                     <div>
-                        <h2 className="font-black text-2xl text-white tracking-tight flex items-center gap-2">
-                            SMS Studio <span className="text-indigo-400">Pro</span>
-                        </h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="font-black text-2xl text-white tracking-tight">
+                                SMS Studio <span className="text-indigo-400">Pro</span>
+                            </h2>
+                            <div className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <ShieldCheck size={10} /> API Oficial
+                            </div>
+                        </div>
                         <div className="flex items-center gap-3 text-xs font-medium mt-1">
                             <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-bold">
                                 <Wifi size={10}/> ONLINE (BRASIL #73)
@@ -628,18 +672,24 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                     </div>
                 </div>
                 
-                <div className="flex gap-3 relative z-10">
-                    <a 
-                        href="https://sms-rush.com/panel/" 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-colors border border-white/10 flex items-center gap-2"
-                    >
-                        <ExternalLink size={14} /> Site Oficial
-                    </a>
-                    <button onClick={() => { setToken(''); setLoginStatus('idle'); }} className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-white text-xs font-bold transition-colors border border-rose-500/20 flex items-center gap-2">
-                        <XCircle size={14} /> Desconectar
-                    </button>
+                <div className="flex gap-3 relative z-10 flex-col md:flex-row items-end">
+                    <div className="text-right mr-2 hidden md:block">
+                        <p className="text-[10px] text-gray-400 font-medium">Ambiente Seguro & Criptografado</p>
+                        <p className="text-[10px] text-gray-500">Saldo atualiza instantaneamente</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <a 
+                            href="https://smsrush.com.br/" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-colors border border-white/10 flex items-center gap-2"
+                        >
+                            <ExternalLink size={14} /> Site Oficial
+                        </a>
+                        <button onClick={() => { setToken(''); setLoginStatus('idle'); }} className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-white text-xs font-bold transition-colors border border-rose-500/20 flex items-center gap-2">
+                            <XCircle size={14} /> Desconectar
+                        </button>
+                    </div>
                 </div>
             </div>
 
