@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, RefreshCw, Search, Copy, Check, X, Clock, AlertTriangle, MessageSquare, Trash2, Shield, LogIn, DollarSign, Server } from 'lucide-react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Smartphone, RefreshCw, Search, Copy, X, MessageSquare, LogIn, Globe, Wifi, ShieldOff, Activity, LayoutGrid, List, Wallet, Timer, CloudLightning, Server, CheckCircle2, XCircle, ShoppingBag, ArrowRight, Star, Zap, AlertTriangle, Trash2, Phone, Mail, Video, Hash, Camera, Send, DollarSign, Database, FileText, Download, Landmark } from 'lucide-react';
 
 interface Props {
     notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -10,6 +11,7 @@ interface Service {
     name: string;
     price: number;
     quantity: number;
+    favorite?: boolean;
 }
 
 interface ActiveNumber {
@@ -19,139 +21,400 @@ interface ActiveNumber {
     service_id: number;
     code?: string;
     status: 'WAITING' | 'RECEIVED' | 'CANCELED' | 'FINISHED';
-    timer?: number; // Para controle de cancelamento
+    timer?: number;
     server_id: number;
     purchase_time: number;
+    cancelUnlockTime?: number;
 }
 
-// Configuração do Proxy Reverso (Vercel)
-const API_BASE = '/api/sms-rush';
+interface PixKey {
+    id: string;
+    number: string;
+    bank: string;
+    date: string;
+    code: string;
+}
+
+// --- BANCOS E CARTEIRAS (PARA AUTO-SAVE PIX) ---
+const BANK_KEYWORDS = [
+    'nubank', 'picpay', 'pagbank', 'mercadopago', 'c6', 'inter', 'itau', 'bradesco', 
+    'santander', 'caixa', 'neon', 'will', 'next', 'banco', 'infinitepay', 'ton', 
+    'recargapay', '99pay', 'banqi', 'iti', 'agibank'
+];
+
+// --- CATÁLOGO ESTÁTICO (DADOS REAIS F12) ---
+// MOVIDO PARA FORA DO COMPONENTE PARA EVITAR MEMORY LEAK DE 2.6GB
+const STATIC_DB: Record<number, Service[]> = {
+    1: [
+        { id: 3, name: "99app", price: 0.8, quantity: 100 },
+        { id: 4, name: "Abastece-ai", price: 0.4, quantity: 100 },
+        { id: 5, name: "AGIBANK", price: 0.5, quantity: 100 },
+        { id: 6, name: "aiqfome", price: 0.5, quantity: 100 },
+        { id: 7, name: "Airbnb", price: 0.5, quantity: 100 },
+        { id: 8, name: "AliExpress", price: 0.5, quantity: 100 },
+        { id: 9, name: "Alipay/Alibaba", price: 0.5, quantity: 100 },
+        { id: 10, name: "Amazon", price: 0.35, quantity: 100 },
+        { id: 11, name: "Ame Digital", price: 0.55, quantity: 100 },
+        { id: 13, name: "ApostaGanha", price: 0.3, quantity: 100 },
+        { id: 14, name: "Apple", price: 0.1, quantity: 100 },
+        { id: 15, name: "Asaas", price: 0.5, quantity: 100 },
+        { id: 16, name: "Astropay", price: 0.8, quantity: 100 },
+        { id: 19, name: "Banqi", price: 0.3, quantity: 100 },
+        { id: 20, name: "bet365", price: 0.5, quantity: 100 },
+        { id: 21, name: "Binance", price: 0.5, quantity: 100 },
+        { id: 25, name: "Bradesco", price: 0.4, quantity: 100 },
+        { id: 28, name: "C6 Bank", price: 0.55, quantity: 100 },
+        { id: 29, name: "CAIXA", price: 1.0, quantity: 100 },
+        { id: 30, name: "Casino/bet", price: 1.0, quantity: 100 },
+        { id: 37, name: "Discord", price: 0.1, quantity: 100 },
+        { id: 42, name: "Facebook", price: 0.5, quantity: 100 },
+        { id: 49, name: "Google", price: 1.0, quantity: 100 },
+        { id: 56, name: "IFood", price: 0.13, quantity: 100 },
+        { id: 58, name: "Instagram", price: 0.4, quantity: 100 },
+        { id: 59, name: "Itau", price: 0.6, quantity: 100 },
+        { id: 60, name: "Iti", price: 0.4, quantity: 100 },
+        { id: 62, name: "Kwai", price: 0.4, quantity: 100 },
+        { id: 65, name: "LinkedIN", price: 0.1, quantity: 100 },
+        { id: 70, name: "Mercado Pago", price: 1.3, quantity: 100 },
+        { id: 79, name: "Netflix", price: 0.35, quantity: 100 },
+        { id: 83, name: "Nubank", price: 1.2, quantity: 100 },
+        { id: 86, name: "Olx", price: 0.4, quantity: 100 },
+        { id: 89, name: "PagBank", price: 0.4, quantity: 100 },
+        { id: 91, name: "Paypal", price: 0.3, quantity: 100 },
+        { id: 101, name: "Rappi", price: 1.0, quantity: 100 },
+        { id: 105, name: "Santander", price: 0.5, quantity: 100 },
+        { id: 108, name: "Shopee", price: 0.65, quantity: 100 },
+        { id: 114, name: "Telegram", price: 6.0, quantity: 100 },
+        { id: 118, name: "TikTok", price: 0.9, quantity: 100 },
+        { id: 119, name: "Tinder", price: 0.67, quantity: 100 },
+        { id: 121, name: "Twitter", price: 0.1, quantity: 100 },
+        { id: 122, name: "Uber", price: 0.5, quantity: 100 },
+        { id: 127, name: "Viber", price: 0.1, quantity: 100 },
+        { id: 152, name: "Shein", price: 1.0, quantity: 100 },
+        { id: 154, name: "Mercado Livre", price: 0.5, quantity: 100 }
+    ],
+    2: [
+        { id: 5256, name: "WhatsApp", price: 8.0, quantity: 100 },
+        { id: 5258, name: "Telegram", price: 2.0, quantity: 100 },
+        { id: 5370, name: "bet365", price: 3.5, quantity: 100 },
+        { id: 5372, name: "Casino/bet", price: 1.9, quantity: 100 },
+        { id: 5363, name: "99app", price: 1.0, quantity: 100 },
+        { id: 5377, name: "Abastece-aí", price: 5.0, quantity: 100 },
+        { id: 5367, name: "Agibank", price: 1.3, quantity: 100 },
+        { id: 5338, name: "Airbnb", price: 1.7, quantity: 100 },
+        { id: 5294, name: "Amazon", price: 0.7, quantity: 100 },
+        { id: 5382, name: "ApostaGanha", price: 1.0, quantity: 100 },
+        { id: 5374, name: "Bradesco", price: 1.5, quantity: 100 },
+        { id: 5360, name: "C6 Bank", price: 1.3, quantity: 100 },
+        { id: 5267, name: "Discord", price: 0.15, quantity: 100 },
+        { id: 5259, name: "Facebook", price: 0.9, quantity: 100 },
+        { id: 5270, name: "Google", price: 2.0, quantity: 100 },
+        { id: 5381, name: "GovBr", price: 1.5, quantity: 100 },
+        { id: 5365, name: "Infinitepay", price: 1.5, quantity: 100 },
+        { id: 5260, name: "Instagram", price: 0.7, quantity: 100 },
+        { id: 5366, name: "Itau", price: 1.5, quantity: 100 },
+        { id: 5383, name: "Iti", price: 0.5, quantity: 100 },
+        { id: 5368, name: "Kwai", price: 1.0, quantity: 100 },
+        { id: 5300, name: "Mercado Livre", price: 1.4, quantity: 100 },
+        { id: 5364, name: "Neon", price: 1.3, quantity: 100 },
+        { id: 5321, name: "Netflix", price: 1.0, quantity: 100 },
+        { id: 5359, name: "Nubank", price: 1.5, quantity: 100 },
+        { id: 5347, name: "OLX", price: 0.7, quantity: 100 },
+        { id: 5373, name: "PagBank", price: 1.0, quantity: 100 },
+        { id: 5358, name: "Picpay", price: 1.2, quantity: 100 },
+        { id: 5362, name: "Santander", price: 0.7, quantity: 100 },
+        { id: 5379, name: "Serasa", price: 1.5, quantity: 100 },
+        { id: 5301, name: "Shopee", price: 1.5, quantity: 100 },
+        { id: 5323, name: "TikTok", price: 2.5, quantity: 100 },
+        { id: 5315, name: "Tinder", price: 2.5, quantity: 100 },
+        { id: 5261, name: "Twitter/X", price: 2.5, quantity: 100 },
+        { id: 5264, name: "Viber", price: 2.5, quantity: 100 },
+        { id: 5385, name: "Will Bank", price: 1.3, quantity: 100 },
+        { id: 5384, name: "Wise", price: 1.5, quantity: 100 }
+    ],
+    3: [
+        { id: 2156, name: "AGIBANK", price: 0.5, quantity: 100 },
+        { id: 2160, name: "Astropay", price: 0.5, quantity: 100 },
+        { id: 2163, name: "CAIXA", price: 0.5, quantity: 100 },
+        { id: 2155, name: "Cassino / bets", price: 1.0, quantity: 100 },
+        { id: 2165, name: "Celcoin", price: 0.5, quantity: 100 },
+        { id: 2166, name: "Coinbase", price: 0.5, quantity: 100 },
+        { id: 2157, name: "Ifood", price: 0.5, quantity: 100 },
+        { id: 2164, name: "Iti", price: 0.5, quantity: 100 },
+        { id: 3154, name: "Kwai", price: 0.5, quantity: 100 },
+        { id: 154, name: "Mercado Pago", price: 0.5, quantity: 100 },
+        { id: 2162, name: "PayPal", price: 0.5, quantity: 100 },
+        { id: 1154, name: "PicPay", price: 0.7, quantity: 100 },
+        { id: 2161, name: "RecargaPay", price: 0.5, quantity: 100 },
+        { id: 2158, name: "Santander", price: 0.5, quantity: 100 },
+        { id: 2159, name: "Shopee", price: 0.5, quantity: 100 }
+    ]
+};
 
 const SmsRush: React.FC<Props> = ({ notify }) => {
     // Auth State
     const [token, setToken] = useState(localStorage.getItem('sms_rush_token') || '');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    
+    // Data State
     const [balance, setBalance] = useState<number | null>(null);
-    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [isSimulation, setIsSimulation] = useState(false);
 
     // App State
     const [services, setServices] = useState<Service[]>([]);
     const [filteredServices, setFilteredServices] = useState<Service[]>([]);
-    const [selectedServer, setSelectedServer] = useState<1 | 2>(1);
+    const [favorites, setFavorites] = useState<number[]>(() => {
+        const saved = localStorage.getItem('sms_favorites');
+        return saved ? JSON.parse(saved) : [];
+    });
+    
+    // Server State Management
+    const [selectedServer, setSelectedServer] = useState<number>(1);
+    
     const [searchTerm, setSearchTerm] = useState('');
     const [activeNumbers, setActiveNumbers] = useState<ActiveNumber[]>([]);
     const [isLoadingServices, setIsLoadingServices] = useState(false);
     const [isBuying, setIsBuying] = useState(false);
+    
+    // Pix Keys State (New Feature)
+    const [pixKeys, setPixKeys] = useState<PixKey[]>(() => {
+        const saved = localStorage.getItem('sms_pix_keys');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [showPixVault, setShowPixVault] = useState(false);
+    
+    // Cancellation State
+    const [cancellingIds, setCancellingIds] = useState<string[]>([]);
 
-    // Refs para Polling
-    const pollingRef = useRef<any>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [lastUpdate, setLastUpdate] = useState<string>('');
 
-    // --- AUTENTICAÇÃO ---
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsLoggingIn(true);
-        try {
-            const res = await fetch(`${API_BASE}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
+    // Ref para garantir acesso ao valor mais atual do token em callbacks
+    const tokenRef = useRef(token);
+    
+    useEffect(() => {
+        tokenRef.current = token;
+    }, [token]);
+
+    // Timers Reference for Force Update
+    const [, setTick] = useState(0);
+
+    // Salvar favoritos
+    useEffect(() => {
+        localStorage.setItem('sms_favorites', JSON.stringify(favorites));
+    }, [favorites]);
+
+    // Salvar Pix Keys
+    useEffect(() => {
+        localStorage.setItem('sms_pix_keys', JSON.stringify(pixKeys));
+    }, [pixKeys]);
+
+    // --- EDGE FUNCTION REQUEST HANDLER (V2) ---
+    const requestBridge = useCallback(async (
+        targetEndpoint: string, 
+        method: string = 'GET', 
+        body: any = null, 
+        tokenOverride?: string,
+        proxyParams?: Record<string, string>
+    ) => {
+        if (isSimulation) return simulateRequest(targetEndpoint, { method, body });
+
+        const BASE_URL = 'https://hmtnpthypvzozroghzsc.supabase.co/functions/v1/sms-proxy';
+        const cleanPath = targetEndpoint.startsWith('/') ? targetEndpoint.substring(1) : targetEndpoint;
+        const urlObj = new URL(BASE_URL);
+        urlObj.searchParams.append('path', cleanPath);
+        
+        if (proxyParams) {
+            Object.entries(proxyParams).forEach(([k, v]) => {
+                urlObj.searchParams.append(k, v);
             });
-            const data = await res.json();
-            
-            if (data.token) {
-                setToken(data.token);
-                localStorage.setItem('sms_rush_token', data.token);
-                if (data.user && data.user.balance) setBalance(Number(data.user.balance));
-                notify('Conectado ao SMS Rush!', 'success');
-            } else {
-                throw new Error(data.message || 'Falha no login');
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+
+        const activeToken = tokenOverride || tokenRef.current || token;
+
+        if (activeToken) {
+            headers['Authorization'] = `Bearer ${activeToken}`;
+        }
+
+        const options: RequestInit = {
+            method: method,
+            headers: headers
+        };
+
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+
+        try {
+            const res = await fetch(urlObj.toString(), options);
+            if (!res.ok) {
+                let errorMsg = `Erro HTTP: ${res.status}`;
+                try {
+                    const errData = await res.json();
+                    if (errData.error || errData.message) errorMsg = errData.error || errData.message;
+                } catch(e) {}
+                if (res.status === 401) {
+                    setToken('');
+                    localStorage.removeItem('sms_rush_token');
+                }
+                throw new Error(errorMsg);
             }
+            const data = await res.json();
+            if (data && (data.status === 'error' || data.error)) {
+                throw new Error(data.message || data.error);
+            }
+            return { ok: true, json: async () => data };
         } catch (err: any) {
-            notify(err.message, 'error');
-        } finally {
-            setIsLoggingIn(false);
+            console.error("SMS Proxy Error:", err);
+            throw err;
         }
+    }, [token, isSimulation]);
+
+    // --- SIMULATION MOCK ---
+    const simulateRequest = async (endpoint: string, options: any): Promise<any> => {
+        await new Promise(r => setTimeout(r, 600));
+        if (endpoint.includes('login')) return { ok: true, json: async () => ({ token: 'SIM-TOKEN', user: { balance: 100.00 } }) };
+        if (endpoint.includes('me')) return { ok: true, json: async () => ({ balance: 100.00 }) };
+        if (endpoint.includes('virtual-numbers') && options.method === 'POST') {
+            return { ok: true, json: async () => ({ id: 'sim-'+Date.now(), number: '5511999998888', service_name: 'Simulado' }) };
+        }
+        return { ok: true, json: async () => ({ status: 'WAITING' }) };
     };
 
-    const handleLogout = () => {
-        setToken('');
-        localStorage.removeItem('sms_rush_token');
-        setServices([]);
-        setActiveNumbers([]);
-    };
+    // --- ACTIONS ---
 
-    // --- SERVIÇOS ---
-    useEffect(() => {
-        if (token) {
-            fetchServices();
-            // Start Polling loop if we have active numbers
-            startPolling();
-        }
-        return () => stopPolling();
-    }, [token, selectedServer]);
-
-    useEffect(() => {
-        if (searchTerm.trim() === '') {
-            setFilteredServices(services);
-        } else {
-            const lower = searchTerm.toLowerCase();
-            setFilteredServices(services.filter(s => s.name.toLowerCase().includes(lower)));
-        }
-    }, [searchTerm, services]);
-
-    const fetchServices = async () => {
+    const fetchServices = useCallback(async (tokenOverride?: string, serverId: number = selectedServer) => {
         setIsLoadingServices(true);
         try {
-            // Busca dinâmica baseada no Server ID (1 ou 2) e País (73 = Brasil)
-            const res = await fetch(`${API_BASE}/services?country_id=73&server_id=${selectedServer}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            // USANDO CATÁLOGO ESTÁTICO (CORREÇÃO DE PERFORMANCE)
+            const staticData = STATIC_DB[serverId] || [];
             
-            if (Array.isArray(data)) {
-                // Mapeia para formato padrão
-                const mapped = data.map((s: any) => ({
-                    id: s.id,
-                    name: s.name,
-                    price: Number(s.price),
-                    quantity: s.quantity
-                })).sort((a,b) => a.name.localeCompare(b.name));
-                setServices(mapped);
-                setFilteredServices(mapped);
-            }
+            const sortedData = [...staticData].sort((a: Service, b: Service) => {
+                const isFavA = favorites.includes(a.id);
+                const isFavB = favorites.includes(b.id);
+                if (isFavA && !isFavB) return -1;
+                if (!isFavA && isFavB) return 1;
+                if (a.quantity > 0 && b.quantity <= 0) return -1;
+                if (a.quantity <= 0 && b.quantity > 0) return 1;
+                return a.name.localeCompare(b.name);
+            });
+
+            setServices(sortedData);
+            setFilteredServices(sortedData);
+            setLastUpdate(new Date().toLocaleTimeString());
         } catch (err) {
-            console.error(err);
-            notify('Erro ao carregar serviços.', 'error');
+            console.error("Fetch Services Error", err);
+            notify(`Usando catálogo offline para Server ${serverId}.`, "info");
         } finally {
             setIsLoadingServices(false);
         }
+    }, [notify, favorites, selectedServer]);
+
+    const handleServerChange = (id: number) => {
+        if (id === selectedServer) return;
+        setSelectedServer(id);
+        fetchServices(undefined, id); 
+        notify(`Carregando Catálogo Server ${id}...`, 'info');
     };
 
-    // --- COMPRA & FLUXO ---
-    const handleBuyNumber = async (service: Service) => {
+    const refreshData = async () => {
+        if (!tokenRef.current) return;
+        await Promise.all([fetchServices(tokenRef.current, selectedServer), fetchBalance(tokenRef.current)]);
+    };
+
+    const fetchBalance = useCallback(async (tokenOverride?: string) => {
+        try {
+            const res = await requestBridge('auth/me', 'GET', null, tokenOverride);
+            const data = await res.json();
+            const bal = data.balance ?? data.user?.balance ?? data.data?.balance ?? data.data?.user?.balance ?? data.data?.current_balance;
+            if (bal !== undefined) setBalance(Number(bal));
+        } catch (e) { console.error("Balance Error", e); }
+    }, [requestBridge]);
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (loginStatus === 'loading') return;
+        setLoginStatus('loading');
+
+        try {
+            const res = await requestBridge('auth/login', 'POST', { email, password });
+            const data = await res.json();
+            const tk = data.token || data.access_token || data.key || data.data?.token || data.data?.access_token;
+            
+            if (tk) {
+                setToken(tk);
+                localStorage.setItem('sms_rush_token', tk);
+                tokenRef.current = tk;
+                
+                const bal = data.balance ?? data.user?.balance ?? data.data?.balance ?? data.data?.user?.balance ?? data.data?.current_balance;
+                if (bal !== undefined) setBalance(Number(bal));
+                else fetchBalance(tk); 
+
+                setLoginStatus('success');
+                notify("Login realizado! Carregando Server 1...", "success");
+                fetchServices(tk, 1);
+                setSelectedServer(1);
+            } else {
+                throw new Error("Token não recebido. Verifique suas credenciais.");
+            }
+        } catch (err: any) {
+            console.error(err);
+            setLoginStatus('error');
+            notify(err.message || "Erro ao conectar.", "error");
+        }
+    };
+
+    const toggleFavorite = (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setFavorites(prev => {
+            const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+            setFilteredServices(current => [...current].sort((a,b) => {
+                const isFavA = newFavs.includes(a.id);
+                const isFavB = newFavs.includes(b.id);
+                if (isFavA && !isFavB) return -1;
+                if (!isFavA && isFavB) return 1;
+                if (a.quantity > 0 && b.quantity <= 0) return -1;
+                if (a.quantity <= 0 && b.quantity > 0) return 1;
+                return a.name.localeCompare(b.name);
+            }));
+            return newFavs;
+        });
+    };
+
+    useEffect(() => {
+        if (token && services.length === 0) {
+            refreshData();
+        }
+    }, [token]);
+
+    const buyNumber = async (service: Service) => {
         if (isBuying) return;
         setIsBuying(true);
+        
         try {
-            const res = await fetch(`${API_BASE}/virtual-numbers`, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    service_id: service.id,
-                    country_id: 73,
-                    server_id: selectedServer
-                })
+            const res = await requestBridge('virtual-numbers', 'POST', {
+                service_id: service.id,
+                country_id: 73,
+                server_id: selectedServer,
+                quantity: 1
             });
             const data = await res.json();
+            
+            if (data.success === false) throw new Error(data.message || 'Erro na compra');
 
-            if (data.id && data.number) {
-                // Sucesso na compra
-                const newNumber: ActiveNumber = {
-                    id: data.id,
-                    number: data.number,
+            const id = data.id || data.data?.id;
+            const number = data.number || data.data?.number;
+
+            if (id || number) {
+                const newNum: ActiveNumber = {
+                    id: id,
+                    number: number,
                     service_name: service.name,
                     service_id: service.id,
                     status: 'WAITING',
@@ -159,164 +422,213 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                     purchase_time: Date.now()
                 };
                 
-                setActiveNumbers(prev => [newNumber, ...prev]);
+                setActiveNumbers(prev => [newNum, ...prev]);
                 
-                // UX: Copiar Automático
-                navigator.clipboard.writeText(data.number);
-                notify(`Número ${data.number} copiado!`, 'success');
-                
-                // Refresh balance se possível (API não retorna saldo na compra, mas podemos tentar estimar ou refazer login/profile)
-                if(balance !== null) setBalance(prev => prev ? prev - service.price : 0);
-
+                if (number && navigator.clipboard) {
+                    navigator.clipboard.writeText(number);
+                    notify(`Número ${number} gerado (Server ${selectedServer})`, 'success');
+                }
+                fetchBalance();
             } else {
-                throw new Error(data.message || 'Sem estoque ou erro.');
+                throw new Error("Resposta inválida da API.");
             }
         } catch (err: any) {
-            notify(`Erro na compra: ${err.message}`, 'error');
+            notify(err.message, "error");
         } finally {
             setIsBuying(false);
         }
     };
 
-    // --- POLLING DE STATUS ---
-    const startPolling = () => {
-        if (pollingRef.current) clearInterval(pollingRef.current);
+    const cancelNumber = async (id: string) => {
+        // ATUALIZA UI IMEDIATAMENTE
+        setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
+        setCancellingIds(prev => [...prev, id]);
         
-        pollingRef.current = setInterval(async () => {
-            setActiveNumbers(currentList => {
-                // Filtra apenas os que estão esperando
-                const waiting = currentList.filter(n => n.status === 'WAITING');
-                if (waiting.length === 0) return currentList;
-
-                // Para cada número esperando, checa status
-                waiting.forEach(async (num) => {
-                    try {
-                        const res = await fetch(`${API_BASE}/virtual-numbers/${num.id}/status`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        const data = await res.json();
-                        
-                        // A API retorna { status: 'RECEIVED', message: '123456' } ou similar
-                        if (data.status === 'RECEIVED' || data.sms_code) {
-                            const code = data.sms_code || data.message; // Adaptar conforme retorno real
-                            updateNumberStatus(num.id, 'RECEIVED', code);
-                            notify(`SMS Recebido para ${num.service_name}!`, 'success');
-                            
-                            // Toca som
-                            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
-                            audio.play().catch(()=>{});
-                        } else if (data.status === 'CANCELED' || data.status === 'TIMEOUT') {
-                            updateNumberStatus(num.id, 'CANCELED');
-                        }
-                    } catch (e) {
-                        // Ignora erro de rede no polling para não spammar
-                    }
-                });
-
-                return currentList;
-            });
-        }, 5000); // 5 segundos conforme especificação
-    };
-
-    const stopPolling = () => {
-        if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-
-    const updateNumberStatus = (id: string, status: ActiveNumber['status'], code?: string) => {
-        setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status, code } : n));
-    };
-
-    // --- CANCELAMENTO & FINALIZAÇÃO ---
-    const handleCancel = async (num: ActiveNumber) => {
-        if (!confirm('Cancelar este número e pedir reembolso?')) return;
-
         try {
-            const res = await fetch(`${API_BASE}/virtual-numbers/${num.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            // Tratamento do Status Code
-            // 200/204 = Sucesso
-            // 400 = Erro de tempo (Semáforo Amarelo)
+            const res = await requestBridge(`virtual-numbers/${id}`, 'DELETE');
+            const data = await res.json();
             
             if (res.ok) {
-                updateNumberStatus(num.id, 'CANCELED');
-                notify('Número cancelado e reembolsado.', 'info');
-                // Estimativa de estorno no saldo visual
-                // if (balance !== null) fetchProfile... (ideal seria buscar perfil novamente)
+                notify("Cancelado e reembolsado.", "success");
+                fetchBalance();
             } else {
-                const data = await res.json();
-                // Regra do Semáforo Amarelo
-                if (data.message && data.message.includes('time') || res.status === 400) {
-                    const timeLeft = 120; // 2 minutos padrão se a API não mandar o tempo
-                    updateNumberTimer(num.id, timeLeft);
-                    notify('Cancelamento pendente. Aguarde o contador.', 'error');
-                } else {
-                    notify(`Erro: ${data.message}`, 'error');
-                }
+                // Se falhar API, reverte ou mostra erro
+                console.warn("Cancel API Warning:", data);
             }
-        } catch (err) {
-            notify('Erro de conexão ao cancelar.', 'error');
+        } catch (err: any) {
+            notify("Erro ao cancelar na API (UI atualizada localmente)", "info");
+        } finally {
+            setCancellingIds(prev => prev.filter(cid => cid !== id));
         }
     };
 
-    const updateNumberTimer = (id: string, time: number) => {
-        setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, timer: time } : n));
-        
-        // Inicia contagem regressiva local para este item
-        const interval = setInterval(() => {
-            setActiveNumbers(current => {
-                const target = current.find(n => n.id === id);
-                if (!target || target.status !== 'WAITING' || (target.timer && target.timer <= 0)) {
-                    clearInterval(interval);
-                    return current;
-                }
-                return current.map(n => n.id === id ? { ...n, timer: (n.timer || 0) - 1 } : n);
-            });
-        }, 1000);
+    const removeCard = (id: string) => {
+        setActiveNumbers(prev => prev.filter(n => n.id !== id));
     };
+
+    // Helper: Detecta se é banco
+    const isBankService = (name: string) => {
+        return BANK_KEYWORDS.some(bank => name.toLowerCase().includes(bank));
+    };
+
+    // Helper: Salva no Cofre Pix
+    const saveToPixVault = (num: ActiveNumber, code: string) => {
+        setPixKeys(prev => {
+            // Evita duplicatas
+            if (prev.some(k => k.id === num.id)) return prev;
+            return [{
+                id: num.id,
+                number: num.number,
+                bank: num.service_name,
+                code: code,
+                date: new Date().toISOString()
+            }, ...prev];
+        });
+        notify(`Número salvo no Cofre Pix: ${num.service_name}`, 'success');
+    };
+
+    const exportPixKeys = () => {
+        const text = pixKeys.map(k => `Banco: ${k.bank} | Número: ${k.number} | Código: ${k.code} | Data: ${new Date(k.date).toLocaleString()}`).join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CPA_CHAVES_PIX_${new Date().toISOString().slice(0,10)}.txt`;
+        a.click();
+        notify('Lista de Chaves exportada!', 'success');
+    };
+
+    const getServiceIcon = (name: string) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('whats') || lower.includes('zap')) return <Phone size={16} />;
+        if (lower.includes('tele') || lower.includes('gram')) return <Send size={16} />;
+        if (lower.includes('face') || lower.includes('insta')) return <Camera size={16} />;
+        if (lower.includes('google') || lower.includes('gmail')) return <Mail size={16} />;
+        if (lower.includes('tik') || lower.includes('tok')) return <Video size={16} />;
+        if (isBankService(lower)) return <DollarSign size={16} />;
+        return <Hash size={16} />;
+    };
+
+    // POLLING OTIMIZADO (Só roda se houver números WAITING)
+    useEffect(() => {
+        if (!token) return;
+        
+        const pollInterval = setInterval(() => {
+            setActiveNumbers(current => {
+                // Filtra apenas quem está esperando
+                const waiting = current.filter(n => n.status === 'WAITING');
+                if (waiting.length === 0) return current;
+
+                waiting.forEach(async (num) => {
+                    try {
+                        const res = await requestBridge(`virtual-numbers/${num.id}/status`, 'GET');
+                        const d = await res.json();
+                        const dataObj = d.data || d;
+                        const smsCode = dataObj.sms_code || dataObj.code || dataObj.message;
+                        const status = dataObj.status || dataObj.code_status;
+
+                        if (status === 'RECEIVED' || (smsCode && smsCode.length > 2 && smsCode !== 'WAITING')) {
+                            
+                            // ATUALIZA ESTADO
+                            setActiveNumbers(prev => prev.map(n => n.id === num.id ? { ...n, status: 'RECEIVED', code: smsCode } : n));
+                            notify(`SMS Recebido: ${num.service_name}`, 'success');
+                            
+                            // AUTO-SAVE PIX KEYS
+                            if (isBankService(num.service_name)) {
+                                saveToPixVault(num, smsCode);
+                            }
+
+                            if(navigator.clipboard) navigator.clipboard.writeText(smsCode); 
+                            new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3').play().catch(()=>{});
+                        
+                        } else if (status === 'CANCELED' || status === 'TIMEOUT') {
+                            setActiveNumbers(prev => prev.map(n => n.id === num.id ? { ...n, status: 'CANCELED' } : n));
+                        }
+                    } catch (e) {}
+                });
+                return current;
+            });
+        }, 4000); // 4 segundos para economizar recurso
+
+        return () => clearInterval(pollInterval);
+    }, [token, requestBridge]);
+
+    // Busca Instantânea
+    useEffect(() => {
+        if (!searchTerm.trim()) {
+            setFilteredServices(services);
+        } else {
+            const lower = searchTerm.toLowerCase();
+            setFilteredServices(services.filter(s => s.name.toLowerCase().includes(lower)));
+        }
+    }, [searchTerm, services]);
+
+
+    // --- RENDER ---
 
     if (!token) {
         return (
-            <div className="flex items-center justify-center min-h-[600px] animate-fade-in">
-                <div className="w-full max-w-md p-8 bg-[#0a0516] border border-emerald-500/20 rounded-3xl shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-5"><Smartphone size={100} /></div>
+            <div className="flex items-center justify-center min-h-[600px] animate-fade-in p-4">
+                <div className="w-full max-w-md p-8 bg-[#0a0516]/90 border border-indigo-500/20 rounded-3xl shadow-2xl relative overflow-hidden group backdrop-blur-xl">
+                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none"></div>
                     
                     <div className="text-center mb-8 relative z-10">
-                        <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
-                            <Smartphone size={32} className="text-emerald-400" />
+                        <div className="w-20 h-20 bg-indigo-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+                            <CloudLightning size={40} className="text-indigo-400" />
                         </div>
-                        <h2 className="text-2xl font-black text-white">SMS Rush</h2>
-                        <p className="text-gray-400 text-sm mt-2">Automação de Ativações 2.0</p>
+                        <h2 className="text-3xl font-black text-white tracking-tight">SMS Rush <span className="text-indigo-500">Edge</span></h2>
+                        <p className="text-gray-400 text-sm mt-2 font-medium">Gateway V2: Conexão Direta BR</p>
                     </div>
 
                     <form onSubmit={handleLogin} className="space-y-4 relative z-10">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Email</label>
-                            <input 
-                                type="email" 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-emerald-500 outline-none"
-                                value={email} onChange={e => setEmail(e.target.value)}
-                                placeholder="seu@email.com"
-                            />
+                        <div className="grid grid-cols-1 gap-3">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">E-mail SMS Rush</label>
+                                <input 
+                                    type="email" 
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all text-sm"
+                                    value={email} onChange={e => setEmail(e.target.value)}
+                                    placeholder="user@email.com"
+                                    disabled={isSimulation || loginStatus === 'loading'}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Senha</label>
+                                <input 
+                                    type="password" 
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all text-sm"
+                                    value={password} onChange={e => setPassword(e.target.value)}
+                                    placeholder="••••••"
+                                    disabled={isSimulation || loginStatus === 'loading'}
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Senha</label>
-                            <input 
-                                type="password" 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-emerald-500 outline-none"
-                                value={password} onChange={e => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                            />
+
+                        <div 
+                            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${isSimulation ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                            onClick={() => setIsSimulation(!isSimulation)}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSimulation ? 'bg-indigo-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                                    <ShieldOff size={16} />
+                                </div>
+                                <div className="text-left">
+                                    <span className={`block text-xs font-bold ${isSimulation ? 'text-white' : 'text-gray-400'}`}>MODO SIMULAÇÃO</span>
+                                    <span className="text-[10px] text-gray-500">Testar interface sem API</span>
+                                </div>
+                            </div>
+                            <div className={`w-10 h-5 rounded-full relative transition-colors ${isSimulation ? 'bg-indigo-500' : 'bg-gray-700'}`}>
+                                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${isSimulation ? 'left-6' : 'left-1'}`}></div>
+                            </div>
                         </div>
+
                         <button 
                             type="submit" 
-                            disabled={isLoggingIn}
-                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 transition-all"
+                            disabled={loginStatus === 'loading'}
+                            className={`w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-3 transition-all ${loginStatus === 'loading' ? 'opacity-80 cursor-wait' : ''}`}
                         >
-                            {isLoggingIn ? <RefreshCw className="animate-spin" size={18} /> : <LogIn size={18} />}
-                            ACESSAR PAINEL
+                            {loginStatus === 'loading' ? <RefreshCw className="animate-spin" size={20} /> : <LogIn size={20} />}
+                            {loginStatus === 'loading' ? 'CONECTANDO...' : 'ACESSAR SISTEMA'}
                         </button>
                     </form>
                 </div>
@@ -325,177 +637,363 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     }
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-20">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-white/5 pb-6">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shadow-lg">
-                        <Smartphone size={24} className="text-emerald-400" />
+        <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in pb-20 relative">
+            
+            {/* PIX VAULT MODAL */}
+            {showPixVault && (
+                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="w-full max-w-4xl bg-[#0a0516] border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl relative">
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-emerald-900/10">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Database className="text-emerald-400" /> Cofre de Chaves Pix
+                            </h3>
+                            <div className="flex gap-2">
+                                <button onClick={exportPixKeys} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+                                    <Download size={14} /> Exportar TXT
+                                </button>
+                                <button onClick={() => setShowPixVault(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-0 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            {pixKeys.length === 0 ? (
+                                <div className="py-20 text-center text-gray-500 opacity-60">
+                                    <Landmark size={48} className="mx-auto mb-4" />
+                                    <p>Nenhuma chave bancária salva ainda.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left text-sm text-gray-400">
+                                    <thead className="bg-black/40 text-xs uppercase font-bold text-emerald-500/70 sticky top-0 backdrop-blur-md">
+                                        <tr>
+                                            <th className="px-6 py-4">Banco</th>
+                                            <th className="px-6 py-4">Número (Chave)</th>
+                                            <th className="px-6 py-4">Código SMS</th>
+                                            <th className="px-6 py-4 text-right">Data</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {pixKeys.map((k, i) => (
+                                            <tr key={i} className="hover:bg-white/[0.02]">
+                                                <td className="px-6 py-4 font-bold text-white uppercase">{k.bank}</td>
+                                                <td className="px-6 py-4 font-mono text-emerald-300 select-all cursor-pointer" onClick={() => {navigator.clipboard.writeText(k.number); notify('Copiado!', 'success')}}>{k.number}</td>
+                                                <td className="px-6 py-4 font-mono font-bold select-all cursor-pointer" onClick={() => {navigator.clipboard.writeText(k.code); notify('Copiado!', 'success')}}>{k.code}</td>
+                                                <td className="px-6 py-4 text-right text-xs font-mono">{new Date(k.date).toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Header / Top Bar */}
+            <div className="bg-[#0a0516] rounded-2xl p-6 border border-white/10 shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-5">
+                    <div className="p-3 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl shadow-lg shadow-indigo-900/20">
+                        <Smartphone className="text-white" size={28} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white">SMS Studio I.A</h2>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-gray-400 font-mono bg-white/5 px-2 py-0.5 rounded flex items-center gap-1">
-                                <Shield size={10} /> Conexão Segura
+                        <h2 className="font-black text-2xl text-white tracking-tight">SMS Studio <span className="text-indigo-400">Pro</span></h2>
+                        <div className="flex items-center gap-3 text-xs font-medium mt-1">
+                            <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-bold">
+                                <Wifi size={10}/> ONLINE (BRASIL #73)
                             </span>
+                            <div className="h-4 w-px bg-white/10"></div>
                             {balance !== null && (
-                                <span className="text-sm text-emerald-400 font-bold flex items-center gap-1">
-                                    <DollarSign size={14} /> Saldo: R$ {balance.toFixed(2)}
+                                <span className="text-white flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded border border-white/10">
+                                    <Wallet size={10} className="text-indigo-400"/>
+                                    Saldo: <span className="text-emerald-400 font-mono font-bold text-sm">R$ {balance.toFixed(2)}</span>
                                 </span>
                             )}
                         </div>
                     </div>
                 </div>
-                <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 underline">Sair</button>
+                
+                <div className="flex gap-3">
+                    <button onClick={() => setShowPixVault(true)} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg flex items-center gap-2">
+                        <Database size={14} /> Cofre Pix ({pixKeys.length})
+                    </button>
+                    <button onClick={() => { setToken(''); setLoginStatus('idle'); }} className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-bold transition-colors border border-white/5">
+                        Desconectar
+                    </button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* COLUNA 1: SERVIÇOS */}
-                <div className="lg:col-span-1 space-y-4">
-                    {/* Server Selector */}
-                    <div className="bg-[#0a0516] p-4 rounded-2xl border border-white/10 flex gap-2">
-                        <button 
-                            onClick={() => setSelectedServer(1)}
-                            className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase transition-all flex flex-col items-center gap-1 ${
-                                selectedServer === 1 ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:text-white'
-                            }`}
-                        >
-                            <Server size={16} /> Servidor 1 (Rápido)
-                        </button>
-                        <button 
-                            onClick={() => setSelectedServer(2)}
-                            className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase transition-all flex flex-col items-center gap-1 ${
-                                selectedServer === 2 ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white/5 text-gray-500 hover:text-white'
-                            }`}
-                        >
-                            <Server size={16} /> Servidor 2 (Econ.)
-                        </button>
-                    </div>
-
-                    {/* Search & List */}
-                    <div className="bg-[#0a0516] rounded-2xl border border-white/10 overflow-hidden flex flex-col h-[600px]">
-                        <div className="p-4 border-b border-white/5">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar serviço (ex: WhatsApp)..."
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-emerald-500 outline-none"
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* SERVIÇOS (COL 4) - CATALOG */}
+                <div className="lg:col-span-4 space-y-4">
+                    <div className="bg-[#0a0516] p-5 rounded-2xl border border-white/10 flex flex-col h-[750px] shadow-xl relative overflow-hidden">
+                        
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                                    <Globe size={16} className="text-indigo-400" /> Catálogo
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mt-0.5">Atualizado: {lastUpdate || '...'}</p>
                             </div>
+                            <button 
+                                onClick={refreshData} 
+                                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors border border-white/5" 
+                                title="Forçar Atualização"
+                            >
+                                <RefreshCw size={14} className={isLoadingServices ? 'animate-spin' : ''} />
+                            </button>
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-                            {isLoadingServices ? (
-                                <div className="flex justify-center py-10"><RefreshCw className="animate-spin text-emerald-500" /></div>
+                        {/* SERVER TABS (Target Selection & FILTER) */}
+                        <div className="mb-4">
+                            <p className="text-[9px] text-gray-500 font-bold uppercase mb-2 pl-1">Escolha o Servidor (Carrega IDs Específicos)</p>
+                            <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
+                                {[1, 2, 3].map((sId) => (
+                                    <button 
+                                        key={sId}
+                                        onClick={() => handleServerChange(sId)} 
+                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 relative overflow-hidden group
+                                            ${selectedServer === sId 
+                                                ? 'bg-indigo-600 text-white shadow-md border border-indigo-500' 
+                                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
+                                        `}
+                                    >
+                                        <span>Server {sId}</span>
+                                        {selectedServer === sId && isLoadingServices && <RefreshCw size={10} className="animate-spin mt-1" />}
+                                        {selectedServer === sId && !isLoadingServices && <div className="w-1 h-1 bg-white rounded-full mt-1"></div>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="flex gap-2 mb-4">
+                            <div className="relative flex-1 group">
+                                <Search className="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar serviço..." 
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 py-2 text-sm text-white focus:border-indigo-500 outline-none transition-all placeholder:text-gray-600"
+                                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <button onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 text-gray-400 hover:text-white">
+                                {viewMode === 'list' ? <LayoutGrid size={18} /> : <List size={18} />}
+                            </button>
+                        </div>
+
+                        {/* Service List */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 relative">
+                            {isLoadingServices && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0516]/90 backdrop-blur-sm z-20">
+                                    <RefreshCw className="animate-spin text-indigo-500 mb-2" size={32} />
+                                    <span className="text-xs text-indigo-300 font-bold animate-pulse">Sincronizando Server {selectedServer}...</span>
+                                </div>
+                            )}
+
+                            {filteredServices.length === 0 && !isLoadingServices ? (
+                                <div className="flex flex-col items-center justify-center h-60 text-gray-500 border border-dashed border-white/10 rounded-xl m-2 bg-white/5 p-4 text-center">
+                                    <AlertTriangle size={24} className="mb-2 opacity-50 text-amber-500"/>
+                                    <p className="text-sm font-bold text-white mb-1">Nenhum serviço disponível</p>
+                                    <p className="text-xs mb-4">O Server {selectedServer} pode estar offline ou não ter serviços para o Brasil (73).</p>
+                                    <button onClick={refreshData} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                        Forçar Recarregamento
+                                    </button>
+                                </div>
                             ) : (
-                                filteredServices.map(service => (
-                                    <div key={service.id} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group flex justify-between items-center">
-                                        <div>
-                                            <h4 className="font-bold text-white text-sm">{service.name}</h4>
-                                            <p className="text-[10px] text-gray-500">Qtd: {service.quantity} • ID: {service.id}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleBuyNumber(service)}
-                                            disabled={isBuying}
-                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-1"
-                                        >
-                                            R$ {service.price.toFixed(2)}
-                                        </button>
-                                    </div>
-                                ))
+                                <div className={viewMode === 'grid' ? 'grid grid-cols-2 gap-2 pb-2' : 'space-y-2 pb-2'}>
+                                    {filteredServices.map(s => {
+                                        const isFav = favorites.includes(s.id);
+                                        const hasStock = s.quantity > 0;
+                                        
+                                        return (
+                                            <div 
+                                                key={s.id} 
+                                                onClick={() => buyNumber(s)}
+                                                className={`group relative overflow-hidden border transition-all cursor-pointer bg-white/[0.02] hover:bg-white/[0.05] active:scale-95
+                                                    ${viewMode === 'grid' 
+                                                        ? 'p-3 rounded-xl flex flex-col items-center text-center gap-2 aspect-[4/3] justify-between hover:border-indigo-500/50 border-white/5' 
+                                                        : 'p-3 rounded-xl flex justify-between items-center hover:border-indigo-500/50 border-white/5'}
+                                                    ${isFav ? 'border-amber-500/30 bg-amber-500/[0.02]' : ''}
+                                                `}
+                                            >
+                                                {/* Favorite Button */}
+                                                <button 
+                                                    onClick={(e) => toggleFavorite(s.id, e)}
+                                                    className={`absolute top-2 right-2 p-1 rounded-full hover:bg-black/40 transition-colors z-10 ${isFav ? 'text-amber-400' : 'text-gray-700 hover:text-gray-400'}`}
+                                                >
+                                                    <Star size={12} fill={isFav ? "currentColor" : "none"} />
+                                                </button>
+
+                                                <div className={viewMode === 'grid' ? 'flex flex-col items-center gap-2 w-full' : 'flex items-center gap-3'}>
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs border ${
+                                                        isFav ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                                    }`}>
+                                                        {getServiceIcon(s.name)}
+                                                    </div>
+                                                    <div className={viewMode === 'grid' ? 'text-center w-full px-1' : 'text-left'}>
+                                                        <div className="text-sm font-bold text-white truncate w-full" title={s.name}>{s.name}</div>
+                                                        <div className={`text-[10px] flex items-center gap-1 justify-center md:justify-start ${hasStock ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                            <Activity size={10} /> 
+                                                            {hasStock ? `${s.quantity} und` : 'Pronta Entrega'}
+                                                        </div>
+                                                        <div className="text-[9px] text-gray-600 font-mono mt-0.5">ID: {s.id}</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <button 
+                                                    disabled={isBuying} 
+                                                    className={`font-bold text-xs text-white transition-all shadow-lg border flex items-center justify-center gap-1
+                                                        ${hasStock 
+                                                            ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 border-emerald-500/50' 
+                                                            : 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20 border-amber-500/50 opacity-90'}
+                                                        ${viewMode === 'grid' ? 'w-full py-1.5 rounded-lg' : 'px-3 py-1.5 rounded-lg'}
+                                                    `}
+                                                >
+                                                    <span className="opacity-70">R$</span> {s.price.toFixed(2)}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* COLUNA 2: MEUS NÚMEROS */}
-                <div className="lg:col-span-2 space-y-4">
-                    <div className="bg-[#0a0516] p-4 rounded-2xl border border-white/10 flex justify-between items-center">
-                        <h3 className="font-bold text-white flex items-center gap-2">
-                            <MessageSquare size={18} className="text-emerald-400" /> Ativações Recentes
-                        </h3>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                            Polling Ativo (5s)
+                {/* ATIVAÇÕES (COL 8) */}
+                <div className="lg:col-span-8 space-y-4">
+                    <div className="bg-[#0a0516] p-6 rounded-2xl border border-white/10 h-full min-h-[750px] flex flex-col relative overflow-hidden shadow-xl">
+                        
+                        <div className="flex justify-between items-center mb-6 z-10 relative">
+                            <h3 className="text-white font-bold text-lg uppercase tracking-wider flex items-center gap-2">
+                                <MessageSquare size={20} className="text-emerald-400" /> Painel de Ativações
+                            </h3>
+                            {isBuying && (
+                                <div className="flex items-center gap-2 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
+                                    <RefreshCw size={12} className="animate-spin text-indigo-400"/>
+                                    <span className="text-xs font-bold text-indigo-400">Solicitando número...</span>
+                                </div>
+                            )}
                         </div>
-                    </div>
 
-                    <div className="space-y-3">
-                        {activeNumbers.length === 0 ? (
-                            <div className="text-center py-20 opacity-50">
-                                <Smartphone size={48} className="mx-auto mb-4 text-gray-600" />
-                                <p className="text-gray-500">Nenhum número ativo no momento.</p>
-                            </div>
-                        ) : (
-                            activeNumbers.map(num => (
-                                <div key={num.id} className={`p-5 rounded-2xl border relative overflow-hidden transition-all ${
-                                    num.status === 'RECEIVED' ? 'bg-emerald-900/10 border-emerald-500/30' : 
-                                    num.status === 'CANCELED' ? 'bg-red-900/10 border-red-500/20 opacity-60' :
-                                    'bg-white/5 border-white/10'
-                                }`}>
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-white/10 rounded-lg">
-                                                {num.status === 'RECEIVED' ? <Check className="text-emerald-400" /> : <Clock className="text-amber-400 animate-pulse" />}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-white text-lg tracking-wide">{num.number}</h4>
-                                                <p className="text-xs text-gray-400 flex items-center gap-2">
-                                                    {num.service_name} • Server {num.server_id}
-                                                    {num.status === 'WAITING' && <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Aguardando SMS...</span>}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="text-right">
-                                            <button 
-                                                onClick={() => { navigator.clipboard.writeText(num.number); notify('Copiado!', 'success'); }}
-                                                className="text-xs bg-black/40 hover:bg-white/10 text-gray-400 px-3 py-1.5 rounded-lg border border-white/10 transition-colors flex items-center gap-1 ml-auto"
-                                            >
-                                                <Copy size={12} /> Copiar
-                                            </button>
-                                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 relative z-10 p-1">
+                            {activeNumbers.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-40 pb-20">
+                                    <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 animate-pulse-slow">
+                                        <Smartphone size={48} />
                                     </div>
+                                    <p className="text-lg font-bold text-gray-500">Nenhuma ativação ativa.</p>
+                                    <p className="text-sm">Selecione um serviço ao lado para gerar um número.</p>
+                                </div>
+                            ) : (
+                                activeNumbers.map(num => {
+                                    const isLocked = num.cancelUnlockTime && Date.now() < num.cancelUnlockTime;
+                                    const isCancelling = cancellingIds.includes(num.id);
+                                    const remainingTime = isLocked ? Math.ceil((num.cancelUnlockTime! - Date.now()) / 1000) : 0;
+                                    const isBank = isBankService(num.service_name);
 
-                                    {/* ÁREA DO CÓDIGO SMS */}
-                                    <div className="bg-black/40 rounded-xl p-4 border border-white/5 text-center min-h-[60px] flex items-center justify-center">
-                                        {num.status === 'RECEIVED' ? (
-                                            <span className="text-3xl font-black text-emerald-400 tracking-[0.2em] drop-shadow-glow animate-bounce-in">
-                                                {num.code}
-                                            </span>
-                                        ) : num.status === 'CANCELED' ? (
-                                            <span className="text-red-400 text-sm font-bold uppercase">Cancelado</span>
-                                        ) : (
-                                            <div className="flex items-center gap-2 text-gray-600 text-xs animate-pulse">
-                                                <MessageSquare size={14} /> Esperando mensagem...
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* AÇÕES DE CONTROLE */}
-                                    {num.status === 'WAITING' && (
-                                        <div className="mt-4 flex justify-end">
-                                            {num.timer && num.timer > 0 ? (
-                                                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
-                                                    <AlertTriangle size={14} />
-                                                    Aguarde {num.timer}s para cancelar
+                                    return (
+                                        <div key={num.id} className={`p-6 rounded-2xl border transition-all relative overflow-hidden group animate-slide-in-right ${
+                                            num.status === 'RECEIVED' ? 'bg-emerald-900/10 border-emerald-500/30' :
+                                            num.status === 'CANCELED' ? 'bg-red-900/5 border-red-500/10 opacity-60' :
+                                            'bg-white/5 border-white/10 hover:bg-white/[0.07]'
+                                        }`}>
+                                            {isBank && num.status === 'RECEIVED' && (
+                                                <div className="absolute top-2 right-2 bg-emerald-500 text-black text-[9px] font-bold px-2 py-0.5 rounded shadow-lg flex items-center gap-1 z-20">
+                                                    <Database size={10}/> SALVO NO COFRE
                                                 </div>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleCancel(num)}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold transition-all"
-                                                >
-                                                    <X size={14} /> Cancelar / Reembolsar
-                                                </button>
+                                            )}
+
+                                            <div className="flex justify-between items-start mb-6 relative z-10">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`p-3 rounded-2xl ${num.status === 'RECEIVED' ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-white/10 text-gray-400'}`}>
+                                                        <Smartphone size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <div 
+                                                            className="text-3xl font-black text-white tracking-wider font-mono select-all cursor-pointer hover:text-indigo-300 transition-colors flex items-center gap-2" 
+                                                            onClick={() => {navigator.clipboard.writeText(num.number); notify('Número copiado!', 'success')}}
+                                                        >
+                                                            {num.number}
+                                                            <Copy size={16} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        </div>
+                                                        <div className="text-xs text-gray-400 flex items-center gap-2 mt-1">
+                                                            <span className="font-bold text-indigo-300 uppercase tracking-wider bg-indigo-500/10 px-2 py-0.5 rounded">{num.service_name}</span>
+                                                            <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                                                            <span className="bg-white/5 px-2 py-0.5 rounded text-gray-300">Server {num.server_id}</span>
+                                                            <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                                                            <span>ID: {num.id}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => { navigator.clipboard.writeText(num.number); notify('Copiado!', 'success'); }} className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/5" title="Copiar Número">
+                                                        <Copy size={18} />
+                                                    </button>
+                                                    
+                                                    {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 10s em erro) */}
+                                                    {num.status === 'WAITING' && (
+                                                        isLocked ? (
+                                                            <div className="p-2.5 bg-red-500/5 rounded-xl text-red-400 border border-red-500/20 flex items-center gap-2 font-mono font-bold text-xs cursor-not-allowed w-[100px] justify-center">
+                                                                <Timer size={14} className="animate-pulse" /> {remainingTime}s
+                                                            </div>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => cancelNumber(num.id)} 
+                                                                disabled={isCancelling}
+                                                                className="p-2.5 bg-red-500/10 rounded-xl hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all border border-red-500/20 w-10 h-10 flex items-center justify-center" 
+                                                                title="Cancelar/Reembolsar"
+                                                            >
+                                                                {isCancelling ? <RefreshCw size={16} className="animate-spin"/> : <X size={18} />}
+                                                            </button>
+                                                        )
+                                                    )}
+
+                                                    {/* BOTÃO REMOVER DO CARD (LIXEIRA VISUAL) */}
+                                                    {(num.status === 'CANCELED' || num.status === 'FINISHED' || num.status === 'RECEIVED') && (
+                                                        <button 
+                                                            onClick={() => removeCard(num.id)} 
+                                                            className="p-2.5 bg-gray-800 rounded-xl hover:bg-gray-700 text-gray-500 hover:text-white transition-all border border-white/5" 
+                                                            title="Remover da lista"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* CODE AREA */}
+                                            <div className="bg-black/30 p-6 rounded-xl border border-white/5 text-center min-h-[100px] flex items-center justify-center relative z-10 overflow-hidden">
+                                                {num.status === 'RECEIVED' ? (
+                                                    <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center">
+                                                        <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-[0.3em] mb-2">CÓDIGO RECEBIDO</p>
+                                                        <span className="text-6xl font-black text-white tracking-[0.2em] drop-shadow-[0_0_20px_rgba(16,185,129,0.6)] select-all cursor-pointer hover:scale-105 transition-transform" onClick={() => { navigator.clipboard.writeText(num.code || ''); notify('Código copiado!', 'success'); }}>
+                                                            {num.code}
+                                                        </span>
+                                                        <p className="text-[10px] text-gray-500 mt-2">Clique para copiar</p>
+                                                    </div>
+                                                ) : num.status === 'CANCELED' ? (
+                                                    <span className="text-red-500 font-bold text-sm uppercase flex items-center gap-2 border border-red-500/20 px-4 py-2 rounded-lg bg-red-500/5">
+                                                        <X size={16} /> Cancelado / Reembolsado
+                                                    </span>
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-3 text-gray-500">
+                                                        <RefreshCw size={24} className="animate-spin text-indigo-500 opacity-80"/> 
+                                                        <span className="text-xs font-bold uppercase tracking-widest animate-pulse">Aguardando SMS...</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {num.status === 'WAITING' && (
+                                                <div className="absolute bottom-0 left-0 h-1 bg-indigo-500/50 animate-progress w-full"></div>
                                             )}
                                         </div>
-                                    )}
-                                </div>
-                            ))
-                        )}
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

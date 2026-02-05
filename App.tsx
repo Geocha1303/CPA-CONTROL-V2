@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -739,13 +740,14 @@ function App() {
       }
   ];
 
-  const notify = (message: string, type: 'success' | 'error' | 'info') => {
+  // --- MEMOIZED NOTIFY TO PREVENT LOOPS ---
+  const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 4000);
-  };
+  }, []);
 
   const updateState = (updates: Partial<AppState>) => {
     if (isDemoMode) return; // Read-only in demo
