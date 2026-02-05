@@ -908,7 +908,7 @@ function App() {
             {/* Privacy Toggle */}
             <button 
                 onClick={() => setPrivacyMode(!privacyMode)}
-                className={`p-2 rounded-lg transition-colors ${privacyMode ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-white/5 text-gray-400'}`}
+                className={`p-2 rounded-lg transition-all ${privacyMode ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-white/5 text-gray-400'}`}
                 title="Modo Privacidade (Ocultar Valores)"
             >
                 {privacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -932,43 +932,77 @@ function App() {
       {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden relative">
         
-        {/* Sidebar / Mobile Menu */}
+        {/* Sidebar / Mobile Menu (CLEAN DESIGN + REORDERED + VISUAL ALERT) */}
         <nav className={`
             fixed md:relative z-40 w-full md:w-20 lg:w-64 bg-[#05030a] md:bg-transparent border-r border-white/5 flex flex-col transition-all duration-300
             ${mobileMenuOpen ? 'translate-x-0 inset-0' : '-translate-x-full md:translate-x-0'}
         `}>
-             <div className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
+             <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1">
+                 {/* MENU ITEMS DEFINITION WITH SEPARATORS */}
                  {[
+                     { type: 'header', label: 'VISÃO GERAL' },
                      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag }, 
+                     // MOVIDO PARA CÁ COM BADGE
+                     { id: 'sms', label: 'SMS Studio I.A', icon: Smartphone, badge: 'NOVO' },
+                     
+                     { type: 'header', label: 'FINANCEIRO' },
                      { id: 'planejamento', label: 'Planejamento', icon: Target },
                      { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
                      { id: 'despesas', label: 'Despesas', icon: Receipt },
                      { id: 'metas', label: 'Metas', icon: Crown },
-                     // MOSTRA BOTÃO SLOTS PARA TODOS (AGORA LIBERADO)
+                     
+                     { type: 'header', label: 'FERRAMENTAS' },
                      { id: 'slots', label: 'Slots Radar', icon: Gamepad2 },
                      { id: 'squad', label: 'Squad', icon: Users },
-                     ...(isAdmin ? [
-                        { id: 'admin', label: 'Admin Panel', icon: ShieldCheck },
-                        { id: 'sms', label: 'SMS Studio I.A', icon: Smartphone }
-                     ] : []),
+                     // MOVIDO PARA CÁ
+                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag },
+                     
+                     { type: 'header', label: 'SISTEMA' },
+                     ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }] : []),
                      { id: 'configuracoes', label: 'Ajustes', icon: SettingsIcon },
-                 ].map(item => (
-                     <button
-                        key={item.id}
-                        onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group ${
-                            activeView === item.id 
-                            ? 'bg-primary/10 text-white border border-primary/20 shadow-[0_0_15px_rgba(112,0,255,0.1)]' 
-                            : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
-                        }`}
-                     >
-                         <div className={`p-2 rounded-lg transition-colors ${activeView === item.id ? 'bg-primary text-white' : 'bg-white/5 text-gray-500 group-hover:text-white'}`}>
-                             <item.icon size={18} />
-                         </div>
-                         <span className={`font-medium text-sm md:hidden lg:block ${activeView === item.id ? 'font-bold' : ''}`}>{item.label}</span>
-                     </button>
-                 ))}
+                 ].map((item, index) => {
+                     if (item.type === 'header') {
+                         return (
+                             <div key={`header-${index}`} className="pt-4 pb-2 px-2">
+                                 <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{item.label}</p>
+                             </div>
+                         );
+                     }
+                     return (
+                         <button
+                            key={item.id}
+                            onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative overflow-hidden ${
+                                activeView === item.id 
+                                ? 'text-white font-bold bg-white/[0.03]' 
+                                : 'text-gray-500 hover:text-white hover:bg-white/[0.02]'
+                            }`}
+                         >
+                             {/* Active Indicator (Left Bar) */}
+                             {activeView === item.id && (
+                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>
+                             )}
+                             
+                             <div className={`transition-transform duration-300 ${activeView === item.id ? 'translate-x-2 text-primary' : ''}`}>
+                                 <item.icon size={18} />
+                             </div>
+                             <span className={`text-sm md:hidden lg:block transition-transform duration-300 ${activeView === item.id ? 'translate-x-2' : ''}`}>
+                                 {item.label}
+                             </span>
+
+                             {/* BADGE "NOVO" PULSANTE PARA SMS STUDIO */}
+                             {item.badge === 'NOVO' && (
+                                 <span className="ml-auto flex items-center gap-1.5 md:hidden lg:flex">
+                                     <span className="relative flex h-2 w-2">
+                                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                       <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                     </span>
+                                     <span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">NOVO</span>
+                                 </span>
+                             )}
+                         </button>
+                     );
+                 })}
              </div>
 
              {/* Footer Info */}
@@ -1054,8 +1088,8 @@ function App() {
             {activeView === 'dashboard' && <Dashboard state={activeState} privacyMode={privacyMode} />}
             {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
             
-            {/* SMS RUSH - SOMENTE ADMIN */}
-            {activeView === 'sms' && isAdmin && <SmsRush notify={notify} />}
+            {/* SMS RUSH - AGORA PARA TODOS */}
+            {activeView === 'sms' && <SmsRush notify={notify} />}
             
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}

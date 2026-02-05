@@ -374,8 +374,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                     status: 'WAITING',
                     server_id: selectedServer,
                     purchase_time: Date.now(),
-                    // REGRA DE RETENÇÃO MÍNIMA: Bloqueia cancelamento por 120 segundos
-                    cancelUnlockTime: Date.now() + 120000 
+                    // REGRA DE RETENÇÃO: Se for Server 1, libera instantâneo (0). Outros: 120s.
+                    cancelUnlockTime: selectedServer === 1 ? 0 : Date.now() + 120000 
                 };
                 
                 setActiveNumbers(prev => [newNum, ...prev]);
@@ -400,8 +400,9 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         if (!num) return;
 
         // VERIFICAÇÃO DUPLA DE TEMPO (Preventivo)
+        // Só aplica a trava de 120s se NÃO for Server 1
         const timeDiff = Date.now() - num.purchase_time;
-        if (timeDiff < 120000) {
+        if (num.server_id !== 1 && timeDiff < 120000) {
             const remaining = Math.ceil((120000 - timeDiff) / 1000);
             notify(`Aguarde ${remaining}s para cancelar (Regra da Operadora).`, "info");
             // Atualiza visualmente se estiver desincronizado
@@ -855,7 +856,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                             <Copy size={18} />
                                                         </button>
                                                         
-                                                        {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 120s) */}
+                                                        {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 120s APENAS P/ SERVERS 2 E 3) */}
                                                         {num.status === 'WAITING' && (
                                                             isLocked ? (
                                                                 <div className="p-2.5 bg-amber-500/5 rounded-xl text-amber-400 border border-amber-500/20 flex items-center gap-2 font-mono font-bold text-xs cursor-not-allowed w-[120px] justify-center" title="Regra da Operadora: Mínimo 120s para cancelar">
