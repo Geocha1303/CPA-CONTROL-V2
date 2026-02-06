@@ -943,7 +943,7 @@ function App() {
                      { type: 'header', label: 'VISÃO GERAL' },
                      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
                      // MOVIDO PARA CÁ COM BADGE
-                     { id: 'sms', label: 'SMS Studio I.A', icon: Smartphone, badge: 'NOVO' },
+                     { id: 'sms', label: 'SMS RUSH', icon: Smartphone, badge: 'NOVO' },
                      
                      { type: 'header', label: 'FINANCEIRO' },
                      { id: 'planejamento', label: 'Planejamento', icon: Target },

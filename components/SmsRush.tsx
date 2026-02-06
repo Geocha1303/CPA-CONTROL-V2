@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Smartphone, RefreshCw, Search, Copy, X, MessageSquare, LogIn, Globe, Wifi, ShieldOff, Activity, LayoutGrid, List, Wallet, Timer, CloudLightning, Server, CheckCircle2, XCircle, ShoppingBag, ArrowRight, Star, Zap, AlertTriangle, Trash2, Phone, Mail, Video, Hash, Camera, Send, DollarSign, Database, FileText, Download, Landmark, ExternalLink, Lock, ShieldCheck } from 'lucide-react';
+import { Smartphone, RefreshCw, Search, Copy, X, LogIn, Wifi, Activity, ShoppingBag, Database, Download, Landmark, ExternalLink, Lock, ShieldCheck, CreditCard, Wallet, CloudLightning, XCircle, Star, Timer, Trash2, Server, CheckCircle2, ArrowRight, Zap, Info, Signal, MessageSquare, ChevronRight, LayoutList, Grid, Globe } from 'lucide-react';
 
 interface Props {
     notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -36,19 +36,9 @@ interface PixKey {
     server_id: number;
 }
 
-// --- FILTRO BANCÁRIO ESTRITO ---
-const BANK_KEYWORDS = [
-    'nubank', 'picpay', 'pagbank', 'mercadopago', 'c6', 'inter', 'itau', 'bradesco', 
-    'santander', 'caixa', 'neon', 'will', 'next', 'banco', 'infinitepay', 'ton', 
-    'recargapay', '99pay', 'banqi', 'iti', 'agibank', 'sofisa', 'pan', 'original',
-    'safra', 'btg', 'digio', 'nomad', 'wise', 'bs2', 'crefisa', 'bmg', 'mercado',
-    'ame', 'asaas', 'celcoin', 'astropay', 'paypal', 'coinbase', 'sicredi'
-];
-
-// --- CATÁLOGO ESTÁTICO (DADOS REAIS F12 - TABELA STUDIO I.A ATUALIZADA) ---
+// --- CATÁLOGO ESTÁTICO (Mantido) ---
 const STATIC_DB: Record<number, Service[]> = {
     1: [
-        // Servidor 1 (Principal)
         { id: 70, name: "Mercado Pago", price: 1.2, quantity: 100 },
         { id: 88, name: "PicPay", price: 1.0, quantity: 100 },
         { id: 83, name: "Nubank", price: 1.5, quantity: 100 },
@@ -72,10 +62,11 @@ const STATIC_DB: Record<number, Service[]> = {
         { id: 15, name: "Asaas", price: 0.7, quantity: 100 },
         { id: 19, name: "Banqi", price: 0.5, quantity: 100 },
         { id: 31, name: "Celcoin", price: 0.5, quantity: 100 },
-        { id: 34, name: "CrefisaMais", price: 0.6, quantity: 100 }
+        { id: 34, name: "CrefisaMais", price: 0.6, quantity: 100 },
+        { id: 187, name: "Kwai", price: 0.5, quantity: 100 },
+        { id: 188, name: "TikTok", price: 0.5, quantity: 100 }
     ],
-    2: [
-        // Servidor 2 (Premium/Alternativo)
+    2002: [
         { id: 5300, name: "Mercado Pago", price: 1.8, quantity: 100 },
         { id: 5358, name: "PicPay", price: 1.5, quantity: 100 },
         { id: 5359, name: "Nubank", price: 2.0, quantity: 100 },
@@ -92,7 +83,6 @@ const STATIC_DB: Record<number, Service[]> = {
         { id: 5384, name: "Wise", price: 1.8, quantity: 100 }
     ],
     3: [
-        // Servidor 3 (Econômico/Fallback)
         { id: 154, name: "Mercado Pago", price: 0.8, quantity: 100 },
         { id: 1154, name: "PicPay", price: 0.8, quantity: 100 },
         { id: 2163, name: "CAIXA", price: 0.8, quantity: 100 },
@@ -114,6 +104,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     
     // Data State
     const [balance, setBalance] = useState<number | null>(null);
+    const [isBalanceRefreshing, setIsBalanceRefreshing] = useState(false);
     const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
     // App State
@@ -127,7 +118,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     // Server State Management
     const [selectedServer, setSelectedServer] = useState<number>(1);
     const [activeTab, setActiveTab] = useState<'catalog' | 'vault'>('catalog');
-    
     const [searchTerm, setSearchTerm] = useState('');
     
     // PERSISTÊNCIA PARA NÚMEROS ATIVOS
@@ -154,8 +144,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     });
     
     const [cancellingIds, setCancellingIds] = useState<string[]>([]);
-    const [lastUpdate, setLastUpdate] = useState<string>('');
-
     const tokenRef = useRef(token);
     
     useEffect(() => {
@@ -172,7 +160,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         localStorage.setItem('sms_pix_keys', JSON.stringify(pixKeys));
     }, [pixKeys]);
 
-    // --- EDGE FUNCTION REQUEST HANDLER (V2) ---
+    // --- EDGE FUNCTION REQUEST HANDLER (UPDATED: 75S TIMEOUT FOR SAFETY) ---
     const requestBridge = useCallback(async (
         targetEndpoint: string, 
         method: string = 'GET', 
@@ -201,9 +189,14 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             headers['Authorization'] = `Bearer ${activeToken}`;
         }
 
+        // Timeout aumentado para 75s para dar margem ao backend (que tem 60s)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 75000); 
+
         const options: RequestInit = {
             method: method,
-            headers: headers
+            headers: headers,
+            signal: controller.signal
         };
 
         if (body) {
@@ -212,6 +205,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
 
         try {
             const res = await fetch(urlObj.toString(), options);
+            clearTimeout(timeoutId); 
+
             if (!res.ok) {
                 let errorMsg = `Erro HTTP: ${res.status}`;
                 try {
@@ -230,8 +225,18 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             }
             return { ok: true, json: async () => data };
         } catch (err: any) {
-            console.error("SMS Proxy Error:", err);
-            throw err;
+            // Tratamento melhorado de erros de rede
+            let finalError = err;
+            if (err.name === 'AbortError') {
+                finalError = new Error("Tempo limite excedido (75s). A operação pode ter sido concluída no servidor.");
+            } else if (err.message === 'Failed to fetch') {
+                finalError = new Error("Falha de conexão com o servidor. Verifique sua internet.");
+            }
+            
+            console.error("SMS Rush API Error:", finalError);
+            throw finalError;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }, [token]);
 
@@ -240,9 +245,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     const fetchServices = useCallback(async (tokenOverride?: string, serverId: number = selectedServer) => {
         setIsLoadingServices(true);
         try {
-            // USANDO CATÁLOGO ESTÁTICO COM FILTRO BANCÁRIO
             const staticData = STATIC_DB[serverId] || [];
-            
             const sortedData = [...staticData].sort((a: Service, b: Service) => {
                 const isFavA = favorites.includes(a.id);
                 const isFavB = favorites.includes(b.id);
@@ -250,10 +253,8 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 if (!isFavA && isFavB) return 1;
                 return a.name.localeCompare(b.name);
             });
-
             setServices(sortedData);
             setFilteredServices(sortedData);
-            setLastUpdate(new Date().toLocaleTimeString());
         } catch (err) {
             console.error("Fetch Services Error", err);
             notify(`Usando catálogo offline para Server ${serverId}.`, "info");
@@ -268,19 +269,32 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         fetchServices(undefined, id); 
     };
 
+    const fetchBalance = useCallback(async (tokenOverride?: string, silent: boolean = false) => {
+        if (!silent) setIsBalanceRefreshing(true);
+        try {
+            const res = await requestBridge('auth/me', 'GET', null, tokenOverride);
+            const data = await res.json();
+            
+            let foundBalance = null;
+            if (data?.user?.current_balance !== undefined) foundBalance = data.user.current_balance;
+            else if (data?.data?.user?.current_balance !== undefined) foundBalance = data.data.user.current_balance;
+            else if (data?.current_balance !== undefined) foundBalance = data.current_balance;
+            else if (data?.balance !== undefined) foundBalance = data.balance;
+
+            const numBalance = Number(foundBalance);
+            if (!isNaN(numBalance)) setBalance(numBalance);
+        } catch (e) { 
+            // Silent error for balance polling to avoid spamming
+            if(!silent) console.error("Balance Error", e); 
+        } finally { 
+            if (!silent) setIsBalanceRefreshing(false); 
+        }
+    }, [requestBridge]);
+
     const refreshData = async () => {
         if (!tokenRef.current) return;
         await Promise.all([fetchServices(tokenRef.current, selectedServer), fetchBalance(tokenRef.current)]);
     };
-
-    const fetchBalance = useCallback(async (tokenOverride?: string) => {
-        try {
-            const res = await requestBridge('auth/me', 'GET', null, tokenOverride);
-            const data = await res.json();
-            const bal = data.balance ?? data.user?.balance ?? data.data?.balance ?? data.data?.user?.balance ?? data.data?.current_balance;
-            if (bal !== undefined) setBalance(Number(bal));
-        } catch (e) { console.error("Balance Error", e); }
-    }, [requestBridge]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -297,21 +311,25 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 localStorage.setItem('sms_rush_token', tk);
                 tokenRef.current = tk;
                 
-                const bal = data.balance ?? data.user?.balance ?? data.data?.balance ?? data.data?.user?.balance ?? data.data?.current_balance;
-                if (bal !== undefined) setBalance(Number(bal));
-                else fetchBalance(tk); 
+                let bal: number | null = null;
+                if (data.user?.current_balance !== undefined) bal = Number(data.user.current_balance);
+                else if (data.data?.user?.current_balance !== undefined) bal = Number(data.data.user.current_balance);
+                else if (data.balance !== undefined) bal = Number(data.balance);
+                
+                if (bal !== null && !isNaN(bal)) setBalance(bal);
+                else await fetchBalance(tk); 
 
+                await fetchServices(tk, 1);
                 setLoginStatus('success');
-                notify("Conexão estabelecida.", "success");
-                fetchServices(tk, 1);
+                notify("Conexão estabelecida com sucesso.", "success");
                 setSelectedServer(1);
             } else {
-                throw new Error("Token não recebido. Verifique suas credenciais.");
+                throw new Error("Credenciais inválidas ou token não retornado.");
             }
         } catch (err: any) {
             console.error(err);
             setLoginStatus('error');
-            notify(err.message || "Erro ao conectar.", "error");
+            notify(err.message || "Erro ao conectar com SMS RUSH API.", "error");
         }
     };
 
@@ -331,16 +349,19 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     };
 
     useEffect(() => {
-        if (token && services.length === 0) {
-            refreshData();
-        }
+        if (token && services.length === 0) refreshData();
     }, [token]);
 
-    // --- HELPER FOR FALLBACK LOGIC ---
-    const findAlternativeService = (name: string, currentServer: number): { serverId: number, serviceId: number } | null => {
-        // Tenta Server 1 -> 2 -> 3 (Excluindo o atual)
-        const order = [1, 2, 3].filter(id => id !== currentServer);
+    useEffect(() => {
+        if (!token) return;
+        fetchBalance(); 
+        const balanceInterval = setInterval(() => { fetchBalance(undefined, true); }, 8000); 
+        return () => clearInterval(balanceInterval);
+    }, [token, fetchBalance]);
 
+    // --- PURCHASE & QUEUE LOGIC ---
+    const findAlternativeService = (name: string, currentServer: number): { serverId: number, serviceId: number } | null => {
+        const order = [1, 2002, 3].filter(id => id !== currentServer);
         for (const serverId of order) {
             const match = STATIC_DB[serverId]?.find(s => s.name === name);
             if (match) return { serverId, serviceId: match.id };
@@ -348,7 +369,6 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         return null;
     };
 
-    // --- PURCHASE LOGIC WITH FALLBACK ---
     const attemptPurchase = async (serviceId: number, serverId: number, serviceName: string): Promise<any> => {
         const res = await requestBridge('virtual-numbers', 'POST', {
             service_id: serviceId,
@@ -364,32 +384,26 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     const buyNumber = async (service: Service) => {
         if (isBuying) return;
         setIsBuying(true);
-        
         try {
-            // Tenta o servidor atual primeiro
             try {
                 const data = await attemptPurchase(service.id, selectedServer, service.name);
                 handleSuccessfulPurchase(data, service.name, service.id, selectedServer);
             } catch (err: any) {
-                // VERIFICA SE É ERRO DE ESTOQUE (E004, NO STOCK, ETC)
                 const errorMsg = err.message ? err.message.toLowerCase() : '';
                 const isStockError = errorMsg.includes('stock') || errorMsg.includes('number') || errorMsg.includes('estoque') || errorMsg.includes('e004');
 
                 if (isStockError) {
-                    // Tenta Fallback
                     const fallback = findAlternativeService(service.name, selectedServer);
                     if (fallback) {
-                        notify(`Server ${selectedServer} sem estoque. Tentando Server ${fallback.serverId} (Fallback Automático)...`, 'info');
-                        
-                        // Tenta o fallback
+                        notify(`Server ${selectedServer === 2002 ? '2' : selectedServer} sem estoque. Tentando Fallback...`, 'info');
                         const dataFallback = await attemptPurchase(fallback.serviceId, fallback.serverId, service.name);
                         handleSuccessfulPurchase(dataFallback, service.name, fallback.serviceId, fallback.serverId);
-                        notify(`Conectado com sucesso ao Server ${fallback.serverId}!`, 'success');
+                        notify(`Conectado com sucesso ao Server ${fallback.serverId === 2002 ? '2' : fallback.serverId}!`, 'success');
                     } else {
-                        throw new Error(`Sem estoque no Server ${selectedServer} e sem alternativas.`);
+                        throw new Error(`Sem estoque no Server ${selectedServer === 2002 ? '2' : selectedServer} e sem alternativas.`);
                     }
                 } else {
-                    throw err; // Se não for estoque, lança o erro original
+                    throw err; 
                 }
             }
         } catch (err: any) {
@@ -412,77 +426,77 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 status: 'WAITING',
                 server_id: serverId,
                 purchase_time: Date.now(),
-                // Regra de Retenção: Server 1 = 0s, Outros = 120s
                 cancelUnlockTime: serverId === 1 ? 0 : Date.now() + 120000 
             };
-            
             setActiveNumbers(prev => [newNum, ...prev]);
-            
             if (number && navigator.clipboard) {
                 navigator.clipboard.writeText(number);
-                notify(`Número ${number} gerado (Server ${serverId})`, 'success');
+                notify(`Número ${number} gerado (Server ${serverId === 2002 ? '2' : serverId})`, 'success');
             }
-            
-            setTimeout(() => fetchBalance(), 500); 
+            setTimeout(() => fetchBalance(), 1500); 
         } else {
-            throw new Error("Resposta inválida da API (ID não recebido).");
+            throw new Error("Resposta inválida da SMS RUSH API.");
         }
     };
 
+    // --- CORREÇÃO DO CANCELAMENTO (STRICT & RELIABLE) ---
     const cancelNumber = async (id: string) => {
         const num = activeNumbers.find(n => n.id === id);
         if (!num) return;
 
-        // VERIFICAÇÃO DUPLA DE TEMPO
         const timeDiff = Date.now() - num.purchase_time;
+        // Validação de tempo mínimo (Regra API)
         if (num.server_id !== 1 && timeDiff < 120000) {
             const remaining = Math.ceil((120000 - timeDiff) / 1000);
-            notify(`Aguarde ${remaining}s para cancelar (Regra da Operadora).`, "info");
+            notify(`Aguarde ${remaining}s para cancelar.`, "info");
             setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + (120000 - timeDiff) } : n));
             return;
         }
 
         if (num.status === 'RECEIVED' || num.code) {
-            notify("Impossível cancelar: SMS já recebido e cobrado.", "error");
+            notify("Impossível cancelar: SMS já recebido.", "error");
             return;
         }
 
+        // 1. Marca como processando visualmente
         setCancellingIds(prev => [...prev, id]);
         
         try {
+            // 2. Envia requisição DELETE com timeout estendido
             const res = await requestBridge(`virtual-numbers/${id}`, 'DELETE');
             const data = await res.json();
             
+            // 3. Verifica sucesso EXPLÍCITO
             if (res.ok || (data.message && data.message.includes('already'))) {
                 setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
-                notify("Cancelado e reembolsado.", "success");
-                setTimeout(() => fetchBalance(), 500);
+                notify("Cancelamento confirmado e reembolsado.", "success");
+                fetchBalance();
             } else {
-                console.warn("Cancel API Warning:", data);
-                if(data.message && (data.message.includes('time') || data.message.includes('wait'))) {
-                     notify("A API exigiu mais tempo de retenção.", "info");
+                 // Tratamento de erros conhecidos da API
+                 if(data.message && (data.message.includes('time') || data.message.includes('wait'))) {
+                     notify("Aguarde o tempo mínimo da operadora.", "info");
                      setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, cancelUnlockTime: Date.now() + 30000 } : n)); 
                 } else {
-                     setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
-                     fetchBalance();
+                     // Erro genérico da API - NÃO CANCELA LOCALMENTE
+                     notify(`Falha ao cancelar: ${data.message || 'Erro desconhecido'}`, "error");
                 }
             }
         } catch (err: any) {
-            notify("Erro de conexão (Número marcado como cancelado localmente)", "info");
-            setActiveNumbers(prev => prev.map(n => n.id === id ? { ...n, status: 'CANCELED' } : n));
-            fetchBalance();
+            console.error("Cancel Error:", err);
+            // CRÍTICO: Se der erro de conexão/timeout, NÃO marca como cancelado.
+            if (err.message.includes("Falha de conexão")) {
+                notify("Erro de conexão. Verifique sua internet e tente novamente.", "error");
+            } else if (err.message.includes("Tempo limite")) {
+                notify("Tempo limite excedido. O servidor demorou para responder.", "error");
+            } else {
+                notify("Erro ao processar cancelamento.", "error");
+            }
         } finally {
             setCancellingIds(prev => prev.filter(cid => cid !== id));
         }
     };
 
-    const removeCard = (id: string) => {
-        setActiveNumbers(prev => prev.filter(n => n.id !== id));
-    };
-
-    const isBankService = (name: string) => {
-        return BANK_KEYWORDS.some(bank => name.toLowerCase().includes(bank));
-    };
+    const removeCard = (id: string) => setActiveNumbers(prev => prev.filter(n => n.id !== id));
 
     const saveToPixVault = (num: ActiveNumber, code: string) => {
         setPixKeys(prev => {
@@ -496,36 +510,26 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 server_id: num.server_id
             }, ...prev];
         });
-        notify(`Número salvo no Cofre: ${num.service_name}`, 'success');
     };
 
     const exportPixKeys = () => {
-        const text = pixKeys.map(k => `Banco: ${k.bank} | Número: ${k.number} | Código: ${k.code} | Data: ${new Date(k.date).toLocaleString()} | Server: ${k.server_id}`).join('\n');
+        const text = pixKeys.map(k => `Banco: ${k.bank} | Número: ${k.number} | Código: ${k.code} | Data: ${new Date(k.date).toLocaleString()} | Server: ${k.server_id === 2002 ? '2' : k.server_id}`).join('\n');
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `SMS_RUSH_VAULT_${new Date().toISOString().slice(0,10)}.txt`;
         a.click();
-        notify('Lista exportada com sucesso!', 'success');
+        notify('Lista exportada!', 'success');
     };
 
-    const getServiceIcon = (name: string) => {
-        return <Landmark size={16} />;
-    };
-
-    // UI TIMER TICK (1s) - Apenas visual para o cronômetro de retenção
     useEffect(() => {
-        const timerInterval = setInterval(() => {
-            setTimerTick(t => t + 1);
-        }, 1000);
+        const timerInterval = setInterval(() => { setTimerTick(t => t + 1); }, 1000);
         return () => clearInterval(timerInterval);
     }, []);
 
-    // POLLING OTIMIZADO (4s) - Para buscar SMS
     useEffect(() => {
         if (!token) return;
-        
         const pollInterval = setInterval(() => {
             setActiveNumbers(current => {
                 const waiting = current.filter(n => n.status === 'WAITING');
@@ -540,16 +544,11 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                         const status = dataObj.status || dataObj.code_status;
 
                         if (status === 'RECEIVED' || (smsCode && smsCode.length > 2 && smsCode !== 'WAITING')) {
-                            
                             setActiveNumbers(prev => prev.map(n => n.id === num.id ? { ...n, status: 'RECEIVED', code: smsCode } : n));
                             notify(`SMS Recebido: ${num.service_name}`, 'success');
-                            
-                            // SEMPRE SALVA NO COFRE POIS SÓ TEM BANCOS
                             saveToPixVault(num, smsCode);
-
                             if(navigator.clipboard) navigator.clipboard.writeText(smsCode); 
                             new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3').play().catch(()=>{});
-                        
                         } else if (status === 'CANCELED' || status === 'TIMEOUT') {
                             setActiveNumbers(prev => prev.map(n => n.id === num.id ? { ...n, status: 'CANCELED' } : n));
                         }
@@ -558,11 +557,9 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 return current;
             });
         }, 4000); 
-
         return () => clearInterval(pollInterval);
     }, [token, requestBridge]);
 
-    // Busca Instantânea
     useEffect(() => {
         if (!searchTerm.trim()) {
             setFilteredServices(services);
@@ -573,454 +570,414 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     }, [searchTerm, services]);
 
 
-    // --- RENDER ---
-
+    // --- LOGIN SCREEN (SPLIT VIEW RESTORED & ENHANCED) ---
     if (!token) {
         return (
-            <div className="flex items-center justify-center min-h-[600px] animate-fade-in p-4">
-                <div className="w-full max-w-md p-8 bg-[#0a0516]/90 border border-white/10 rounded-3xl shadow-2xl relative overflow-hidden group backdrop-blur-xl">
-                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none"></div>
+            <div className="flex items-center justify-center min-h-[700px] animate-fade-in p-4">
+                <div className="w-full max-w-4xl bg-[#09090b] rounded-3xl border border-white/5 shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[550px]">
                     
-                    <div className="text-center mb-8 relative z-10">
-                        <div className="w-20 h-20 bg-indigo-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
-                            <CloudLightning size={40} className="text-indigo-400" />
+                    {/* ESQUERDA: IDENTIDADE E INFO (Visual Rico) */}
+                    <div className="w-full md:w-1/2 bg-gradient-to-br from-indigo-900 to-black p-10 flex flex-col justify-between relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
+                            <CloudLightning size={200} className="text-white" />
                         </div>
-                        <h2 className="text-3xl font-black text-white tracking-tight">SMS Rush <span className="text-indigo-500">Gateway</span></h2>
-                        <p className="text-gray-400 text-sm mt-2 font-medium">Autenticação Segura</p>
+                        
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-md border border-white/10">
+                                    <Zap size={20} className="text-indigo-400" />
+                                </div>
+                                <h1 className="text-2xl font-black text-white tracking-tight">SMS RUSH <span className="text-indigo-400">PRO</span></h1>
+                            </div>
+                            
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-white font-bold text-lg mb-2 flex items-center gap-2">
+                                        <CheckCircle2 size={18} className="text-emerald-400"/> Integração API Oficial
+                                    </h3>
+                                    <p className="text-indigo-200/80 text-sm leading-relaxed mb-4">
+                                        Painel de alta performance conectado diretamente aos servidores da SMS Rush. Organize, monitore e salve suas ativações com segurança máxima.
+                                    </p>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 text-sm text-indigo-100/70">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300"><Activity size={14} /></div>
+                                        <div>
+                                            <strong className="block text-indigo-200 text-xs">Tempo Real</strong>
+                                            <span className="text-[10px]">Atualização instantânea de status</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm text-indigo-100/70">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300"><Database size={14} /></div>
+                                        <div>
+                                            <strong className="block text-indigo-200 text-xs">Cofre Local</strong>
+                                            <span className="text-[10px]">Histórico salvo no seu dispositivo</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm text-indigo-100/70">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-300"><ShieldCheck size={14} /></div>
+                                        <div>
+                                            <strong className="block text-indigo-200 text-xs">Conexão Segura</strong>
+                                            <span className="text-[10px]">Criptografia ponta a ponta</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="relative z-10 mt-10">
+                            <p className="text-[10px] text-indigo-400/50 uppercase tracking-widest font-bold">Powered by SMS Rush API v2</p>
+                        </div>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-4 relative z-10">
-                        <div className="grid grid-cols-1 gap-3">
+                    {/* DIREITA: FORMULÁRIO (Clean) */}
+                    <div className="w-full md:w-1/2 p-10 flex flex-col justify-center bg-[#09090b]">
+                        <h2 className="text-xl font-bold text-white mb-6">Acessar Painel</h2>
+                        
+                        <form onSubmit={handleLogin} className="space-y-5">
                             <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">E-mail SMS Rush</label>
-                                <input 
-                                    type="email" 
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all text-sm font-medium"
-                                    value={email} onChange={e => setEmail(e.target.value)}
-                                    placeholder="user@email.com"
-                                    disabled={loginStatus === 'loading'}
-                                />
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">E-mail de Acesso</label>
+                                <div className="relative">
+                                    <input 
+                                        type="email" 
+                                        className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-gray-600 text-sm font-medium"
+                                        placeholder="seu@email.com"
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        disabled={loginStatus === 'loading'}
+                                    />
+                                    <div className="absolute right-4 top-3.5 text-gray-600"><Search size={18} /></div>
+                                </div>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Senha</label>
-                                <input 
-                                    type="password" 
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all text-sm font-medium"
-                                    value={password} onChange={e => setPassword(e.target.value)}
-                                    placeholder="••••••"
-                                    disabled={loginStatus === 'loading'}
-                                />
-                            </div>
-                        </div>
 
-                        <button 
-                            type="submit" 
-                            disabled={loginStatus === 'loading'}
-                            className={`w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-3 transition-all ${loginStatus === 'loading' ? 'opacity-80 cursor-wait' : ''}`}
-                        >
-                            {loginStatus === 'loading' ? <RefreshCw className="animate-spin" size={20} /> : <LogIn size={20} />}
-                            {loginStatus === 'loading' ? 'CONECTANDO...' : 'INICIAR SESSÃO'}
-                        </button>
-                    </form>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Senha</label>
+                                <div className="relative">
+                                    <input 
+                                        type="password" 
+                                        className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none transition-all placeholder:text-gray-600 text-sm font-medium"
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        disabled={loginStatus === 'loading'}
+                                    />
+                                    <div className="absolute right-4 top-3.5 text-gray-600"><Lock size={18} /></div>
+                                </div>
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                disabled={loginStatus === 'loading'}
+                                className="w-full bg-white hover:bg-gray-200 text-black font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm mt-2"
+                            >
+                                {loginStatus === 'loading' ? <RefreshCw className="animate-spin" size={18} /> : <ArrowRight size={18} />}
+                                {loginStatus === 'loading' ? 'Autenticando...' : 'Iniciar Sessão'}
+                            </button>
+                        </form>
+
+                        <div className="mt-8 pt-6 border-t border-white/5 flex flex-col gap-3 items-center">
+                            <p className="text-[10px] text-gray-500">Não tem conta ou precisa recarregar?</p>
+                            <a 
+                                href="https://smsrush.com.br/" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20 hover:bg-indigo-500/20 w-full"
+                            >
+                                <Globe size={14} /> ACESSAR SITE OFICIAL
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in pb-20 relative">
+        <div className="max-w-[1600px] mx-auto animate-fade-in pb-10 relative px-4 h-[calc(100vh-100px)] flex flex-col">
             
-            {/* Header / Top Bar High-End */}
-            <div className="bg-[#0c0818] rounded-3xl p-6 border border-white/10 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-                
-                <div className="flex items-center gap-5 relative z-10">
-                    {/* AVATAR COM LINK SEGURO */}
-                    <a href="https://smsrush.com.br/" target="_blank" rel="noreferrer" className="group">
-                        <div className="p-1 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full shadow-lg shadow-indigo-900/30 border border-white/5 cursor-pointer group-hover:scale-105 transition-transform overflow-hidden w-14 h-14 relative">
-                            <img 
-                                src="https://instagram.fguz7-1.fna.fbcdn.net/v/t51.2885-19/515984726_18505314049053277_5074969620859834658_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby44MjguYzIifQ&_nc_ht=instagram.fguz7-1.fna.fbcdn.net&_nc_cat=101&_nc_oc=Q6cZ2QE9D-GF8zp2WqXLtQu8lHE16Te1wIPLbjlU0w6ifUGVRRDMC4ggQRq_wJUcnwkhIAbp_Gm4-W1XAnNCMbK84Pa_&_nc_ohc=4i4L_qfPYNoQ7kNvwHrRjc9&_nc_gid=LPdmvOZfLjwJAaVL2ktPJA&edm=AEYEu-QBAAAA&ccb=7-5&oh=00_AfvYn8TfSb_9e3d1P9TDCPrepsbYx_T1Iev5nnQAl8xy_A&oe=698AD6FB&_nc_sid=ead92" 
-                                alt="SMS Rush"
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = 'https://cdn-icons-png.flaticon.com/512/724/724664.png'; }} // Fallback
-                            />
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
-                        </div>
-                    </a>
-
+            {/* HEADER COMPACTO */}
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4 flex-shrink-0">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                        <Signal size={20} className="text-black" />
+                    </div>
                     <div>
-                        <div className="flex items-center gap-2">
-                            <h2 className="font-black text-2xl text-white tracking-tight">
-                                SMS Studio <span className="text-indigo-400">Pro</span>
-                            </h2>
-                            <div className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                                <ShieldCheck size={10} /> API Oficial
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs font-medium mt-1">
-                            <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-bold">
-                                <Wifi size={10}/> ONLINE (BRASIL #73)
-                            </span>
-                            <div className="h-4 w-px bg-white/10"></div>
-                            {balance !== null && (
-                                <span className="text-white flex items-center gap-2 bg-white/5 px-3 py-0.5 rounded-full border border-white/10">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <span className="text-emerald-400 font-mono font-bold text-sm">R$ {balance.toFixed(2)}</span>
-                                </span>
-                            )}
+                        <h1 className="text-xl font-black text-white tracking-tight leading-none">SMS RUSH</h1>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Online</span>
                         </div>
                     </div>
                 </div>
-                
-                <div className="flex gap-3 relative z-10 flex-col md:flex-row items-end">
-                    <div className="text-right mr-2 hidden md:block">
-                        <p className="text-[10px] text-gray-400 font-medium">Ambiente Seguro & Criptografado</p>
-                        <p className="text-[10px] text-gray-500">Saldo atualiza instantaneamente</p>
+
+                <div className="flex items-center gap-4 bg-[#18181b] p-1.5 rounded-xl border border-white/5">
+                    <div className="px-4 border-r border-white/5 text-right">
+                        <p className="text-[9px] text-gray-500 font-bold uppercase">Saldo</p>
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => fetchBalance(undefined, false)}>
+                            <span className="text-lg font-black text-white font-mono group-hover:text-gray-300 transition-colors">
+                                {balance !== null ? `R$ ${balance.toFixed(2)}` : '---'}
+                            </span>
+                            {isBalanceRefreshing && <RefreshCw size={10} className="animate-spin text-gray-500" />}
+                        </div>
                     </div>
-                    <div className="flex gap-2">
-                        <a 
-                            href="https://smsrush.com.br/" 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-colors border border-white/10 flex items-center gap-2"
-                        >
-                            <ExternalLink size={14} /> Site Oficial
-                        </a>
-                        <button onClick={() => { setToken(''); setLoginStatus('idle'); }} className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-white text-xs font-bold transition-colors border border-rose-500/20 flex items-center gap-2">
-                            <XCircle size={14} /> Desconectar
-                        </button>
-                    </div>
+                    <button onClick={refreshData} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors" title="Sincronizar">
+                        <RefreshCw size={16} />
+                    </button>
+                    <button onClick={() => {setToken(''); setLoginStatus('idle')}} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-red-400 transition-colors" title="Sair">
+                        <XCircle size={16} />
+                    </button>
                 </div>
             </div>
 
-            {/* TAB NAVIGATION */}
-            <div className="flex justify-center mb-2">
-                <div className="bg-black/40 p-1.5 rounded-xl border border-white/10 flex gap-2 shadow-inner backdrop-blur-md">
-                    <button 
-                        onClick={() => setActiveTab('catalog')}
-                        className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'catalog' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                    >
-                        <ShoppingBag size={16} /> Comprar Números (Bancos)
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('vault')}
-                        className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'vault' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                    >
-                        <Database size={16} /> Cofre (Recebidos) <span className="bg-black/20 px-1.5 rounded text-[10px] text-emerald-200">{pixKeys.length}</span>
-                    </button>
-                </div>
+            {/* TOGGLE TABS (SEMPRE VISÍVEL) */}
+            <div className="flex justify-start gap-2 mb-4 flex-shrink-0">
+                <button 
+                    onClick={() => setActiveTab('catalog')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'catalog' ? 'bg-white text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                >
+                    <LayoutList size={14} /> Painel de Ativação
+                </button>
+                <button 
+                    onClick={() => setActiveTab('vault')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'vault' ? 'bg-white text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                >
+                    <Database size={14} /> Cofre ({pixKeys.length})
+                </button>
             </div>
 
             {activeTab === 'catalog' ? (
-                // --- VIEW: CATALOGO E ATIVAÇÕES ---
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                // --- LAYOUT MASTER-DETAIL (2 COLUNAS) ---
+                <div className="flex gap-6 flex-1 overflow-hidden">
                     
-                    {/* COLUNA ESQUERDA: LISTA DE SERVIÇOS (FILTRADA) */}
-                    <div className="lg:col-span-4 space-y-4">
-                        <div className="bg-[#0a0516] p-5 rounded-2xl border border-white/10 flex flex-col h-[750px] shadow-xl relative overflow-hidden">
-                            
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                                        <Landmark size={16} className="text-indigo-400" /> Bancos & Carteiras
-                                    </h3>
-                                    <p className="text-[10px] text-gray-500 mt-0.5">Filtro Inteligente Ativo</p>
-                                </div>
-                                <button 
-                                    onClick={refreshData} 
-                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors border border-white/5" 
-                                >
-                                    <RefreshCw size={14} className={isLoadingServices ? 'animate-spin' : ''} />
-                                </button>
+                    {/* COLUNA 1: CATÁLOGO (LISTA) - 30% */}
+                    <div className="w-[320px] flex flex-col bg-[#0a0516] border border-white/5 rounded-xl overflow-hidden flex-shrink-0">
+                        {/* Header da Lista */}
+                        <div className="p-3 border-b border-white/5 bg-black/20 space-y-3">
+                            {/* Server Select */}
+                            <div className="flex gap-1">
+                                {[1, 2002, 3].map((sId) => (
+                                    <button 
+                                        key={sId}
+                                        onClick={() => handleServerChange(sId)} 
+                                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${
+                                            selectedServer === sId 
+                                            ? 'bg-white/10 text-white border-white/20' 
+                                            : 'bg-transparent text-gray-500 border-transparent hover:bg-white/5'
+                                        }`}
+                                    >
+                                        Srv {sId === 2002 ? '2' : sId}
+                                    </button>
+                                ))}
                             </div>
-                            
-                            {/* SERVER TABS */}
-                            <div className="mb-4">
-                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 gap-1">
-                                    {[1, 2, 3].map((sId) => (
+                            {/* Search */}
+                            <div className="relative">
+                                <Search className="absolute left-3 top-2.5 text-gray-500" size={14} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar serviço..." 
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-white/30 outline-none"
+                                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Lista de Serviços */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                            {isLoadingServices ? (
+                                <div className="py-10 text-center text-gray-500 text-xs">Carregando...</div>
+                            ) : filteredServices.length === 0 ? (
+                                <div className="py-10 text-center text-gray-500 text-xs">Nada encontrado.</div>
+                            ) : (
+                                filteredServices.map(s => {
+                                    const hasStock = s.quantity > 0;
+                                    const isFav = favorites.includes(s.id);
+                                    return (
                                         <button 
-                                            key={sId}
-                                            onClick={() => handleServerChange(sId)} 
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 relative overflow-hidden group
-                                                ${selectedServer === sId 
-                                                    ? 'bg-indigo-600 text-white shadow-md border border-indigo-500' 
-                                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
+                                            key={s.id}
+                                            onClick={() => buyNumber(s)}
+                                            disabled={isBuying}
+                                            className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group
+                                                ${hasStock 
+                                                    ? 'bg-white/[0.02] border-white/5 hover:bg-white/[0.05] hover:border-white/10' 
+                                                    : 'opacity-50 grayscale cursor-not-allowed'}
                                             `}
                                         >
-                                            <span>Server {sId}</span>
-                                            {selectedServer === sId && isLoadingServices && <RefreshCw size={10} className="animate-spin mt-1" />}
-                                            {selectedServer === sId && !isLoadingServices && <div className="w-1 h-1 bg-white rounded-full mt-1"></div>}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Search Bar */}
-                            <div className="flex gap-2 mb-4">
-                                <div className="relative flex-1 group">
-                                    <Search className="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Buscar banco..." 
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 py-2 text-sm text-white focus:border-indigo-500 outline-none transition-all placeholder:text-gray-600"
-                                        value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Service List */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 relative space-y-2 pb-2">
-                                {isLoadingServices && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0516]/90 backdrop-blur-sm z-20">
-                                        <RefreshCw className="animate-spin text-indigo-500 mb-2" size={32} />
-                                        <span className="text-xs text-indigo-300 font-bold animate-pulse">Sincronizando Server {selectedServer}...</span>
-                                    </div>
-                                )}
-
-                                {filteredServices.length === 0 && !isLoadingServices ? (
-                                    <div className="flex flex-col items-center justify-center h-40 text-gray-500 border border-dashed border-white/10 rounded-xl bg-white/5 p-4 text-center">
-                                        <Lock size={24} className="mb-2 opacity-50 text-gray-500"/>
-                                        <p className="text-sm font-bold text-white mb-1">Nada encontrado</p>
-                                        <p className="text-xs">Nenhum serviço bancário disponível neste servidor.</p>
-                                    </div>
-                                ) : (
-                                    filteredServices.map(s => {
-                                        const isFav = favorites.includes(s.id);
-                                        const hasStock = s.quantity > 0;
-                                        
-                                        return (
-                                            <div 
-                                                key={s.id} 
-                                                onClick={() => buyNumber(s)}
-                                                className={`group relative overflow-hidden border transition-all cursor-pointer bg-[#0c0818] hover:bg-[#150f24] active:scale-95 p-3 rounded-xl flex justify-between items-center hover:border-indigo-500/50 border-white/5
-                                                    ${isFav ? 'border-amber-500/30 bg-amber-500/[0.02]' : ''}
-                                                `}
-                                            >
-                                                <button 
-                                                    onClick={(e) => toggleFavorite(s.id, e)}
-                                                    className={`absolute top-2 right-2 p-1 rounded-full hover:bg-black/40 transition-colors z-10 ${isFav ? 'text-amber-400' : 'text-gray-700 hover:text-gray-400'}`}
-                                                >
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className={`p-1.5 rounded-md ${isFav ? 'text-amber-400 bg-amber-400/10' : 'text-gray-600 bg-white/5'}`}
+                                                     onClick={(e) => toggleFavorite(s.id, e)}>
                                                     <Star size={12} fill={isFav ? "currentColor" : "none"} />
-                                                </button>
-
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs border bg-indigo-500/10 text-indigo-400 border-indigo-500/20`}>
-                                                        <Landmark size={18} />
-                                                    </div>
-                                                    <div className="text-left">
-                                                        <div className="text-sm font-bold text-white truncate w-32" title={s.name}>{s.name}</div>
-                                                        <div className={`text-[10px] flex items-center gap-1 ${hasStock ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                                            <Activity size={10} /> 
-                                                            {hasStock ? `${s.quantity} und` : 'Pronta Entrega'}
-                                                        </div>
+                                                </div>
+                                                <div className="overflow-hidden">
+                                                    <div className="text-xs font-bold text-white truncate w-32 group-hover:text-white transition-colors">{s.name}</div>
+                                                    <div className={`text-[9px] font-bold ${hasStock ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                        {hasStock ? 'DISPONÍVEL' : 'SEM ESTOQUE'}
                                                     </div>
                                                 </div>
-                                                
-                                                <button 
-                                                    disabled={isBuying} 
-                                                    className={`font-bold text-xs text-white transition-all shadow-lg border flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg
-                                                        ${hasStock 
-                                                            ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20 border-emerald-500/50' 
-                                                            : 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20 border-amber-500/50 opacity-90'}
-                                                    `}
-                                                >
-                                                    <span className="opacity-70">R$</span> {s.price.toFixed(2)}
-                                                </button>
                                             </div>
-                                        );
-                                    })
-                                )}
-                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-mono font-bold text-white">R$ {s.price.toFixed(2)}</div>
+                                                <div className="text-[10px] text-gray-500">ID: {s.id}</div>
+                                            </div>
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
 
-                    {/* COLUNA DIREITA: PAINEL DE ATIVAÇÕES */}
-                    <div className="lg:col-span-8 space-y-4">
-                        <div className="bg-[#0a0516] p-6 rounded-2xl border border-white/10 h-full min-h-[750px] flex flex-col relative overflow-hidden shadow-xl">
-                            
-                            <div className="flex justify-between items-center mb-6 z-10 relative">
-                                <h3 className="text-white font-bold text-lg uppercase tracking-wider flex items-center gap-2">
-                                    <MessageSquare size={20} className="text-emerald-400" /> Números Ativos
-                                </h3>
-                                {isBuying && (
-                                    <div className="flex items-center gap-2 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
-                                        <RefreshCw size={12} className="animate-spin text-indigo-400"/>
-                                        <span className="text-xs font-bold text-indigo-400">Solicitando número...</span>
-                                    </div>
-                                )}
-                            </div>
+                    {/* COLUNA 2: ÁREA DE TRABALHO (CARDS) - 70% */}
+                    <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-xl overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/20">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                <Activity size={16} className="text-indigo-400" /> Fila de Ativação ({activeNumbers.length})
+                            </h3>
+                            {isBuying && <span className="text-[10px] bg-white text-black px-2 py-0.5 rounded font-bold animate-pulse">PROCESSANDO PEDIDO...</span>}
+                        </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 relative z-10 p-1">
-                                {activeNumbers.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-40 pb-20">
-                                        <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 animate-pulse-slow">
-                                            <Smartphone size={48} />
-                                        </div>
-                                        <p className="text-lg font-bold text-gray-500">Nenhuma ativação ativa.</p>
-                                        <p className="text-sm">Selecione um banco ao lado para gerar um número.</p>
-                                    </div>
-                                ) : (
-                                    activeNumbers.map(num => {
-                                        const isLocked = num.cancelUnlockTime && Date.now() < num.cancelUnlockTime;
-                                        const isCancelling = cancellingIds.includes(num.id);
-                                        const remainingTime = isLocked ? Math.ceil((num.cancelUnlockTime! - Date.now()) / 1000) : 0;
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                            {activeNumbers.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
+                                    <Smartphone size={48} className="mb-4 stroke-1" />
+                                    <p className="text-sm font-bold">Nenhum número ativo</p>
+                                    <p className="text-xs mt-1">Selecione um serviço na lista ao lado para começar.</p>
+                                </div>
+                            ) : (
+                                activeNumbers.map(num => {
+                                    const isLocked = num.cancelUnlockTime && Date.now() < num.cancelUnlockTime;
+                                    const isCancelling = cancellingIds.includes(num.id);
+                                    const remainingTime = isLocked ? Math.ceil((num.cancelUnlockTime! - Date.now()) / 1000) : 0;
 
-                                        return (
-                                            <div key={num.id} className={`p-6 rounded-2xl border transition-all relative overflow-hidden group animate-slide-in-right ${
-                                                num.status === 'RECEIVED' ? 'bg-emerald-900/10 border-emerald-500/30' :
-                                                num.status === 'CANCELED' ? 'bg-red-900/5 border-red-500/10 opacity-60' :
-                                                'bg-[#0c0818] border-white/10 hover:border-indigo-500/30'
-                                            }`}>
-                                                {/* SUCCESS BADGE */}
-                                                {num.status === 'RECEIVED' && (
-                                                    <div className="absolute top-2 right-2 bg-emerald-500 text-black text-[9px] font-bold px-2 py-0.5 rounded shadow-lg flex items-center gap-1 z-20">
-                                                        <Database size={10}/> SALVO NO COFRE
-                                                    </div>
-                                                )}
-
-                                                <div className="flex justify-between items-start mb-6 relative z-10">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`p-3 rounded-2xl ${num.status === 'RECEIVED' ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-white/10 text-gray-400'}`}>
-                                                            <Smartphone size={24} />
-                                                        </div>
-                                                        <div>
-                                                            <div 
-                                                                className="text-3xl font-black text-white tracking-wider font-mono select-all cursor-pointer hover:text-indigo-300 transition-colors flex items-center gap-2" 
-                                                                onClick={() => {navigator.clipboard.writeText(num.number); notify('Número copiado!', 'success')}}
-                                                            >
-                                                                {num.number}
-                                                                <Copy size={16} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                            </div>
-                                                            <div className="text-xs text-gray-400 flex items-center gap-2 mt-1">
-                                                                <span className="font-bold text-indigo-300 uppercase tracking-wider bg-indigo-500/10 px-2 py-0.5 rounded">{num.service_name}</span>
-                                                                <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-                                                                <span className="bg-white/5 px-2 py-0.5 rounded text-gray-300">Server {num.server_id}</span>
-                                                                <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-                                                                <span>ID: {num.id}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => { navigator.clipboard.writeText(num.number); notify('Copiado!', 'success'); }} className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/5" title="Copiar Número">
-                                                            <Copy size={18} />
-                                                        </button>
-                                                        
-                                                        {/* BOTÃO CANCELAR COM LOADER E TIMER (TRAVA 120s APENAS P/ SERVERS 2 E 3) */}
-                                                        {num.status === 'WAITING' && (
-                                                            isLocked ? (
-                                                                <div className="p-2.5 bg-amber-500/5 rounded-xl text-amber-400 border border-amber-500/20 flex items-center gap-2 font-mono font-bold text-xs cursor-not-allowed w-[120px] justify-center" title="Regra da Operadora: Mínimo 120s para cancelar">
-                                                                    <Timer size={14} className="animate-pulse" /> Retenção: {remainingTime}s
-                                                                </div>
-                                                            ) : (
-                                                                <button 
-                                                                    onClick={() => cancelNumber(num.id)} 
-                                                                    disabled={isCancelling}
-                                                                    className="p-2.5 bg-red-500/10 rounded-xl hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all border border-red-500/20 w-10 h-10 flex items-center justify-center" 
-                                                                    title="Cancelar/Reembolsar"
-                                                                >
-                                                                    {isCancelling ? <RefreshCw size={16} className="animate-spin"/> : <X size={18} />}
-                                                                </button>
-                                                            )
-                                                        )}
-
-                                                        {/* BOTÃO REMOVER DO CARD (LIXEIRA VISUAL) */}
-                                                        {(num.status === 'CANCELED' || num.status === 'FINISHED' || num.status === 'RECEIVED') && (
-                                                            <button 
-                                                                onClick={() => removeCard(num.id)} 
-                                                                className="p-2.5 bg-gray-800 rounded-xl hover:bg-gray-700 text-gray-500 hover:text-white transition-all border border-white/5" 
-                                                                title="Remover da lista"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                    return (
+                                        <div key={num.id} className="flex items-stretch bg-[#0c0818] border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all shadow-lg min-h-[90px]">
+                                            {/* Left: Info */}
+                                            <div className="w-[200px] p-4 flex flex-col justify-center border-r border-white/5 bg-black/20">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{num.service_name}</span>
+                                                <div className="flex items-center gap-2 mb-2 group cursor-pointer" onClick={() => {navigator.clipboard.writeText(num.number); notify('Número copiado!', 'success')}}>
+                                                    <span className="text-lg font-mono font-bold text-white group-hover:text-indigo-300 transition-colors">{num.number}</span>
+                                                    <Copy size={12} className="text-gray-600 group-hover:text-white" />
                                                 </div>
-                                                
-                                                {/* CODE AREA */}
-                                                <div className="bg-black/30 p-6 rounded-xl border border-white/5 text-center min-h-[100px] flex items-center justify-center relative z-10 overflow-hidden">
-                                                    {num.status === 'RECEIVED' ? (
-                                                        <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center">
-                                                            <p className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-[0.3em] mb-2">CÓDIGO RECEBIDO</p>
-                                                            <span className="text-6xl font-black text-white tracking-[0.2em] drop-shadow-[0_0_20px_rgba(16,185,129,0.6)] select-all cursor-pointer hover:scale-105 transition-transform" onClick={() => { navigator.clipboard.writeText(num.code || ''); notify('Código copiado!', 'success'); }}>
-                                                                {num.code}
-                                                            </span>
-                                                            <p className="text-[10px] text-gray-500 mt-2">Clique para copiar</p>
-                                                        </div>
-                                                    ) : num.status === 'CANCELED' ? (
-                                                        <span className="text-red-500 font-bold text-sm uppercase flex items-center gap-2 border border-red-500/20 px-4 py-2 rounded-lg bg-red-500/5">
-                                                            <X size={16} /> Cancelado / Reembolsado
+                                                <div className="flex gap-2">
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase
+                                                        ${num.status === 'RECEIVED' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 
+                                                          num.status === 'CANCELED' ? 'bg-red-900/30 text-red-400 border-red-900/50' : 
+                                                          'bg-amber-900/30 text-amber-400 border-amber-900/50 animate-pulse'}
+                                                    `}>
+                                                        {num.status === 'WAITING' ? 'AGUARDANDO...' : num.status}
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-600 px-1.5 py-0.5 border border-white/5 rounded">Server {num.server_id === 2002 ? '2' : num.server_id}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Middle: Code Area (Big Highlight) */}
+                                            <div className="flex-1 flex items-center justify-center p-4 bg-gradient-to-r from-black/20 to-transparent relative">
+                                                {num.status === 'RECEIVED' ? (
+                                                    <div 
+                                                        className="text-center cursor-pointer group"
+                                                        onClick={() => {navigator.clipboard.writeText(num.code || ''); notify('Código Copiado!', 'success')}}
+                                                    >
+                                                        <span className="text-4xl font-mono font-black text-emerald-400 tracking-[0.2em] drop-shadow-[0_0_15px_rgba(16,185,129,0.4)] group-hover:scale-105 transition-transform inline-block">
+                                                            {num.code}
                                                         </span>
-                                                    ) : (
-                                                        <div className="flex flex-col items-center gap-3 text-gray-500">
-                                                            <RefreshCw size={24} className="animate-spin text-indigo-500 opacity-80"/> 
-                                                            <span className="text-xs font-bold uppercase tracking-widest animate-pulse">Aguardando SMS...</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {num.status === 'WAITING' && (
-                                                    <div className="absolute bottom-0 left-0 h-1 bg-indigo-500/50 animate-progress w-full"></div>
+                                                        <p className="text-[9px] text-emerald-600 uppercase font-bold mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Clique para copiar</p>
+                                                    </div>
+                                                ) : num.status === 'CANCELED' ? (
+                                                    <div className="text-center text-gray-700">
+                                                        <XCircle size={24} className="mx-auto mb-1 opacity-50" />
+                                                        <span className="text-xs font-bold uppercase">Cancelado</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2 opacity-30">
+                                                        <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
+                                                        <div className="w-2 h-2 bg-white rounded-full animate-bounce delay-100"></div>
+                                                        <div className="w-2 h-2 bg-white rounded-full animate-bounce delay-200"></div>
+                                                    </div>
                                                 )}
                                             </div>
-                                        );
-                                    })
-                                )}
-                            </div>
+
+                                            {/* Right: Actions */}
+                                            <div className="w-[120px] flex flex-col justify-center items-center p-2 border-l border-white/5 gap-2 bg-black/10">
+                                                {num.status === 'WAITING' && (
+                                                    isLocked ? (
+                                                        <div className="text-center">
+                                                            <Timer size={16} className="mx-auto text-gray-600 mb-1" />
+                                                            <span className="text-[9px] font-bold text-gray-500 block">Bloqueio</span>
+                                                            <span className="text-[10px] font-mono text-gray-400">{remainingTime}s</span>
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => cancelNumber(num.id)} 
+                                                            disabled={isCancelling}
+                                                            className={`w-full py-2 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all
+                                                                ${isCancelling 
+                                                                    ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-wait' 
+                                                                    : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300'}
+                                                            `}
+                                                        >
+                                                            {isCancelling ? <RefreshCw size={14} className="animate-spin" /> : <XCircle size={14} />}
+                                                            <span className="text-[9px] font-bold uppercase">{isCancelling ? 'Processando' : 'Cancelar'}</span>
+                                                        </button>
+                                                    )
+                                                )}
+                                                
+                                                {(num.status === 'RECEIVED' || num.status === 'CANCELED' || num.status === 'FINISHED') && (
+                                                    <button 
+                                                        onClick={() => removeCard(num.id)} 
+                                                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all flex flex-col items-center justify-center gap-1"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                        <span className="text-[9px] font-bold uppercase">Arquivar</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>
             ) : (
-                // --- VIEW: COFRE (VAULT) ---
-                <div className="animate-fade-in">
-                    <div className="bg-[#0a0516] border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl relative min-h-[600px]">
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-emerald-900/10">
-                            <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Database className="text-emerald-400" /> Cofre de Chaves Pix
-                                </h3>
-                                <p className="text-gray-400 text-xs mt-1">Todos os números bancários que receberam SMS.</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={exportPixKeys} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2">
-                                    <Download size={14} /> Exportar TXT
-                                </button>
-                            </div>
-                        </div>
-                        <div className="p-0">
-                            {pixKeys.length === 0 ? (
-                                <div className="py-20 text-center text-gray-500 opacity-60 flex flex-col items-center justify-center h-full">
-                                    <Landmark size={64} className="mb-4 text-emerald-500/20" />
-                                    <p className="text-lg font-bold">Cofre Vazio</p>
-                                    <p className="text-sm">Os números aprovados aparecerão aqui automaticamente.</p>
-                                </div>
-                            ) : (
-                                <table className="w-full text-left text-sm text-gray-400">
-                                    <thead className="bg-black/40 text-xs uppercase font-bold text-emerald-500/70 sticky top-0 backdrop-blur-md">
-                                        <tr>
-                                            <th className="px-6 py-4">Banco</th>
-                                            <th className="px-6 py-4">Número (Chave)</th>
-                                            <th className="px-6 py-4">Código SMS</th>
-                                            <th className="px-6 py-4">Server</th>
-                                            <th className="px-6 py-4 text-right">Data</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {pixKeys.map((k, i) => (
-                                            <tr key={i} className="hover:bg-white/[0.02] transition-colors">
-                                                <td className="px-6 py-4 font-bold text-white uppercase flex items-center gap-2">
-                                                    <Landmark size={14} className="text-indigo-400"/> {k.bank}
-                                                </td>
-                                                <td className="px-6 py-4 font-mono text-emerald-300 select-all cursor-pointer hover:text-white transition-colors" onClick={() => {navigator.clipboard.writeText(k.number); notify('Copiado!', 'success')}}>{k.number}</td>
-                                                <td className="px-6 py-4 font-mono font-bold text-white select-all cursor-pointer" onClick={() => {navigator.clipboard.writeText(k.code); notify('Copiado!', 'success')}}>{k.code}</td>
-                                                <td className="px-6 py-4 text-xs font-mono">#{k.server_id}</td>
-                                                <td className="px-6 py-4 text-right text-xs font-mono">{new Date(k.date).toLocaleString()}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                // --- TAB COFRE (TABELA SIMPLES) ---
+                <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-xl overflow-hidden flex flex-col animate-fade-in">
+                    <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/20">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            <Database size={16} className="text-emerald-400" /> Histórico de Códigos Salvos
+                        </h3>
+                        <button onClick={exportPixKeys} className="bg-white text-black px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors flex items-center gap-2">
+                            <Download size={14} /> Baixar .TXT
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                        <table className="w-full text-left text-xs text-gray-400">
+                            <thead className="bg-black/40 text-gray-500 uppercase font-bold sticky top-0">
+                                <tr>
+                                    <th className="px-6 py-3">Serviço</th>
+                                    <th className="px-6 py-3">Número</th>
+                                    <th className="px-6 py-3">Código</th>
+                                    <th className="px-6 py-3 text-right">Data</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {pixKeys.map((k, i) => (
+                                    <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                                        <td className="px-6 py-3 font-bold text-white">{k.bank}</td>
+                                        <td className="px-6 py-3 font-mono">{k.number}</td>
+                                        <td className="px-6 py-3">
+                                            <span className="bg-emerald-900/30 text-emerald-400 px-2 py-1 rounded font-mono font-bold border border-emerald-900/50 select-all">
+                                                {k.code}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-gray-500">{new Date(k.date).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                                {pixKeys.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-10 text-center text-gray-600">Nenhum código salvo ainda.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
