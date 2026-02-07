@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle, ArrowRight } from 'lucide-react';
 import { supabase } from '../supabaseClient'; // IMPORT SUPABASE
@@ -20,65 +21,72 @@ interface Props {
     userName?: string;
 }
 
-// --- BANCO DE DADOS DE JOGOS 2025 (OFICIAIS) ---
+// --- BANCO DE DADOS DE JOGOS 2025 (OFICIAIS - ATUALIZADO) ---
 const GAMES_DB: SlotGame[] = [
     // --- WG (Wealth/Golden) ---
-    { id: 101, name: 'Dragon vs Tiger', provider: 'WG', volatility: 'Alta', stars: 3, tags: ['Cartas', 'Rápido'], imageUrl: 'https://images.unsplash.com/photo-1508349083400-60b6c6b4421b?q=80&w=400&auto=format&fit=crop' },
-    { id: 102, name: 'Mais Fortuna & Riqueza', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Slots'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/CaishenWins.png' },
-    { id: 103, name: 'Lucky Dog', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Animal'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/TaDa-Gaming/38041/lucky-doggy-7053018_s.webp' },
-    { id: 104, name: 'Treasure Bowl', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Pote'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB/15543/Treasure-Bowl-JDB-7087368_s.webp' },
-    { id: 105, name: 'Dragon Treasure II', provider: 'WG', volatility: 'Alta', stars: 3, tags: ['Dragão'], imageUrl: 'https://images.unsplash.com/photo-1577493340887-b7bfff550145?q=80&w=400&auto=format&fit=crop' },
-    { id: 106, name: 'Fishing Master', provider: 'WG', volatility: 'Média', stars: 3, tags: ['Pesca'], imageUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=400&auto=format&fit=crop' },
+    { id: 101, name: 'Dragon vs Tiger', provider: 'WG', volatility: 'Alta', stars: 3, tags: ['Cartas', 'Ao Vivo'], imageUrl: 'https://dashboardcpa.com.br/images/games/dragon-vs-tiger.jpg' },
+    { id: 102, name: 'Mais Fortuna & Riqueza', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Slots', 'Fortuna'], imageUrl: 'https://dashboardcpa.com.br/images/games/mais-fortuna.jpg' },
+    { id: 103, name: 'Lucky Dog', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Animal', 'Divertido'], imageUrl: 'https://dashboardcpa.com.br/images/games/lucky-dog.jpg' },
+    { id: 104, name: 'Treasure Bowl', provider: 'WG', volatility: 'Média', stars: 2, tags: ['Pote', 'Ouro'], imageUrl: 'https://dashboardcpa.com.br/images/games/treasure-bolw.jpg' },
+    { id: 105, name: 'Dragon Treasure II', provider: 'WG', volatility: 'Alta', stars: 3, tags: ['Dragão', 'Jackpot'], imageUrl: 'https://dashboardcpa.com.br/images/games/dragon-treasure.jpg' },
+    { id: 106, name: 'Fishing Master', provider: 'WG', volatility: 'Média', stars: 3, tags: ['Pesca', 'Habilidade'], imageUrl: 'https://dashboardcpa.com.br/images/games/fishing-master.jpg' },
 
     // --- MG (Microgaming) ---
-    { id: 201, name: '777 Mega Deluxe', provider: 'MG', volatility: 'Média', stars: 2, tags: ['Clássico'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Crazy-Tooth-Studio/18517/777-Mega-Deluxe-1_s.jpg' },
-    { id: 202, name: 'Lucky Twins', provider: 'MG', volatility: 'Alta', stars: 3, tags: ['Asiático'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Pulse-8-Studios/15691/Lucky-Twins-Jackpot-1_s.jpg' },
-    { id: 203, name: '777 BIG', provider: 'MG', volatility: 'Média', stars: 3, tags: ['Jackpot'], imageUrl: 'https://cdn.softswiss.net/i/s3/microgaming/777RoyalWheel.png' },
+    { id: 201, name: '777 Mega Deluxe', provider: 'MG', volatility: 'Média', stars: 2, tags: ['Clássico', '777'], imageUrl: 'https://chanz.cloud/cmscontent/images/777megadeluxe-icon_full-9be15147.jpg' },
+    { id: 202, name: 'Lucky Twins', provider: 'MG', volatility: 'Alta', stars: 3, tags: ['Asiático', 'Pares'], imageUrl: 'https://dashboardcpa.com.br/images/games/Lucky-Twins.jpg' },
+    { id: 203, name: '777 BIG', provider: 'MG', volatility: 'Média', stars: 3, tags: ['Jackpot', 'Retro'], imageUrl: 'https://dashboardcpa.com.br/images/games/777-BIG.jpg' },
 
     // --- JILI ---
-    { id: 301, name: 'Jungle King', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Aventura'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Jili-Games/24635/Jungle-King-Jili-Games-6897657_s.jpg' },
-    { id: 302, name: 'Crazy 777', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Rápido'], imageUrl: 'https://slotsia.com/en/wp-content/uploads/sites/12/img-crazy-777-game-card-2.png' },
-    { id: 303, name: 'Jumple King', provider: 'JILI', volatility: 'Média', stars: 2, tags: ['Pulo'], imageUrl: 'https://images.unsplash.com/photo-1629814249159-e14b1e5a51e5?q=80&w=400&auto=format&fit=crop' },
-    { id: 304, name: 'Golden Joker', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Cartas'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/1spin4win/48429/golden-joker-fortune-7112636_s.webp' },
-    { id: 305, name: 'FaFaFa', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Simples'], imageUrl: 'https://www.andyroid.net/wp-content/uploads/2015/11/Fafafa-Casino-Slots-icon.jpg' },
+    { id: 301, name: 'Jungle King', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Aventura', 'Kong'], imageUrl: 'https://dashboardcpa.com.br/images/games/jungle-king.jpg' },
+    { id: 302, name: 'Crazy 777', provider: 'JILI', volatility: 'Baixa', stars: 3, tags: ['Rápido', 'Hot'], imageUrl: 'https://dashboardcpa.com.br/images/games/crazy777.jpg' },
+    { id: 303, name: 'Crazy Hunter', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Tiro', 'Ação'], imageUrl: 'https://dashboardcpa.com.br/images/games/crazy-hunter.jpg' },
+    { id: 304, name: 'XIYANGYANG', provider: 'JILI', volatility: 'Média', stars: 2, tags: ['Asiático', 'Ovelha'], imageUrl: 'https://dashboardcpa.com.br/images/games/xiyangy.jpg' },
+    { id: 305, name: 'FaFaFa', provider: 'JILI', volatility: 'Baixa', stars: 2, tags: ['Simples', 'Clássico'], imageUrl: 'https://dashboardcpa.com.br/images/games/crazy-fafafa.jpg' },
+    { id: 306, name: 'Golden Joker', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Cartas', 'Coringa'], imageUrl: 'https://dashboardcpa.com.br/images/games/golden-joker.jpg' },
 
     // --- JDB ---
-    { id: 401, name: 'Triple King Kong', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Gorila'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/9113/Triple-King-Kong-1_s.jpg' },
-    { id: 402, name: 'Funky King Kong', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Funky'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/16556/Funky-King-Kong-6_s.jpg' },
-    { id: 403, name: 'Treasure Bowl', provider: 'JDB', volatility: 'Média', stars: 3, tags: ['Ouro'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB/15543/Treasure-Bowl-JDB-7087368_s.webp' },
-    { id: 404, name: 'Super Niubi', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Touro'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/16751/Super-Niubi-Deluxe-1_s.jpg' },
-    { id: 405, name: 'Crazy King Kong', provider: 'JDB', volatility: 'Alta', stars: 2, tags: ['Loucura'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/17507/Crazy-King-Kong-1_s.jpg' },
-    { id: 406, name: 'Lucky Color', provider: 'JDB', volatility: 'Baixa', stars: 3, tags: ['Cores'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/JDB168/26845/Lucky-Color-Game-6928396_s.jpg' },
+    { id: 401, name: 'Triple King Kong', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Gorila', 'Multiplicador'], imageUrl: 'https://dashboardcpa.com.br/images/games/triple-king.jpg' },
+    { id: 402, name: 'Funky King Kong', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Funky', 'Música'], imageUrl: 'https://dashboardcpa.com.br/images/games/funky-king-kong.jpg' },
+    { id: 403, name: 'Treasure Bowl (V2)', provider: 'JDB', volatility: 'Média', stars: 3, tags: ['Ouro', 'Upgrade'], imageUrl: 'https://dashboardcpa.com.br/images/games/treasure-bolwwww.jpg' },
+    { id: 404, name: 'Super Niubi', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Touro', 'Sorte'], imageUrl: 'https://dashboardcpa.com.br/images/games/surpe-niube.jpg' },
+    { id: 405, name: 'Crazy King Kong', provider: 'JDB', volatility: 'Alta', stars: 2, tags: ['Loucura', 'Wilds'], imageUrl: 'https://dashboardcpa.com.br/images/games/crazy-king-kong.jpg' },
+    { id: 406, name: 'Lucky Color', provider: 'JDB', volatility: 'Baixa', stars: 3, tags: ['Cores', 'Dados'], imageUrl: 'https://dashboardcpa.com.br/images/games/lucky-color.jpg' },
+    { id: 407, name: 'Bulls Treasure', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Touro', 'Tesouro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Bulls-treasure.jpg' },
+    { id: 408, name: 'Fruity Bonanza', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Frutas', 'Cascata'], imageUrl: 'https://dashboardcpa.com.br/images/games/fruty-bonanza.jpg' },
 
     // --- PG SOFT ---
-    { id: 501, name: 'Fortune Dragon', provider: 'PG', volatility: 'Média', stars: 2, tags: ['Ganho Certo 2.00'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/FortuneDragon.png' },
-    { id: 502, name: 'Gem Saviour Sword', provider: 'PG', volatility: 'Média', stars: 3, tags: ['Aventura'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/GemSaviourSword.png' },
-    { id: 503, name: 'Piggy Gold', provider: 'PG', volatility: 'Média', stars: 2, tags: ['Favorito'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/PiggyGold.png' },
-    { id: 504, name: 'Chicky Run', provider: 'PG', volatility: 'Baixa', stars: 3, tags: ['Corrida'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/RoosterRumble.png' },
-    { id: 505, name: 'Hood vs Wolf', provider: 'PG', volatility: 'Média', stars: 2, tags: ['Batalha'], imageUrl: 'https://rainbet.com/_next/image?url=https%3A%2F%2Fcdn.rainbet.com%2Fslots%2Fpgsoft-hood-vs-wolf.jpg&w=1920&q=75' },
-    { id: 506, name: 'Prosperity Lion', provider: 'PG', volatility: 'Alta', stars: 3, tags: ['Favorito'], imageUrl: 'https://cdn.softswiss.net/i/s3/pgsoft/ProsperityLion.png' },
+    { id: 501, name: 'Fortune Dragon', provider: 'PG', volatility: 'Média', stars: 3, tags: ['Dragão', 'Multiplier'], imageUrl: 'https://dashboardcpa.com.br/images/games/fortune-dragon.jpg' },
+    { id: 502, name: 'Gem Saviour', provider: 'PG', volatility: 'Média', stars: 3, tags: ['Aventura', 'Gemas'], imageUrl: 'https://dashboardcpa.com.br/images/games/Gem-Saviour.jpg' },
+    { id: 503, name: 'Piggy Gold', provider: 'PG', volatility: 'Média', stars: 2, tags: ['Porquinho', 'Ano Novo'], imageUrl: 'https://dashboardcpa.com.br/images/games/pigg-gold.jpg' },
+    { id: 504, name: 'Chicky Run', provider: 'PG', volatility: 'Baixa', stars: 3, tags: ['Corrida', 'Pinto'], imageUrl: 'https://dashboardcpa.com.br/images/games/Chicky-run.jpg' },
+    { id: 506, name: 'Prosperity Lion', provider: 'PG', volatility: 'Alta', stars: 3, tags: ['Leão', 'Dança'], imageUrl: 'https://dashboardcpa.com.br/images/games/Prosperity-lion.jpg' },
+    { id: 507, name: 'Mr Hallow Jackpot', provider: 'PG', volatility: 'Alta', stars: 2, tags: ['Halloween', 'Assustador'], imageUrl: 'https://dashboardcpa.com.br/images/games/Mr-Hallow-Jackpot.jpg' },
+    { id: 508, name: 'Plushie Frenzy', provider: 'PG', volatility: 'Média', stars: 3, tags: ['Fofo', 'Claw Machine'], imageUrl: 'https://dashboardcpa.com.br/images/games/Plushie-Frenzy.jpg' },
+    { id: 509, name: 'Win Win Won', provider: 'PG', volatility: 'Baixa', stars: 3, tags: ['Pet', 'Cachorro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Win-Win-Won.jpg' },
 
     // --- PESCARIA ---
-    { id: 601, name: 'Dinosaur Tycoon', provider: 'PESCARIA', volatility: 'Alta', stars: 3, tags: ['Média Alta'], imageUrl: 'https://cdn.softswiss.net/i/s3/quickspin/DinosaurRage.png' },
-    { id: 602, name: 'Dinosaur Tycoon 2', provider: 'PESCARIA', volatility: 'Alta', stars: 3, tags: ['Montante'], imageUrl: 'https://cdn.softswiss.net/i/s3/redtiger/ReptizillionsPowerReels.png' },
+    { id: 601, name: 'Mega Fishing', provider: 'PESCARIA', volatility: 'Alta', stars: 3, tags: ['Oceano', 'Chefe'], imageUrl: 'https://dashboardcpa.com.br/images/games/mega-finsh.jpg' },
+    { id: 602, name: 'Happy Fishing', provider: 'PESCARIA', volatility: 'Média', stars: 3, tags: ['Divertido', 'Peixes'], imageUrl: 'https://dashboardcpa.com.br/images/games/happy-fishing.jpg' },
+    { id: 603, name: 'Boom Legend', provider: 'PESCARIA', volatility: 'Alta', stars: 3, tags: ['Monstros', 'RPG'], imageUrl: 'https://dashboardcpa.com.br/images/games/boom-legend.jpg' },
+    { id: 604, name: 'Dragon Fortune', provider: 'PESCARIA', volatility: 'Alta', stars: 3, tags: ['Dragão', 'Tiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/dragon-fortune.jpg' },
 
     // --- PP (Pragmatic Play) ---
-    { id: 701, name: 'Joker Jewels', provider: 'PP', volatility: 'Média', stars: 2, tags: ['Clássico'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/JokersJewels.png' },
-    { id: 702, name: '888 Gold', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Ouro'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/888Gold.png' },
-    { id: 703, name: 'Jade Butterfly', provider: 'PP', volatility: 'Baixa', stars: 3, tags: ['Média/Montante'], imageUrl: 'https://rainbet.com/_next/image?url=https%3A%2F%2Frainbet-images.nyc3.cdn.digitaloceanspaces.com%2Fslots%2Fpragmatic-play-jade-butterfly.png&w=256&q=75' },
-    { id: 704, name: 'Fire Strike', provider: 'PP', volatility: 'Alta', stars: 2, tags: ['Fogo'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/FireStrike.png' },
-    { id: 705, name: 'Irish Charms', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Trevo'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/IrishCharms.png' },
-    { id: 706, name: 'Diamonds Are Forever', provider: 'PP', volatility: 'Média', stars: 2, tags: ['3 Linhas'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/DiamondsareForever3Lines.png' },
-    { id: 707, name: 'Diamond Strike', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Diamantes'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/DiamondStrike.png' },
+    { id: 700, name: 'Plush WINS', provider: 'PP', volatility: 'Média', stars: 2, tags: ['Fofo', 'Ursinhos'], imageUrl: 'https://dashboardcpa.com.br/images/games/plush-win-pp.jpg' },
+    { id: 702, name: '888 Gold', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Ouro', '888'], imageUrl: 'https://dashboardcpa.com.br/images/games/888gold.jpg' },
+    { id: 703, name: 'Jade Butterfly', provider: 'PP', volatility: 'Baixa', stars: 3, tags: ['Borboleta', 'Zen'], imageUrl: 'https://dashboardcpa.com.br/images/games/Jade-Butterfly.jpg' },
+    { id: 704, name: 'Fire Strike', provider: 'PP', volatility: 'Alta', stars: 2, tags: ['Fogo', 'Jackpot'], imageUrl: 'https://dashboardcpa.com.br/images/games/Fire-Strike.jpg' },
+    { id: 705, name: 'Irish Charms', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Trevo', 'Sorte'], imageUrl: 'https://dashboardcpa.com.br/images/games/Irish-Charms.jpg' },
+    { id: 706, name: 'Diamonds Are Forever', provider: 'PP', volatility: 'Média', stars: 2, tags: ['Diamantes', 'Retrô'], imageUrl: 'https://dashboardcpa.com.br/images/games/Diamonds-Are-Forever.jpg' },
+    { id: 707, name: 'Diamond Strike', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Diamantes', 'Free Spins'], imageUrl: 'https://dashboardcpa.com.br/images/games/Diamond-Strike.jpg' },
 
     // --- FC (Fa Chai) ---
-    { id: 801, name: 'Treasure Raiders', provider: 'FC', volatility: 'Média', stars: 3, tags: ['Tumba'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/32773/Treasure-Raiders-7012311.jpg' },
-    { id: 802, name: 'Cowboys', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Oeste'], imageUrl: 'https://cdn.softswiss.net/i/s3/pragmaticexternal/WildWestGold.png' },
-    { id: 803, name: 'Fortune Sheep', provider: 'FC', volatility: 'Baixa', stars: 2, tags: ['Ovelha'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/37118/fortune-sheep-7042554_s.webp' },
-    { id: 804, name: 'Golden Panther', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Pantera'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/33033/The-Golden-Panther-7014265_s.jpg' },
-    { id: 805, name: 'Rich Man', provider: 'FC', volatility: 'Alta', stars: 3, tags: ['Magnata'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/32824/Rich-Man-7012747_s.jpg' },
-    { id: 806, name: 'Color Game', provider: 'FC', volatility: 'Baixa', stars: 3, tags: ['Dados'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/AllWaySpin/23024/Color-Game-6875568_s.jpg' },
-    { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Batalha'], imageUrl: 'https://slotcatalog.com/userfiles/image/games/Fa-Chai-Gaming/40070/roma-gladiatrix-7065751.webp' },
+    { id: 801, name: 'Treasure Raiders', provider: 'FC', volatility: 'Média', stars: 3, tags: ['Tumba', 'Aventura'], imageUrl: 'https://dashboardcpa.com.br/images/games/Treasure-Raiders.jpg' },
+    { id: 802, name: 'Cowboys', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Oeste', 'Tiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Cowboys.jpg' },
+    { id: 803, name: 'Fortune Sheep', provider: 'FC', volatility: 'Baixa', stars: 2, tags: ['Ovelha', 'Ano Novo'], imageUrl: 'https://dashboardcpa.com.br/images/games/Fortune-Sheep.jpg' },
+    { id: 804, name: 'Golden Panther', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Pantera', 'Selva'], imageUrl: 'https://dashboardcpa.com.br/images/games/Golden-Panther.jpg' },
+    { id: 805, name: 'Rich Man', provider: 'FC', volatility: 'Alta', stars: 3, tags: ['Magnata', 'Dinheiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Rich-Man.jpg' },
+    { id: 806, name: 'Color Game', provider: 'FC', volatility: 'Baixa', stars: 3, tags: ['Dados', 'Cores'], imageUrl: 'https://dashboardcpa.com.br/images/games/Color-Game.jpg' },
+    { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Roma', 'Batalha'], imageUrl: 'https://dashboardcpa.com.br/images/games/Gladiatriz-de-Roma.jpg' },
 ];
 
 const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, userName }) => {
