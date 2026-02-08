@@ -120,14 +120,24 @@ const Admin: React.FC<Props> = ({ notify }) => {
       }
   };
 
-  const connectRealtime = () => {
+  const connectRealtime = async () => {
+      // 1. Limpeza Agressiva de Conflitos
+      // Remove qualquer canal existente chamado 'online_users' para evitar conflito com App.tsx
+      const allChannels = supabase.getChannels();
+      const conflictChannel = allChannels.find(c => c.topic === 'realtime:online_users');
+      if (conflictChannel) {
+          await supabase.removeChannel(conflictChannel);
+      }
+
+      // Remove referência local anterior
       if (channelRef.current) {
-          supabase.removeChannel(channelRef.current);
+          await supabase.removeChannel(channelRef.current);
           channelRef.current = null;
       }
+
       setConnectionStatus('CONNECTING');
 
-      // CORREÇÃO CRÍTICA: Adicionada config de Presence Key para alinhar com App.tsx
+      // 2. Nova Conexão Privilegiada (Admin)
       const channel = supabase.channel('online_users', {
           config: {
               presence: {
@@ -562,10 +572,20 @@ const Admin: React.FC<Props> = ({ notify }) => {
                             <h3 className="text-white font-bold text-xl flex items-center gap-2">
                                 <Globe size={24} className="text-emerald-400" /> Rede Neural (Realtime)
                             </h3>
-                            <p className="text-gray-400 text-sm flex items-center gap-2 mt-1">
-                                <span className={`w-2 h-2 rounded-full ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
-                                {connectionStatus === 'CONNECTED' ? 'Conexão Estabelecida' : 'Desconectado'}
-                            </p>
+                            <div className="flex items-center gap-3 mt-1">
+                                <p className="text-gray-400 text-sm flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${connectionStatus === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                                    {connectionStatus === 'CONNECTED' ? 'Conexão Estabelecida' : 'Desconectado'}
+                                </p>
+                                {/* BOTÃO DE REFRESH ADICIONADO AQUI */}
+                                <button 
+                                    onClick={connectRealtime}
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors border border-white/5"
+                                    title="Forçar Reconexão"
+                                >
+                                    <RefreshCw size={12} className={connectionStatus === 'CONNECTING' ? 'animate-spin' : ''} />
+                                </button>
+                            </div>
                         </div>
                         <div className="text-right">
                             <span className="text-4xl font-black text-white">{onlineUsers.length}</span>
