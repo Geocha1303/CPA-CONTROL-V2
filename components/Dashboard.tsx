@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL, getHojeISO } from '../utils';
@@ -10,7 +11,7 @@ import {
   Filter, PieChart as PieIcon, History, ArrowUpRight,
   Wallet, HelpCircle, BarChart3,
   Flame, Sparkles, Globe, User, RefreshCw, Lock, Clock, HeartPulse,
-  Zap, Target, ChevronUp, Cpu, Wifi
+  Zap, Target, ChevronUp, Cpu, Wifi, Info, X, Calendar, ChevronDown, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -26,6 +27,14 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   const [globalAggregatedData, setGlobalAggregatedData] = useState<Record<string, DayRecord>>({});
   const [globalUserCount, setGlobalUserCount] = useState(0);
   
+  // State do Alerta de Atualização
+  const [showUpdateInfo, setShowUpdateInfo] = useState(true);
+  
+  // --- DATE FILTER STATE ---
+  const hojeISO = getHojeISO();
+  const currentMonthKey = hojeISO.substring(0, 7); // YYYY-MM
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
+
   // --- TIME & GREETING STATE ---
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -98,21 +107,57 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
       }
   };
 
+  // --- AVAILABLE MONTHS CALCULATION ---
+  const availableMonths = useMemo(() => {
+      const keys = Object.keys(state.dailyRecords);
+      const monthsSet = new Set<string>();
+      
+      // Adiciona o mês atual sempre
+      monthsSet.add(currentMonthKey);
+      
+      // Adiciona meses do histórico
+      keys.forEach(k => {
+          if (k.length >= 7) monthsSet.add(k.substring(0, 7));
+      });
+
+      // Converte para array e ordena (mais recente primeiro)
+      return Array.from(monthsSet).sort().reverse().map(m => {
+          const [y, monthIdx] = m.split('-').map(Number);
+          const dateObj = new Date(y, monthIdx - 1, 1);
+          return {
+              key: m,
+              label: dateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+              isCurrent: m === currentMonthKey
+          };
+      });
+  }, [state.dailyRecords, currentMonthKey]);
+
   const metrics = useMemo(() => {
-    const hojeISO = getHojeISO();
+    // FILTRO PRINCIPAL: Usa o mês selecionado no dropdown
+    const filterKey = selectedMonth; 
     const allDates = Object.keys(state.dailyRecords).sort();
-    const pastAndPresentDates = allDates.filter(d => d <= hojeISO);
+    
+    // Filtra datas que correspondem ao mês selecionado
+    const monthDates = allDates.filter(d => d.startsWith(filterKey));
 
     let totalDespGeral = 0;
     const bonusMultiplier = (state.config.manualBonusMode) ? 1 : (state.config.valorBonus || 20);
 
     let totalDepositos = 0;
     let totalRedepositos = 0;
+    let totalInv = 0; 
+    let totalRet = 0; 
+    let totalLucro = 0;
 
     // --- CHART DATA PREP ---
-    let chartData = pastAndPresentDates.map(date => {
+    let chartData = monthDates.map(date => {
         const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
         const record = state.dailyRecords[date];
+
+        // Somas Totais (KPIs)
+        totalInv += (isNaN(m.invest) ? 0 : m.invest);
+        totalRet += (isNaN(m.ret) ? 0 : m.ret);
+        totalLucro += (isNaN(m.lucro) ? 0 : m.lucro);
 
         if(record && record.accounts) {
             record.accounts.forEach(acc => {
@@ -138,21 +183,15 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
     const cleanChartData = chartData.filter(item => item.hasActivity || item.fullDate === hojeISO);
 
+    // Filtra despesas gerais apenas do mês selecionado
     if (Array.isArray(state.generalExpenses)) {
         state.generalExpenses.forEach(e => {
-            const val = parseFloat(String(e.valor));
-            if (!isNaN(val)) totalDespGeral += val;
+            if (e.date.startsWith(filterKey)) {
+                const val = parseFloat(String(e.valor));
+                if (!isNaN(val)) totalDespGeral += val;
+            }
         });
     }
-
-    let totalInv = 0; let totalRet = 0; let totalLucro = 0;
-    
-    allDates.forEach(date => {
-        const m = calculateDayMetrics(state.dailyRecords[date], bonusMultiplier);
-        totalInv += (isNaN(m.invest) ? 0 : m.invest);
-        totalRet += (isNaN(m.ret) ? 0 : m.ret);
-        totalLucro += (isNaN(m.lucro) ? 0 : m.lucro);
-    });
 
     const lucroLiquido = totalLucro - totalDespGeral;
     const totalInvestimentoReal = totalInv + totalDespGeral;
@@ -175,17 +214,32 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         ? (lucroLiquido / totalRet) * 100 
         : 0;
 
-    // PROJEÇÃO MENSAL
-    const currentMonthKey = hojeISO.substring(0, 7); // YYYY-MM
-    const currentMonthData = chartData.filter(d => d.fullDate.startsWith(currentMonthKey));
-    const currentMonthProfit = currentMonthData.reduce((acc, curr) => acc + curr.lucro, 0);
-    const daysPassed = new Date().getDate();
-    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-    const dailyAvg = daysPassed > 0 ? currentMonthProfit / daysPassed : 0;
-    const projectedProfit = dailyAvg * daysInMonth;
+    // LÓGICA DE PROJEÇÃO (AJUSTADA PARA PASSADO)
+    const isCurrentMonth = selectedMonth === currentMonthKey;
+    const [selYear, selMonth] = selectedMonth.split('-').map(Number);
+    const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+    
+    let dailyAvg = 0;
+    let projectedProfit = 0;
 
+    if (isCurrentMonth) {
+        // Mês atual: média baseada nos dias passados até hoje
+        const daysPassed = new Date().getDate();
+        dailyAvg = daysPassed > 0 ? lucroLiquido / daysPassed : 0;
+        projectedProfit = dailyAvg * daysInMonth;
+    } else {
+        // Mês passado: média é o total dividido pelos dias do mês (ou dias operados)
+        // Para simplificar "Projeção" vira "Total Realizado"
+        dailyAvg = lucroLiquido / daysInMonth;
+        projectedProfit = lucroLiquido; // Não há projeção, é o fato.
+    }
+
+    // Activity Feed (Mostra atividades do mês selecionado)
     const allAccounts: any[] = [];
     Object.entries(state.dailyRecords).forEach(([date, record]) => {
+        // Importante: Filtra activity feed pelo mês selecionado
+        if (!date.startsWith(filterKey)) return;
+        
         const dayRecord = record as DayRecord;
         if(dayRecord.accounts){
             dayRecord.accounts.forEach(acc => {
@@ -199,6 +253,10 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     const recentActivity = allAccounts.sort((a, b) => b.id - a.id).slice(0, 5);
     const hasData = cleanChartData.some(d => d.hasActivity);
 
+    // Nome do mês selecionado para exibição
+    const displayDateObj = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1, 1);
+    const monthName = displayDateObj.toLocaleDateString('pt-BR', { month: 'long' });
+
     return {
         totalInv: totalInvestimentoReal,
         totalRet,
@@ -209,9 +267,11 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         margin: isNaN(margin) ? 0 : margin,
         recentActivity,
         hasData,
-        projectedProfit: isNaN(projectedProfit) ? 0 : projectedProfit
+        projectedProfit: isNaN(projectedProfit) ? 0 : projectedProfit,
+        monthName,
+        isCurrentMonth
     };
-  }, [state.dailyRecords, state.generalExpenses, state.config]);
+  }, [state.dailyRecords, state.generalExpenses, state.config, selectedMonth, currentMonthKey]);
 
   // --- HEATMAP LOGIC ---
   const intelligenceData = useMemo(() => {
@@ -224,6 +284,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         : (state.config.manualBonusMode ? 1 : (state.config.valorBonus || 20));
 
       Object.keys(activeRecords).forEach(date => {
+          // Heatmap considera TODO o histórico para ser mais preciso estatisticamente
           const m = calculateDayMetrics(activeRecords[date], bonusMultiplier);
           const dayIndex = new Date(date).getDay();
           if(m.lucro > 0) {
@@ -287,15 +348,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     return null;
   };
 
-  const InfoTooltip = ({ text }: { text: string }) => (
-      <div className="group relative ml-1 inline-flex">
-          <HelpCircle size={10} className="text-gray-500 hover:text-white cursor-help" />
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 border border-white/10 p-2 rounded-lg text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 text-center shadow-xl">
-              {text}
-          </div>
-      </div>
-  );
-
   return (
     <div className="space-y-8 animate-fade-in pb-10">
         
@@ -308,9 +360,35 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                 <span className="flex items-center gap-2"><Globe size={10} className="text-blue-500"/> REGION: SA-EAST-1</span>
             </div>
             <div className="hidden md:flex items-center gap-2 text-[10px] font-mono text-gray-600">
-                <span>V3.9.2-STABLE</span>
+                <span>V3.9.4-STABLE</span>
             </div>
         </div>
+
+        {/* --- ALERTA DE ATUALIZAÇÃO (CAIXINHA DE CORREÇÃO) --- */}
+        {showUpdateInfo && (
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl flex items-start justify-between gap-4 mb-2 animate-fade-in shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg text-blue-400 mt-0.5 shadow-inner">
+                        <AlertTriangle size={18} className="animate-pulse" />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-bold text-sm mb-1">Atualização do Dashboard: Visão Mensal</h4>
+                        <p className="text-blue-200/80 text-xs leading-relaxed max-w-3xl">
+                            <strong>Nota Importante:</strong> O dashboard foi atualizado para contabilidade mensal. 
+                            Se notar valores abaixo do esperado, é porque a contagem agora reinicia todo dia 1º. 
+                            Para consultar o histórico completo ou meses anteriores, utilize o novo seletor piscando no canto superior direito.
+                        </p>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setShowUpdateInfo(false)}
+                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/5"
+                    title="Fechar aviso"
+                >
+                    <X size={16} />
+                </button>
+            </div>
+        )}
 
         {/* --- HEADER HOLOGRÁFICO --- */}
         <div className="relative rounded-3xl overflow-hidden p-8 border border-white/10 shadow-2xl bg-[#0a0516] group">
@@ -333,24 +411,71 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                     </h1>
                     <div className="flex items-center gap-4 text-sm text-gray-400 font-medium">
                         <span className="flex items-center gap-1.5"><Clock size={14}/> {currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-                        <span className="font-mono text-gray-500">{currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</span>
                     </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <div className="text-right">
-                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">ROI Atual</p>
-                        <p className={`text-3xl font-black font-mono leading-none drop-shadow-lg ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
+                <div className="flex flex-col items-end gap-4">
+                    {/* GLOBAL DATE FILTER (SELECTOR) - UPGRADED NEON */}
+                    <div className="relative z-20">
+                        {/* Badge "NOVO" Pulsante */}
+                        <div className="absolute -top-2 -right-2 z-30 pointer-events-none">
+                            <span className="flex h-3 w-3 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                            </span>
+                        </div>
+
+                        <div className="relative group">
+                            {/* Ícone da Esquerda */}
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none z-10">
+                                <Calendar size={16} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                            </div>
+
+                            <select 
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                className="appearance-none pl-10 pr-10 py-2.5 text-sm font-bold text-white outline-none cursor-pointer uppercase tracking-wider
+                                bg-gradient-to-r from-cyan-950/40 to-indigo-950/40 
+                                border border-cyan-500/50 
+                                rounded-xl 
+                                shadow-[0_0_15px_rgba(6,182,212,0.15)] 
+                                hover:shadow-[0_0_25px_rgba(6,182,212,0.3)]
+                                hover:border-cyan-400
+                                focus:ring-2 focus:ring-cyan-500/30
+                                transition-all duration-300
+                                animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] hover:animate-none"
+                            >
+                                {availableMonths.map((m) => (
+                                    <option key={m.key} value={m.key} className="bg-[#0a0516] text-gray-300">
+                                        {m.label} {m.isCurrent ? '(Atual)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Ícone da Direita (Seta) */}
+                            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                <ChevronDown size={14} className="text-cyan-400" />
+                            </div>
+                        </div>
+                        <p className="text-[9px] text-cyan-500/80 font-bold text-right mt-1 mr-1 uppercase tracking-widest animate-pulse">
+                            Histórico Disponível
                         </p>
                     </div>
-                    <div className="w-px bg-white/10 h-10 self-center"></div>
-                    <div className="text-right">
-                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Margem Líq.</p>
-                        <p className="text-3xl font-black text-blue-400 font-mono leading-none drop-shadow-lg">
-                            {metrics.margin.toFixed(0)}%
-                        </p>
+
+                    <div className="flex gap-4">
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">ROI ({metrics.monthName})</p>
+                            <p className={`text-3xl font-black font-mono leading-none drop-shadow-lg ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
+                            </p>
+                        </div>
+                        <div className="w-px bg-white/10 h-10 self-center"></div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Margem Líq.</p>
+                            <p className="text-3xl font-black text-blue-400 font-mono leading-none drop-shadow-lg">
+                                {metrics.margin.toFixed(0)}%
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -376,14 +501,18 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                             <Wallet size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido ({metrics.monthName})</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-emerald-50 transition-colors">
                         {formatVal(metrics.lucroLiquido)}
                     </div>
                     <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded w-fit border border-emerald-500/10">
-                        <TrendingUp size={12} />
-                        <span>PROJEÇÃO: {formatVal(metrics.projectedProfit)}</span>
+                        {metrics.isCurrentMonth ? <TrendingUp size={12} /> : <CheckCircle2 size={12} />}
+                        <span>
+                            {metrics.isCurrentMonth 
+                                ? `PROJEÇÃO: ${formatVal(metrics.projectedProfit)}` 
+                                : `FECHAMENTO: ${formatVal(metrics.projectedProfit)}`}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -405,7 +534,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
                             <Activity size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume Total</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume ({metrics.monthName})</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-indigo-50 transition-colors">
                         {formatVal(metrics.totalRet)}
@@ -434,7 +563,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
                             <Filter size={20} />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Investimento</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Investimento ({metrics.monthName})</span>
                     </div>
                     <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-rose-50 transition-colors">
                         {formatVal(metrics.totalInv)}
@@ -550,10 +679,10 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                 <div className="flex items-center justify-between mb-8 relative z-10">
                      <div>
                         <h3 className="text-white font-bold text-xl flex items-center gap-2">
-                             <BarChart3 size={20} className="text-indigo-400"/> Evolução Financeira
+                             <BarChart3 size={20} className="text-indigo-400"/> Evolução Financeira ({metrics.monthName})
                         </h3>
                         <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mt-1">
-                            {metrics.hasData ? 'Análise de tendência' : 'Aguardando dados'}
+                            {metrics.hasData ? 'Análise de tendência mensal' : 'Aguardando dados'}
                         </p>
                      </div>
                 </div>
@@ -563,7 +692,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                         <div className="w-full h-full flex flex-col items-center justify-center text-center opacity-40">
                             <Activity size={64} className="text-indigo-400 mb-6" />
                             <h3 className="text-xl font-bold text-white">Gráfico Vazio</h3>
-                            <p className="text-sm text-gray-500 mt-2">Registre operações para visualizar dados.</p>
+                            <p className="text-sm text-gray-500 mt-2">Registre operações neste mês para visualizar dados.</p>
                         </div>
                     ) : (
                         <ResponsiveContainer width="100%" height="100%">
@@ -595,7 +724,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             <div className="flex flex-col gap-6 h-full">
                 <div className="rounded-3xl p-8 border border-white/10 bg-[#08050e] flex flex-col flex-1 min-h-[300px] shadow-xl relative overflow-hidden">
                     <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-2 flex items-center gap-2 relative z-10">
-                         <PieIcon size={16} className="text-indigo-400" /> Distribuição de Capital
+                         <PieIcon size={16} className="text-indigo-400" /> Distribuição ({metrics.monthName})
                     </h3>
                     <div className="flex-1 relative z-10">
                         <ResponsiveContainer width="100%" height="100%">
@@ -627,13 +756,13 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
                 <div className="rounded-3xl p-6 border border-white/10 bg-[#08050e] flex-1 overflow-hidden shadow-xl">
                      <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
-                         <History size={16} className="text-gray-400" /> Atividade Recente
+                         <History size={16} className="text-gray-400" /> Atividade ({metrics.monthName})
                     </h3>
                     <div className="space-y-3">
                         {metrics.recentActivity.length === 0 ? (
                             <div className="text-center py-8 opacity-50">
                                 <History className="mx-auto mb-2 text-gray-600" size={24} />
-                                <p className="text-[10px] text-gray-500">Sem histórico recente.</p>
+                                <p className="text-[10px] text-gray-500">Sem histórico neste mês.</p>
                             </div>
                         ) : (
                             metrics.recentActivity.map((item: any) => (
