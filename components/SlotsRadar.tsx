@@ -104,6 +104,9 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
 
     // BUSCA OS JOGOS DO SUPABASE
     const fetchCustomSlots = async () => {
+        // SEGURANÇA: Evita busca se não for admin e não tiver chave
+        if (!isAdmin && !currentUserKey) return;
+
         setIsLoadingCustom(true);
         try {
             let query = supabase.from('custom_slots').select('*');
@@ -114,7 +117,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
             }
             // Se for Admin, ele pega tudo (query sem filtro)
             
-            // CORREÇÃO LINHA-POR-LINHA: Ordernar por ID decrescente para novos aparecerem primeiro
+            // Ordernar por ID decrescente para novos aparecerem primeiro
             query = query.order('id', { ascending: false });
 
             const { data, error } = await query;

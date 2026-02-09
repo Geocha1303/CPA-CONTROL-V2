@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { AppState, Account } from '../types';
 import { formatarBRL } from '../utils';
-import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle, Lock, Send, Check } from 'lucide-react';
+import { Plus, Trash2, Calendar, TrendingUp, DollarSign, HelpCircle, AlertCircle, Lock, Send, Check, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 interface Props {
@@ -12,9 +13,10 @@ interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
   readOnly?: boolean;
   privacyMode?: boolean; // Nova prop
+  currentUserKey: string; // Nova prop essencial
 }
 
-const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly, privacyMode }) => {
+const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly, privacyMode, currentUserKey }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   const isManualMode = state.config.manualBonusMode === true;
   const [sendingId, setSendingId] = useState<number | null>(null);
@@ -76,10 +78,12 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
     });
   };
 
-  // --- REPORT TO LEADER LOGIC ---
+  // --- REPORT TO LEADER LOGIC (CORRIGIDA PARA USAR PROP) ---
   const handleReportRow = async (acc: Account) => {
-      const myKey = localStorage.getItem('cpa_auth_session_v3_master');
-      if (!myKey) return;
+      if (!currentUserKey) {
+          notify("Erro de autenticação.", "error");
+          return;
+      }
       
       setSendingId(acc.id);
 
@@ -94,7 +98,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
           const { data } = await supabase
             .from('access_keys')
             .select('leader_key, owner_name')
-            .eq('key', myKey)
+            .eq('key', currentUserKey)
             .single();
 
           if (data && data.leader_key) {
@@ -213,73 +217,62 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
          </div>
       </div>
 
-      {/* Tabela Principal */}
-      <div className="gateway-card rounded-xl overflow-hidden min-h-[500px] flex flex-col" id="tour-daily-table">
-        <div className="flex justify-between items-center p-5 border-b border-white/5">
+      {/* Tabela Principal - DESIGN ATUALIZADO (SEM CARA DE EXCEL) */}
+      <div className="min-h-[500px] flex flex-col" id="tour-daily-table">
+        <div className="flex justify-between items-center mb-6 px-2">
             <h3 className="text-lg font-bold text-white flex items-center gap-3 font-mono">
                 LIVRO CAIXA
-                <span className="bg-primary/20 text-primary-glow text-xs px-2 py-0.5 rounded border border-primary/30">{dayRecord.accounts.length}</span>
+                <span className="bg-primary/20 text-primary-glow text-xs px-2 py-0.5 rounded-full border border-primary/30">{dayRecord.accounts.length}</span>
             </h3>
             {!readOnly && (
                 <button 
                     onClick={handleAddAccount}
-                    className="gateway-btn-primary px-4 py-2 rounded text-xs font-bold text-white flex items-center gap-2 font-mono"
+                    className="gateway-btn-primary px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 font-mono shadow-lg hover:shadow-primary/40 transition-all"
                 >
                     <Plus size={14} /> NOVO REGISTRO
                 </button>
             )}
-            {readOnly && <div className="text-xs text-amber-500 font-bold flex items-center gap-1"><Lock size={12}/> MODO LEITURA</div>}
+            {readOnly && <div className="text-xs text-amber-500 font-bold flex items-center gap-1 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20"><Lock size={12}/> MODO LEITURA</div>}
         </div>
         
-        <div className="overflow-x-auto flex-1">
-            <table className="w-full text-sm text-left text-gray-400">
-                <thead className="text-[10px] text-gray-400 uppercase bg-black/40 border-b border-white/5 font-mono">
+        <div className="overflow-x-auto flex-1 pb-10">
+            {/* Adicionado border-separate e spacing-y para criar o efeito de Cards Flutuantes */}
+            <table className="w-full text-sm text-left text-gray-400 border-separate border-spacing-y-3">
+                <thead className="text-[10px] text-gray-500 uppercase font-mono tracking-widest pl-4">
                     <tr>
-                        <th className="px-6 py-4 font-bold tracking-widest text-gray-300">DEPÓSITO</th>
-                        <th className="px-6 py-4 font-bold tracking-widest text-gray-300">RE-DEP</th>
-                        <th className="px-6 py-4 font-bold tracking-widest text-accent-cyan">SAQUE</th>
+                        <th className="px-6 pb-2 font-bold">Investimento (Dep + Re)</th>
+                        <th className="px-6 pb-2 font-bold text-accent-cyan">Saque</th>
                         
                         {/* COLUNA BÔNUS COM INFO BOX */}
-                        <th className="px-6 py-4 font-bold tracking-widest text-primary-glow">
+                        <th className="px-6 pb-2 font-bold text-primary-glow">
                              <div className="flex items-center gap-2">
-                                 {isManualMode ? 'BÔNUS (R$)' : 'CICLOS (TELAS)'}
+                                 {isManualMode ? 'Bônus (R$)' : 'Ciclos'}
                                  {!readOnly && (
                                      <div className="group relative">
-                                         <AlertCircle size={14} className="cursor-help text-primary-glow hover:text-white transition-colors" />
-                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-[0_0_20px_rgba(112,0,255,0.2)] text-left leading-relaxed">
-                                             {isManualMode ? (
-                                                 <>
-                                                    <strong className="text-primary-glow block mb-1">Modo Manual Ativado</strong>
-                                                    Você deve colocar o valor exato que ganhou nesta operação (Baú + Gerente). Se quiser que o sistema calcule automaticamente (Ciclos x Valor), desmarque esta opção em "Sistema".
-                                                 </>
-                                             ) : (
-                                                 <>
-                                                    <strong className="text-primary-glow block mb-1">Modo Automático</strong>
-                                                    Digite a quantidade de ciclos (telas). O sistema multiplicará pelo valor configurado em "Sistema".
-                                                 </>
-                                             )}
-                                             <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-gray-900 border-b border-r border-primary/30 rotate-45"></div>
+                                         <AlertCircle size={14} className="cursor-help text-gray-600 hover:text-white transition-colors" />
+                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-xl text-left leading-relaxed">
+                                             {isManualMode ? "Modo Manual: Digite o valor monetário exato." : "Modo Auto: Digite a quantidade de ciclos."}
                                          </div>
                                      </div>
                                  )}
                              </div>
                         </th>
                         
-                        <th className="px-6 py-4 font-bold tracking-widest text-right text-gray-300">RESULTADO</th>
-                        <th className="px-6 py-4 text-center w-28">AÇÕES</th>
+                        <th className="px-6 pb-2 font-bold text-right">Performance</th>
+                        <th className="px-6 pb-2 text-center w-28">Ações</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                     {dayRecord.accounts.length === 0 ? (
                         <tr>
-                            <td colSpan={6} className="text-center py-20">
+                            <td colSpan={5} className="text-center py-20 bg-white/[0.01] rounded-2xl border border-white/5 border-dashed">
                                 <div className="flex flex-col items-center justify-center opacity-50">
                                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
                                          <TrendingUp size={32} />
                                      </div>
                                      <h4 className="text-white font-bold mb-2">Caixa Diário Vazio</h4>
                                      <p className="text-gray-400 text-sm max-w-sm mb-6">
-                                         Nenhum registro encontrado para esta data.
+                                         Adicione um novo registro para começar a monitorar.
                                      </p>
                                 </div>
                             </td>
@@ -288,27 +281,22 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                         dayRecord.accounts.map((acc, index) => {
                             const lucro = ((acc.saque||0) + ((acc.ciclos||0) * bonusMultiplier)) - ((acc.deposito||0) + (acc.redeposito||0));
                             return (
-                                <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
-                                    {/* DEPÓSITO */}
-                                    <td className="px-6 py-3">
-                                        <div className="relative group/input">
+                                <tr key={acc.id} className="group transition-all hover:-translate-y-1 duration-300 shadow-sm hover:shadow-lg">
+                                    {/* BLOCO UNIFICADO DE INVESTIMENTO */}
+                                    <td className="px-6 py-4 bg-[#0c0818] border-y border-l border-white/5 rounded-l-2xl first:rounded-l-2xl">
+                                        <div className="flex items-center gap-2">
                                             <input type="number" 
-                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
+                                                className={`gateway-input w-24 py-2 px-3 rounded-lg text-white font-mono font-bold text-right border-white/10 focus:border-white/30 bg-black/20 ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.deposito === 0 ? '' : acc.deposito} 
-                                                placeholder={privacyMode ? '****' : "0"}
+                                                placeholder="Dep"
                                                 disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'deposito', e.target.value)} 
                                             />
-                                        </div>
-                                    </td>
-                                    
-                                    {/* REDEPÓSITO */}
-                                    <td className="px-6 py-3">
-                                        <div className="relative group/input">
+                                            <span className="text-gray-600">+</span>
                                             <input type="number" 
-                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-white font-mono font-bold border-transparent focus:border-white/20 hover:bg-white/5 transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
+                                                className={`gateway-input w-24 py-2 px-3 rounded-lg text-gray-300 font-mono font-bold text-right border-white/5 focus:border-white/20 bg-black/20 ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.redeposito === 0 ? '' : acc.redeposito} 
-                                                placeholder={privacyMode ? '****' : "0"}
+                                                placeholder="Re-Dep"
                                                 disabled={readOnly}
                                                 onChange={(e) => handleAccountChange(acc.id, 'redeposito', e.target.value)} 
                                             />
@@ -316,10 +304,10 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                     </td>
 
                                     {/* SAQUE */}
-                                    <td className="px-6 py-3">
+                                    <td className="px-6 py-4 bg-[#0c0818] border-y border-white/5">
                                         <div className="relative group/input">
                                             <input type="number" 
-                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.02] hover:bg-accent-cyan/[0.05] transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
+                                                className={`gateway-input w-full py-2.5 px-3 rounded-lg text-accent-cyan font-mono font-bold border border-accent-cyan/10 focus:border-accent-cyan/50 bg-accent-cyan/[0.05] transition-all text-lg ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                 value={acc.saque === 0 ? '' : acc.saque} 
                                                 placeholder={privacyMode ? '****' : "0"}
                                                 disabled={readOnly}
@@ -328,15 +316,14 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                         </div>
                                     </td>
 
-                                    {/* BÔNUS / CICLOS (REMODELADO) */}
-                                    <td className="px-6 py-3">
+                                    {/* BÔNUS / CICLOS */}
+                                    <td className="px-6 py-4 bg-[#0c0818] border-y border-white/5">
                                         {isManualMode ? (
-                                            // ESTILO MODO MANUAL (VALOR R$)
                                             <div className="relative flex items-center">
                                                 <div className="absolute left-3 text-primary-glow font-bold text-xs pointer-events-none">R$</div>
                                                 <input 
                                                     type="number" 
-                                                    className={`gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all shadow-[0_0_15px_rgba(112,0,255,0.05)] ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
+                                                    className={`gateway-input w-full py-2.5 pl-8 pr-3 rounded-lg text-primary-glow font-mono font-bold border border-primary/20 focus:border-primary/60 bg-primary/[0.05] hover:bg-primary/[0.1] transition-all ${privacyMode ? 'text-transparent bg-gray-800' : ''}`}
                                                     value={acc.ciclos === 0 ? '' : acc.ciclos} 
                                                     placeholder={privacyMode ? '****' : "0.00"}
                                                     disabled={readOnly}
@@ -344,7 +331,6 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                 />
                                             </div>
                                         ) : (
-                                            // ESTILO MODO AUTOMÁTICO (QTD x MULTIPLICADOR)
                                             <div className="flex items-center bg-black/30 border border-white/10 rounded-lg p-1 w-full max-w-[140px]">
                                                 <input 
                                                     type="number" 
@@ -355,21 +341,32 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
                                                     onChange={(e) => handleAccountChange(acc.id, 'ciclos', e.target.value)} 
                                                 />
                                                 <div className="bg-white/5 border-l border-white/10 px-2.5 py-1.5 flex flex-col items-center justify-center min-w-[50px]">
-                                                    <span className="text-[9px] text-gray-500 font-bold uppercase leading-none mb-0.5">Valor</span>
-                                                    <span className="text-[10px] text-primary-glow font-mono font-bold leading-none">x{state.config.valorBonus}</span>
+                                                    <span className="text-[9px] text-gray-500 font-bold uppercase leading-none mb-0.5">x</span>
+                                                    <span className="text-[10px] text-primary-glow font-mono font-bold leading-none">{state.config.valorBonus}</span>
                                                 </div>
                                             </div>
                                         )}
                                     </td>
 
-                                    {/* RESULTADO */}
-                                    <td className={`px-6 py-3 text-right font-black font-mono text-lg tracking-tight ${lucro >= 0 ? 'text-accent-cyan' : 'text-accent-pink'}`}>
-                                        {formatVal(lucro)}
+                                    {/* RESULTADO (BADGE VISUAL) */}
+                                    <td className="px-6 py-4 bg-[#0c0818] border-y border-white/5 text-right">
+                                        <div className={`inline-flex items-center justify-end gap-2 px-4 py-2 rounded-xl border backdrop-blur-md min-w-[140px] shadow-lg transition-all duration-500
+                                            ${lucro >= 0 
+                                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-emerald-500/10' 
+                                                : 'bg-rose-500/10 border-rose-500/20 text-rose-400 shadow-rose-500/10'}
+                                        `}>
+                                            <span className="text-[10px] font-bold opacity-60 uppercase tracking-wider mr-auto">
+                                                {lucro >= 0 ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>}
+                                            </span>
+                                            <span className="text-lg font-black font-mono tracking-tight">
+                                                {formatVal(lucro)}
+                                            </span>
+                                        </div>
                                     </td>
 
-                                    {/* AÇÕES (DELETE + SEND) */}
-                                    <td className="px-6 py-3">
-                                        <div className="flex items-center justify-center gap-2">
+                                    {/* AÇÕES */}
+                                    <td className="px-6 py-4 bg-[#0c0818] border-y border-r border-white/5 rounded-r-2xl text-center">
+                                        <div className="flex items-center justify-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
                                             {!readOnly && (
                                                 <>
                                                     <button 

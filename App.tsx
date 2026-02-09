@@ -980,7 +980,7 @@ function App() {
                          >
                              {/* Active Indicator (Left Bar) */}
                              {activeView === item.id && (
-                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>
+                                 <div className="absolute left-0 top-1/2 -translate-x-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>
                              )}
                              
                              <div className={`transition-transform duration-300 ${activeView === item.id ? 'translate-x-2 text-primary' : ''}`}>
@@ -1092,7 +1092,7 @@ function App() {
             {activeView === 'sms' && <SmsRush notify={notify} />}
             
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
-            {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
+            {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} currentUserKey={currentUserKey} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'metas' && <Goals state={activeState} updateState={updateState} privacyMode={privacyMode} />}
             {activeView === 'configuracoes' && <Settings state={activeState} updateState={updateState} notify={notify} />}
