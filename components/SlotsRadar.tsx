@@ -45,11 +45,11 @@ const GAMES_DB: SlotGame[] = [
     { id: 306, name: 'Golden Joker', provider: 'JILI', volatility: 'Alta', stars: 3, tags: ['Cartas', 'Coringa'], imageUrl: 'https://dashboardcpa.com.br/images/games/golden-joker.jpg' },
 
     // --- JDB ---
-    { id: 401, name: 'Triple King Kong', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Gorila', 'Multiplicador'], imageUrl: 'https://dashboardcpa.com.br/images/games/triple-king.jpg' },
-    { id: 402, name: 'Funky King Kong', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Funky', 'Música'], imageUrl: 'https://dashboardcpa.com.br/images/games/funky-king-kong.jpg' },
+    { id: 401, name: 'Triple King Kong', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Gorila', 'Multiplicador'], imageUrl: 'https://online.casinocity.com/image_resize.ashx?type=game&imgid=87387&width=280' },
+    { id: 402, name: 'Funky King Kong', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Funky', 'Música'], imageUrl: 'https://games.okbet.com/wp-content/uploads/2025/08/funky-king-kong-logo.webp' },
     { id: 403, name: 'Treasure Bowl (V2)', provider: 'JDB', volatility: 'Média', stars: 3, tags: ['Ouro', 'Upgrade'], imageUrl: 'https://dashboardcpa.com.br/images/games/treasure-bolwwww.jpg' },
-    { id: 404, name: 'Super Niubi', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Touro', 'Sorte'], imageUrl: 'https://dashboardcpa.com.br/images/games/surpe-niube.jpg' },
-    { id: 405, name: 'Crazy King Kong', provider: 'JDB', volatility: 'Alta', stars: 2, tags: ['Loucura', 'Wilds'], imageUrl: 'https://dashboardcpa.com.br/images/games/crazy-king-kong.jpg' },
+    { id: 404, name: 'Super Niubi', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Touro', 'Sorte'], imageUrl: 'https://games.okbet.com/wp-content/uploads/2025/08/super-niubi-jdb-logo.webp' },
+    { id: 405, name: 'Crazy King Kong', provider: 'JDB', volatility: 'Alta', stars: 2, tags: ['Loucura', 'Wilds'], imageUrl: 'https://gr8.tech/wp-content/uploads/2025/04/cover-5ef059938ba799aaa845e1c2e8a762bd.png?x22443' },
     { id: 406, name: 'Lucky Color', provider: 'JDB', volatility: 'Baixa', stars: 3, tags: ['Cores', 'Dados'], imageUrl: 'https://dashboardcpa.com.br/images/games/lucky-color.jpg' },
     { id: 407, name: 'Bulls Treasure', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Touro', 'Tesouro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Bulls-treasure.jpg' },
     { id: 408, name: 'Fruity Bonanza', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Frutas', 'Cascata'], imageUrl: 'https://dashboardcpa.com.br/images/games/fruty-bonanza.jpg' },
@@ -83,14 +83,14 @@ const GAMES_DB: SlotGame[] = [
     { id: 707, name: 'Diamond Strike', provider: 'PP', volatility: 'Média', stars: 3, tags: ['Diamantes', 'Free Spins'], imageUrl: 'https://dashboardcpa.com.br/images/games/Diamond-Strike.jpg' },
 
     // --- FC (Fa Chai) ---
-    { id: 801, name: 'Treasure Raiders', provider: 'FC', volatility: 'Média', stars: 3, tags: ['Tumba', 'Aventura'], imageUrl: 'https://dashboardcpa.com.br/images/games/Treasure-Raiders.jpg' },
+    { id: 801, name: 'Treasure Raiders', provider: 'FC', volatility: 'Média', stars: 3, tags: ['Tumba', 'Aventura'], imageUrl: 'https://static.templodeslots.es/pict/1130080/Treasure-Raiders.png?timestamp=1740549955000&imageDataId=1215015&width=320&height=247' },
     { id: 802, name: 'Cowboys', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Oeste', 'Tiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Cowboys.jpg' },
-    { id: 803, name: 'Fortune Sheep', provider: 'FC', volatility: 'Baixa', stars: 2, tags: ['Ovelha', 'Ano Novo'], imageUrl: 'https://dashboardcpa.com.br/images/games/Fortune-Sheep.jpg' },
+    { id: 803, name: 'Fortune Sheep', provider: 'FC', volatility: 'Baixa', stars: 2, tags: ['Ovelha', 'Ano Novo'], imageUrl: 'https://fachaigaming.com/uploads/43e8d9e9-af4c-4520-84de-8f5d7a9240bb-22062_masthead_xs_en.webp' },
     { id: 804, name: 'Golden Panther', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Pantera', 'Selva'], imageUrl: 'https://dashboardcpa.com.br/images/games/Golden-Panther.jpg' },
     { id: 805, name: 'Rich Man', provider: 'FC', volatility: 'Alta', stars: 3, tags: ['Magnata', 'Dinheiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Rich-Man.jpg' },
     { id: 806, name: 'Color Game', provider: 'FC', volatility: 'Baixa', stars: 3, tags: ['Dados', 'Cores'], imageUrl: 'https://dashboardcpa.com.br/images/games/Color-Game.jpg' },
     { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Roma', 'Batalha'], imageUrl: 'https://dashboardcpa.com.br/images/games/Gladiatriz-de-Roma.jpg' },
-    { id: 808, name: 'Hot Money', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Dinheiro', 'Crime'], imageUrl: 'https://assets.slotslaunch.com/25686/hot-money-slot.jpg' },
+    { id: 808, name: 'Hot Money', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Dinheiro', 'Crime'], imageUrl: 'https://mediumrare.imgix.net/68ea84ca72c7ca9002eed0f4d2bf382f15d8ca6220ea1e874ff11bb271dc685f?q=85' },
 
     // --- CQ9 ---
     { id: 901, name: 'Gu Gu Gu 2', provider: 'CQ9', volatility: 'Alta', stars: 3, tags: ['Galo', 'Asiático'], imageUrl: 'https://static.casino.guru/pict/81843/Gu-Gu-Gu-2.png?timestamp=1653485889000&imageDataId=300934&width=320&height=247' },
@@ -107,8 +107,10 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
 
     // --- FAVORITES STATE ---
     const [favorites, setFavorites] = useState<number[]>(() => {
-        const saved = localStorage.getItem('slots_favorites');
-        return saved ? JSON.parse(saved) : [];
+        try {
+            const saved = localStorage.getItem('slots_favorites');
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
     });
 
     // Modal Add
@@ -238,10 +240,6 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
         const matchProvider = selectedProvider === 'Todos' || game.provider === selectedProvider;
         const matchSearch = game.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (game.owner_name && game.owner_name.toLowerCase().includes(searchTerm.toLowerCase()));
-        
-        // Na aba favoritos, geralmente queremos ver todos, mas o filtro de search é útil. O de provider pode ser opcional.
-        // Vou aplicar o filtro de provider APENAS se não for 'Favorites', para simplificar a UX da aba favoritos (ver tudo que ama).
-        // Se quiser filtrar favoritos, basta selecionar o provider. Vou permitir.
         
         return matchProvider && matchSearch;
     });
