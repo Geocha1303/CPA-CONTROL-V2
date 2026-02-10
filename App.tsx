@@ -93,6 +93,7 @@ const initialState: AppState = {
 };
 
 const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
+const LAST_ACTIVE_KEY_STORAGE = 'cpa_last_active_key_guard'; // NOVO: Guarda qual chave é dona do backup
 const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; 
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
@@ -508,33 +509,57 @@ function App() {
                       setIsAdmin(data.is_admin);
                       setIsAuthenticated(true);
                       
-                      // 1. Tenta carregar dados LOCAIS
+                      // --- LÓGICA: LOCAL É REI ---
+                      // 1. Tenta carregar dados LOCAIS (Chrome)
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
-                      let loadedData = localString ? JSON.parse(localString) : null;
+                      let loadedData = null;
+                      let forceCloudSync = false;
 
-                      // 2. Se não houver dados locais, OU para garantir nome atualizado, busca na NUVEM
+                      if (localString) {
+                          try {
+                              loadedData = JSON.parse(localString);
+                              // SE TEM DADOS LOCAIS, ELES MANDAM.
+                              // Vamos forçar o sync para a nuvem logo após carregar para garantir consistência.
+                              forceCloudSync = true; 
+                          } catch(e) {
+                              console.error("Dados locais corrompidos", e);
+                          }
+                      }
+
+                      // 2. Se NÃO tem dados locais válidos, busca da NUVEM
                       if (!loadedData) {
                           const cloudData = await loadCloudData(savedKey);
-                          if (cloudData) loadedData = cloudData;
-                      } else {
-                          // Se tem local, tenta buscar nuvem em background para garantir nome (Opcional, mas bom para sync)
-                          // Para simplicidade e performance no load, confiamos no local se existir,
-                          // mas se o nome for OPERADOR/default, tentamos pegar da chave.
+                          if (cloudData) {
+                              loadedData = cloudData;
+                          }
                       }
 
                       const merged = mergeDeep(initialState, loadedData || {});
                       
-                      // Prioridade do Nome: 
-                      // 1. O que está salvo no state (se não for default)
-                      // 2. O nome atrelado à chave (Owner Name)
+                      // Prioridade do Nome
                       if (data.owner_name && (!merged.config.userName || merged.config.userName === 'OPERADOR')) {
                           merged.config.userName = data.owner_name;
                       }
                       
                       setState(merged);
                       setIsLoaded(true);
+
+                      // Se carregou do local, força a nuvem a se atualizar imediatamente
+                      if (forceCloudSync && !data.is_admin && savedKey !== 'TROPA-FREE') {
+                          setTimeout(async () => {
+                              try {
+                                  await supabase.from('user_data').upsert({ 
+                                      access_key: savedKey, 
+                                      raw_json: merged,
+                                      updated_at: new Date().toISOString()
+                                  }, { onConflict: 'access_key' });
+                                  console.log("Local King: Nuvem atualizada com sucesso.");
+                              } catch(e) { console.error("Erro no sync inicial:", e); }
+                          }, 2000);
+                      }
+
                   } else {
-                      // Chave inválida ou bloqueada, limpa sessão
+                      // Chave inválida ou bloqueada
                       localStorage.removeItem(AUTH_STORAGE_KEY);
                   }
               } catch (e) {
@@ -584,8 +609,11 @@ function App() {
     // PREVENÇÃO CRÍTICA: NUNCA SALVAR SE ESTIVER EM MODO DEMO OU SE A CHAVE FOR DUMMY
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
     
-    // Save to LocalStorage immediately on change
+    // Save to LocalStorage immediately on change (THIS IS THE SOURCE OF TRUTH)
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+    // Carimba a chave atual
+    localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
+    
     setLastSaved(new Date());
 
     // Debounce Cloud Sync (Supabase)
@@ -600,7 +628,7 @@ function App() {
                     .from('user_data')
                     .upsert({ 
                         access_key: currentUserKey, 
-                        raw_json: state,
+                        raw_json: state, // O estado LOCAL (que acabou de ser atualizado) vai para a nuvem
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'access_key' });
                 
@@ -628,8 +656,6 @@ function App() {
     }
 
     // 2. REPARA O ESTADO DE ONBOARDING SE ELE SUMIU DO JSON ANTIGO
-    // Se o usuário tem um JSON antigo (pré-tutorial), 'onboarding' pode estar undefined.
-    // Isso garante que ele receba a configuração padrão (dismissed: false) e veja o tutorial.
     if (!state.onboarding) {
          setState(prev => ({ 
              ...prev, 
@@ -755,8 +781,11 @@ function App() {
   };
 
   const handleLogout = () => {
+    // --- LOGOUT SIMPLES (Mantém Cache) ---
+    // Remove apenas a sessão de autenticação. 
+    // Os dados locais (LOCAL_STORAGE_KEY) são mantidos para conveniência.
     localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem('sms_rush_token'); // Limpa token do SMS Rush para segurança
+    localStorage.removeItem('sms_rush_token'); 
     window.location.reload();
   };
 
@@ -778,31 +807,39 @@ function App() {
             setIsAdmin(admin);
             setIsAuthenticated(true);
             
-            // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS ---
-            // 1. Tenta pegar dados LOCAIS (Chrome) primeiro
+            // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS (LOCAL É REI) ---
             const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
-            let restoredState = localString ? JSON.parse(localString) : null;
+            let restoredState = null;
+            let forceCloudSync = false;
 
-            // 2. Tenta buscar backup na NUVEM (Supabase) em seguida (se houver)
-            const cloudData = await loadCloudData(key);
+            if (localString) {
+                try {
+                    restoredState = JSON.parse(localString);
+                    // DADO LOCAL ENCONTRADO -> ELE VENCE A NUVEM
+                    // Marcamos para forçar a atualização da nuvem assim que carregar
+                    forceCloudSync = true;
+                    // Atualiza o carimbo de segurança sem apagar nada
+                    localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key);
+                } catch(e) {
+                    console.error("JSON local inválido", e);
+                }
+            }
+
+            // Se NÃO achou nada no local, aí sim vai pra nuvem
+            if (!restoredState) {
+                const cloudData = await loadCloudData(key);
+                if (cloudData) {
+                    restoredState = cloudData;
+                }
+            }
             
             setState(prev => {
-                // Base: Estado Inicial
                 let finalState = initialState;
-
-                // Merge 1: Nuvem (Base de backup)
-                if (cloudData) {
-                    finalState = mergeDeep(finalState, cloudData);
-                }
-
-                // Merge 2: Local (PRIORIDADE TOTAL PARA DADOS RECENTES NO NAVEGADOR)
-                // Isso garante que o que estava na tela antes do logout seja restaurado exatamente
                 if (restoredState) {
                     finalState = mergeDeep(finalState, restoredState);
                 }
                 
-                // IMPORTANTE: NÃO forçar ownerName aqui se já existir um nome salvo válido.
-                // Apenas se for nulo ou inválido, usamos o ownerName da chave.
+                // Nome padrão
                 if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) {
                     if (ownerName && !invalidNames.includes(ownerName.toUpperCase())) {
                         finalState.config.userName = ownerName;
@@ -814,6 +851,22 @@ function App() {
                 return finalState;
             });
             setIsLoaded(true);
+
+            // Se forçamos o Local, atualizamos a nuvem agora para garantir sincronia
+            if (forceCloudSync && !admin && key !== 'TROPA-FREE') {
+                setTimeout(async () => {
+                    try {
+                        // Mescla o estado carregado para garantir que não estamos enviando nada incompleto
+                        const finalStateToSync = restoredState ? mergeDeep(initialState, restoredState) : initialState;
+                        
+                        await supabase.from('user_data').upsert({ 
+                            access_key: key, 
+                            raw_json: finalStateToSync,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'access_key' });
+                    } catch(e) { console.error("Sync inicial falhou", e); }
+                }, 1000);
+            }
         }} 
         onDemo={() => {
             setIsDemoMode(true);
