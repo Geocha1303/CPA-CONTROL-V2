@@ -11,8 +11,7 @@ import {
   Filter, PieChart as PieIcon, History, ArrowUpRight,
   Wallet, HelpCircle, BarChart3,
   Flame, Sparkles, Globe, User, RefreshCw, Lock, Clock, HeartPulse,
-  Zap, Target, ChevronUp, Cpu, Wifi, Info, X, Calendar, ChevronDown, CheckCircle2, AlertTriangle,
-  Gauge, TrendingDown, MoreHorizontal, HardDrive // Adicionado HardDrive
+  Zap, Target, ChevronUp, Cpu, Wifi, Info, X, Calendar, ChevronDown, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -28,8 +27,8 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
   const [globalAggregatedData, setGlobalAggregatedData] = useState<Record<string, DayRecord>>({});
   const [globalUserCount, setGlobalUserCount] = useState(0);
   
-  // State do Alerta de Dados
-  const [showDataWarning, setShowDataWarning] = useState(true);
+  // State do Alerta de Atualização
+  const [showUpdateInfo, setShowUpdateInfo] = useState(true);
   
   // --- DATE FILTER STATE ---
   const hojeISO = getHojeISO();
@@ -46,7 +45,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
   const getGreeting = () => {
     const hour = currentTime.getHours();
-    if (hour < 5) return 'Boa madrugada';
     if (hour < 12) return 'Bom dia';
     if (hour < 18) return 'Boa tarde';
     return 'Boa noite';
@@ -172,13 +170,9 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         const safeRet = isNaN(m.ret) ? 0 : m.ret;
         const safeLucro = isNaN(m.lucro) ? 0 : m.lucro;
 
-        // --- CORREÇÃO DE TIMEZONE ---
-        const [y, monthStr, dayStr] = date.split('-');
-        const dateStr = `${dayStr}/${monthStr}`;
-
         return {
-            dateStr: dateStr,
-            dateObj: new Date(date), 
+            dateStr: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+            dateObj: new Date(date),
             fullDate: date,
             lucro: safeLucro,
             faturamento: safeRet,
@@ -220,27 +214,30 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         ? (lucroLiquido / totalRet) * 100 
         : 0;
 
-    // LÓGICA DE PROJEÇÃO & DIÁRIA
+    // LÓGICA DE PROJEÇÃO (AJUSTADA PARA PASSADO)
     const isCurrentMonth = selectedMonth === currentMonthKey;
     const [selYear, selMonth] = selectedMonth.split('-').map(Number);
     const daysInMonth = new Date(selYear, selMonth, 0).getDate();
-    const todayDay = new Date().getDate();
     
     let dailyAvg = 0;
     let projectedProfit = 0;
 
     if (isCurrentMonth) {
-        const daysPassed = Math.max(1, todayDay);
-        dailyAvg = lucroLiquido / daysPassed;
+        // Mês atual: média baseada nos dias passados até hoje
+        const daysPassed = new Date().getDate();
+        dailyAvg = daysPassed > 0 ? lucroLiquido / daysPassed : 0;
         projectedProfit = dailyAvg * daysInMonth;
     } else {
+        // Mês passado: média é o total dividido pelos dias do mês (ou dias operados)
+        // Para simplificar "Projeção" vira "Total Realizado"
         dailyAvg = lucroLiquido / daysInMonth;
-        projectedProfit = lucroLiquido; 
+        projectedProfit = lucroLiquido; // Não há projeção, é o fato.
     }
 
     // Activity Feed (Mostra atividades do mês selecionado)
     const allAccounts: any[] = [];
     Object.entries(state.dailyRecords).forEach(([date, record]) => {
+        // Importante: Filtra activity feed pelo mês selecionado
         if (!date.startsWith(filterKey)) return;
         
         const dayRecord = record as DayRecord;
@@ -260,18 +257,6 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
     const displayDateObj = new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1, 1);
     const monthName = displayDateObj.toLocaleDateString('pt-BR', { month: 'long' });
 
-    // CALCULO DO HEALTH SCORE
-    let healthScore = 0;
-    if (roi > 50) healthScore += 40; else if (roi > 20) healthScore += 20;
-    if (margin > 30) healthScore += 40; else if (margin > 10) healthScore += 20;
-    if (lucroLiquido > 0) healthScore += 20;
-    
-    let healthLabel = "Crítico";
-    let healthColor = "text-rose-500";
-    if (healthScore >= 80) { healthLabel = "Lendário"; healthColor = "text-purple-400"; }
-    else if (healthScore >= 60) { healthLabel = "Saudável"; healthColor = "text-emerald-400"; }
-    else if (healthScore >= 40) { healthLabel = "Estável"; healthColor = "text-amber-400"; }
-
     return {
         totalInv: totalInvestimentoReal,
         totalRet,
@@ -284,11 +269,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
         hasData,
         projectedProfit: isNaN(projectedProfit) ? 0 : projectedProfit,
         monthName,
-        isCurrentMonth,
-        dailyAvg,
-        healthScore,
-        healthLabel,
-        healthColor
+        isCurrentMonth
     };
   }, [state.dailyRecords, state.generalExpenses, state.config, selectedMonth, currentMonthKey]);
 
@@ -379,33 +360,30 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                 <span className="flex items-center gap-2"><Globe size={10} className="text-blue-500"/> REGION: SA-EAST-1</span>
             </div>
             <div className="hidden md:flex items-center gap-2 text-[10px] font-mono text-gray-600">
-                <span>V4.0.1-NEON</span>
+                <span>V3.9.4-STABLE</span>
             </div>
         </div>
 
-        {/* --- CRITICAL DATA SAFETY WARNING --- */}
-        {showDataWarning && (
-            <div className="bg-gradient-to-r from-amber-900/20 to-[#0a0516] border border-amber-500/20 rounded-xl p-4 md:p-5 flex flex-col md:flex-row items-start gap-4 relative overflow-hidden shadow-[0_0_30px_rgba(245,158,11,0.05)] mb-2">
-                <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                <div className="p-3 bg-amber-500/10 rounded-full border border-amber-500/20 shrink-0 mt-1">
-                    <HardDrive className="text-amber-500" size={24} />
-                </div>
-                <div className="flex-1">
-                    <h4 className="text-amber-400 font-bold text-sm uppercase tracking-wide flex items-center gap-2 mb-1">
-                        <AlertTriangle size={14} /> Protocolo de Integridade de Dados
-                    </h4>
-                    <p className="text-amber-200/80 text-xs leading-relaxed max-w-4xl">
-                        <strong className="text-amber-400">AVISO IMPORTANTE:</strong> Seus registros são armazenados primariamente neste computador (Cache Local). 
-                        <span className="block mt-1">
-                            • <strong>NÃO</strong> limpe o histórico ou dados de navegação do Chrome.<br/>
-                            • Embora o sistema possua backup automático na nuvem, a restauração pode apresentar <strong>instabilidades ou bugs</strong> em alguns cenários.<br/>
-                            • Para garantir 100% de segurança, mantenha seus dados locais intactos e evite formatar o navegador.
-                        </span>
-                    </p>
+        {/* --- ALERTA DE ATUALIZAÇÃO (CAIXINHA DE CORREÇÃO) --- */}
+        {showUpdateInfo && (
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl flex items-start justify-between gap-4 mb-2 animate-fade-in shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg text-blue-400 mt-0.5 shadow-inner">
+                        <AlertTriangle size={18} className="animate-pulse" />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-bold text-sm mb-1">Atualização do Dashboard: Visão Mensal</h4>
+                        <p className="text-blue-200/80 text-xs leading-relaxed max-w-3xl">
+                            <strong>Nota Importante:</strong> O dashboard foi atualizado para contabilidade mensal. 
+                            Se notar valores abaixo do esperado, é porque a contagem agora reinicia todo dia 1º. 
+                            Para consultar o histórico completo ou meses anteriores, utilize o novo seletor piscando no canto superior direito.
+                        </p>
+                    </div>
                 </div>
                 <button 
-                    onClick={() => setShowDataWarning(false)}
-                    className="absolute top-2 right-2 text-amber-500/50 hover:text-amber-400 hover:bg-amber-500/10 rounded p-1 transition-colors"
+                    onClick={() => setShowUpdateInfo(false)}
+                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-colors border border-white/5"
+                    title="Fechar aviso"
                 >
                     <X size={16} />
                 </button>
@@ -414,6 +392,7 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
 
         {/* --- HEADER HOLOGRÁFICO --- */}
         <div className="relative rounded-3xl overflow-hidden p-8 border border-white/10 shadow-2xl bg-[#0a0516] group">
+            {/* Background Effects */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-indigo-600/10 to-purple-600/10 rounded-full blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-emerald-600/5 rounded-full blur-[80px] pointer-events-none"></div>
@@ -436,45 +415,61 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                 </div>
 
                 <div className="flex flex-col items-end gap-4">
-                    {/* GLOBAL DATE FILTER */}
-                    <div className="relative group z-20">
-                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none z-10">
-                            <Calendar size={16} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                    {/* GLOBAL DATE FILTER (SELECTOR) - UPGRADED NEON */}
+                    <div className="relative z-20">
+                        {/* Badge "NOVO" Pulsante */}
+                        <div className="absolute -top-2 -right-2 z-30 pointer-events-none">
+                            <span className="flex h-3 w-3 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                            </span>
                         </div>
-                        <select 
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(e.target.value)}
-                            className="appearance-none pl-10 pr-10 py-2.5 text-sm font-bold text-white outline-none cursor-pointer uppercase tracking-wider
-                            bg-gradient-to-r from-cyan-950/40 to-indigo-950/40 
-                            border border-cyan-500/50 
-                            rounded-xl 
-                            shadow-[0_0_15px_rgba(6,182,212,0.15)] 
-                            hover:shadow-[0_0_25px_rgba(6,182,212,0.3)]
-                            hover:border-cyan-400
-                            focus:ring-2 focus:ring-cyan-500/30
-                            transition-all duration-300"
-                        >
-                            {availableMonths.map((m) => (
-                                <option key={m.key} value={m.key} className="bg-[#0a0516] text-gray-300">
-                                    {m.label} {m.isCurrent ? '(Atual)' : ''}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                            <ChevronDown size={14} className="text-cyan-400" />
+
+                        <div className="relative group">
+                            {/* Ícone da Esquerda */}
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none z-10">
+                                <Calendar size={16} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                            </div>
+
+                            <select 
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                className="appearance-none pl-10 pr-10 py-2.5 text-sm font-bold text-white outline-none cursor-pointer uppercase tracking-wider
+                                bg-gradient-to-r from-cyan-950/40 to-indigo-950/40 
+                                border border-cyan-500/50 
+                                rounded-xl 
+                                shadow-[0_0_15px_rgba(6,182,212,0.15)] 
+                                hover:shadow-[0_0_25px_rgba(6,182,212,0.3)]
+                                hover:border-cyan-400
+                                focus:ring-2 focus:ring-cyan-500/30
+                                transition-all duration-300
+                                animate-[pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] hover:animate-none"
+                            >
+                                {availableMonths.map((m) => (
+                                    <option key={m.key} value={m.key} className="bg-[#0a0516] text-gray-300">
+                                        {m.label} {m.isCurrent ? '(Atual)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Ícone da Direita (Seta) */}
+                            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                <ChevronDown size={14} className="text-cyan-400" />
+                            </div>
                         </div>
+                        <p className="text-[9px] text-cyan-500/80 font-bold text-right mt-1 mr-1 uppercase tracking-widest animate-pulse">
+                            Histórico Disponível
+                        </p>
                     </div>
 
-                    <div className="flex gap-6 items-center">
+                    <div className="flex gap-4">
                         <div className="text-right">
-                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Health Score</p>
-                            <div className={`flex items-center gap-2 justify-end ${metrics.healthColor}`}>
-                                <Activity size={16} />
-                                <span className="text-2xl font-black font-mono leading-none drop-shadow-lg">{metrics.healthScore}</span>
-                            </div>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider ${metrics.healthColor} opacity-70`}>{metrics.healthLabel}</span>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">ROI ({metrics.monthName})</p>
+                            <p className={`text-3xl font-black font-mono leading-none drop-shadow-lg ${metrics.roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {metrics.roi >= 0 ? '+' : ''}{metrics.roi.toFixed(0)}%
+                            </p>
                         </div>
-                        <div className="w-px bg-white/10 h-8 self-center"></div>
+                        <div className="w-px bg-white/10 h-10 self-center"></div>
                         <div className="text-right">
                             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Margem Líq.</p>
                             <p className="text-3xl font-black text-blue-400 font-mono leading-none drop-shadow-lg">
@@ -486,85 +481,96 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
             </div>
         </div>
 
-        {/* --- KPI CARDS CRYSTAL (V4) --- */}
+        {/* --- KPI CARDS COM SPARKLINES --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* CARD 1: LUCRO (NEON GREEN) */}
-            <div className="group relative rounded-3xl p-6 bg-[#0c0818]/80 border border-emerald-500/30 hover:border-emerald-400/60 transition-all duration-500 overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.05)] hover:shadow-[0_0_50px_rgba(16,185,129,0.15)]">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all"></div>
+            {/* CARD 1: LUCRO */}
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-emerald-500/20 hover:border-emerald-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 
+                {/* Mini Chart Background */}
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="lucro" stroke="#10b981" fill="#10b981" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
                 <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400 border border-emerald-500/20 shadow-inner">
-                            <Wallet size={24} />
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                            <Wallet size={20} />
                         </div>
-                        <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                            Líquido
-                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo Líquido ({metrics.monthName})</span>
                     </div>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Saldo em Caixa</span>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-emerald-50 transition-colors">
                         {formatVal(metrics.lucroLiquido)}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">
-                        {metrics.isCurrentMonth ? (
-                            <>
-                                <span className="text-emerald-400 flex items-center gap-1"><TrendingUp size={12}/> Projeção:</span>
-                                <span>{formatVal(metrics.projectedProfit)}</span>
-                            </>
-                        ) : (
-                            <span className="text-gray-400 flex items-center gap-1"><CheckCircle2 size={12}/> Mês Fechado</span>
-                        )}
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded w-fit border border-emerald-500/10">
+                        {metrics.isCurrentMonth ? <TrendingUp size={12} /> : <CheckCircle2 size={12} />}
+                        <span>
+                            {metrics.isCurrentMonth 
+                                ? `PROJEÇÃO: ${formatVal(metrics.projectedProfit)}` 
+                                : `FECHAMENTO: ${formatVal(metrics.projectedProfit)}`}
+                        </span>
                     </div>
                 </div>
             </div>
 
-            {/* CARD 2: FATURAMENTO (NEON INDIGO) */}
-            <div className="group relative rounded-3xl p-6 bg-[#0c0818]/80 border border-indigo-500/30 hover:border-indigo-400/60 transition-all duration-500 overflow-hidden shadow-[0_0_30px_rgba(99,102,241,0.05)] hover:shadow-[0_0_50px_rgba(99,102,241,0.15)]">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
+            {/* CARD 2: FATURAMENTO */}
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="faturamento" stroke="#6366f1" fill="#6366f1" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
 
                 <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20 shadow-inner">
-                            <Activity size={24} />
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                            <Activity size={20} />
                         </div>
-                        <div className="px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                            Volume
-                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Volume ({metrics.monthName})</span>
                     </div>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Entradas Totais</span>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 drop-shadow-[0_0_10px_rgba(99,102,241,0.3)]">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-indigo-50 transition-colors">
                         {formatVal(metrics.totalRet)}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">
-                        <ArrowUpRight size={12} className="text-indigo-400" />
-                        <span>Saques + Bônus</span>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500/80 bg-indigo-500/5 px-2 py-1 rounded w-fit border border-indigo-500/10">
+                        <ArrowUpRight size={12} />
+                        <span>ENTRADAS + BÔNUS</span>
                     </div>
                 </div>
             </div>
 
-            {/* CARD 3: CUSTOS (NEON ROSE) */}
-            <div className="group relative rounded-3xl p-6 bg-[#0c0818]/80 border border-rose-500/30 hover:border-rose-400/60 transition-all duration-500 overflow-hidden shadow-[0_0_30px_rgba(244,63,94,0.05)] hover:shadow-[0_0_50px_rgba(244,63,94,0.15)]">
-                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-rose-500/10 rounded-full blur-3xl group-hover:bg-rose-500/20 transition-all"></div>
+            {/* CARD 3: CUSTOS */}
+            <div className="group relative rounded-3xl p-6 bg-[#0c0818] border border-rose-500/20 hover:border-rose-500/40 transition-all duration-500 overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={metrics.chartData.slice(-7)}>
+                            <Area type="monotone" dataKey="investimento" stroke="#f43f5e" fill="#f43f5e" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
 
                 <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-rose-500/10 rounded-2xl text-rose-400 border border-rose-500/20 shadow-inner">
-                            <Filter size={24} />
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                            <Filter size={20} />
                         </div>
-                        <div className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                            Saídas
-                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Investimento ({metrics.monthName})</span>
                     </div>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Investimento Total</span>
-                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 drop-shadow-[0_0_10px_rgba(244,63,94,0.3)]">
+                    <div className="text-4xl font-black text-white font-mono tracking-tight mb-2 group-hover:text-rose-50 transition-colors">
                         {formatVal(metrics.totalInv)}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">
-                        <ArrowDownRight size={12} className="text-rose-400" />
-                        <span>Depósitos + Custos Op.</span>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-rose-500/80 bg-rose-500/5 px-2 py-1 rounded w-fit border border-rose-500/10">
+                        <ArrowDownRight size={12} />
+                        <span>DEPÓSITOS + CUSTOS</span>
                     </div>
                 </div>
             </div>
@@ -634,42 +640,33 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                  </div>
             </div>
 
-            {/* DAILY TARGET WIDGET (NOVO) */}
+            {/* RADAR & ALERTS */}
             <div className="p-6 rounded-3xl border border-white/10 bg-[#08050e] relative overflow-hidden shadow-xl flex flex-col">
-                <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transform rotate-12"><Target size={120} /></div>
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none transform rotate-12"><Clock size={120} /></div>
                 
                 <div className="relative z-10 flex flex-col h-full justify-between">
-                     <div className="flex justify-between items-start">
-                        <div>
-                            <h3 className="text-white font-bold text-base flex items-center gap-2">
-                                <Gauge size={18} className="text-cyan-400" /> Meta Diária Inteligente
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-1">Quanto falta para fechar o dia no alvo?</p>
-                        </div>
+                     <div>
+                        <h3 className="text-white font-bold text-base flex items-center gap-2">
+                            <Sparkles size={18} className="text-purple-400" /> Radar de Oportunidades
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">Sugestões baseadas no calendário comercial.</p>
                      </div>
 
-                     <div className="mt-6">
-                         {state.monthlyGoals[currentMonthKey] > 0 ? (
-                             <>
-                                 <div className="flex justify-between items-end mb-2">
-                                     <span className="text-3xl font-black text-white">{formatVal(metrics.lucroLiquido / Math.max(1, new Date().getDate()))}</span>
-                                     <span className="text-sm font-bold text-gray-500 mb-1">/ {formatVal(metrics.lucroLiquido > state.monthlyGoals[currentMonthKey] ? metrics.dailyAvg : (state.monthlyGoals[currentMonthKey] - metrics.lucroLiquido) / (new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]), 0).getDate() - new Date().getDate() + 1))} (Est.)</span>
-                                 </div>
-                                 <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden">
-                                     <div 
-                                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-1000" 
-                                        style={{width: `${Math.min(100, (metrics.lucroLiquido / (new Date().getDate() * (state.monthlyGoals[currentMonthKey] / 30))) * 100)}%`}}
-                                     ></div>
-                                 </div>
-                                 <p className="text-[10px] text-cyan-400 mt-2 font-bold uppercase tracking-wide">
-                                     Ritmo atual baseado na meta mensal
-                                 </p>
-                             </>
-                         ) : (
-                             <div className="text-center py-4 bg-white/5 rounded-xl border border-white/5">
-                                 <p className="text-xs text-gray-400">Defina uma meta mensal na aba "Metas" para ativar este widget.</p>
+                     <div className="space-y-4 mt-6">
+                         <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-5 flex items-start gap-4 hover:border-purple-500/40 transition-colors cursor-default backdrop-blur-sm">
+                             <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 shrink-0 border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                                 <Clock size={20} />
                              </div>
-                         )}
+                             <div>
+                                 <p className="text-white font-bold text-sm leading-tight mb-1">{intelligenceData.alertMsg}</p>
+                                 <p className="text-[10px] text-gray-400 font-medium">Análise baseada no dia {new Date().getDate()}.</p>
+                             </div>
+                         </div>
+                         
+                         <div className="flex items-center gap-3 text-xs text-gray-400 bg-black/40 p-4 rounded-xl border border-white/5">
+                             <User size={14} className="text-gray-500"/>
+                             <span>Melhor dia da Comunidade: <span className="text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">{intelligenceData.bestDay.name}</span></span>
+                         </div>
                      </div>
                 </div>
             </div>
@@ -730,40 +727,30 @@ const Dashboard: React.FC<Props> = ({ state, privacyMode }) => {
                          <PieIcon size={16} className="text-indigo-400" /> Distribuição ({metrics.monthName})
                     </h3>
                     <div className="flex-1 relative z-10">
-                        {metrics.pieData[0]?.name === 'Sem dados' ? (
-                             <div className="h-full flex items-center justify-center flex-col opacity-50">
-                                 <div className="w-32 h-32 rounded-full border-4 border-white/5 flex items-center justify-center">
-                                     <span className="text-xs text-gray-500">N/A</span>
-                                 </div>
-                             </div>
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={metrics.pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60} 
-                                        outerRadius={85} 
-                                        paddingAngle={6}
-                                        dataKey="value"
-                                        stroke="none"
-                                    >
-                                        {metrics.pieData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" strokeWidth={3} />
-                                        ))}
-                                    </Pie>
-                                    <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{fontSize: '11px', opacity: 0.8, fontWeight: 600}}/>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        )}
-                        {metrics.pieData[0]?.name !== 'Sem dados' && (
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none pb-8">
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Total Investido</span>
-                                <span className="text-white font-bold text-xs">{formatVal(metrics.totalInv)}</span>
-                            </div>
-                        )}
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={metrics.pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60} 
+                                    outerRadius={85} 
+                                    paddingAngle={6}
+                                    dataKey="value"
+                                    stroke="none"
+                                >
+                                    {metrics.pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" strokeWidth={3} />
+                                    ))}
+                                </Pie>
+                                <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{fontSize: '11px', opacity: 0.8, fontWeight: 600}}/>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none pb-8">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Total Investido</span>
+                            <span className="text-white font-bold text-xs">{formatVal(metrics.totalInv)}</span>
+                        </div>
                     </div>
                 </div>
 
