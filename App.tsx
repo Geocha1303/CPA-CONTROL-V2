@@ -93,6 +93,7 @@ const initialState: AppState = {
 };
 
 const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
+const LAST_ACTIVE_KEY_STORAGE = 'cpa_last_active_key_guard'; // NOVO: Guarda qual chave é dona do backup
 const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; 
 const DEVICE_ID_KEY = 'cpa_device_fingerprint';
 const FREE_KEY_STORAGE = 'cpa_free_unique_key'; // Armazena a chave free fixa do usuário
@@ -510,16 +511,22 @@ function App() {
                       
                       // 1. Tenta carregar dados LOCAIS
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
-                      let loadedData = localString ? JSON.parse(localString) : null;
+                      // === KEY GUARD CHECK ===
+                      const lastActiveKey = localStorage.getItem(LAST_ACTIVE_KEY_STORAGE);
+                      let loadedData = null;
+
+                      // SÓ CARREGA LOCAL SE A CHAVE FOR A MESMA
+                      if (localString && lastActiveKey === savedKey) {
+                          loadedData = JSON.parse(localString);
+                      } else if (localString && lastActiveKey !== savedKey) {
+                          console.warn("Isolamento de Sessão: Dados locais descartados pois pertencem a outra chave.");
+                          localStorage.removeItem(LOCAL_STORAGE_KEY); // Limpa lixo da chave anterior
+                      }
 
                       // 2. Se não houver dados locais, OU para garantir nome atualizado, busca na NUVEM
                       if (!loadedData) {
                           const cloudData = await loadCloudData(savedKey);
                           if (cloudData) loadedData = cloudData;
-                      } else {
-                          // Se tem local, tenta buscar nuvem em background para garantir nome (Opcional, mas bom para sync)
-                          // Para simplicidade e performance no load, confiamos no local se existir,
-                          // mas se o nome for OPERADOR/default, tentamos pegar da chave.
                       }
 
                       const merged = mergeDeep(initialState, loadedData || {});
@@ -536,6 +543,7 @@ function App() {
                   } else {
                       // Chave inválida ou bloqueada, limpa sessão
                       localStorage.removeItem(AUTH_STORAGE_KEY);
+                      localStorage.removeItem(LOCAL_STORAGE_KEY); // Limpa dados locais por segurança
                   }
               } catch (e) {
                   console.error("Erro ao restaurar sessão:", e);
@@ -586,6 +594,10 @@ function App() {
     
     // Save to LocalStorage immediately on change
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+    // === KEY GUARD STAMP ===
+    // Carimba a chave atual como dona dos dados locais
+    localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
+    
     setLastSaved(new Date());
 
     // Debounce Cloud Sync (Supabase)
@@ -628,8 +640,6 @@ function App() {
     }
 
     // 2. REPARA O ESTADO DE ONBOARDING SE ELE SUMIU DO JSON ANTIGO
-    // Se o usuário tem um JSON antigo (pré-tutorial), 'onboarding' pode estar undefined.
-    // Isso garante que ele receba a configuração padrão (dismissed: false) e veja o tutorial.
     if (!state.onboarding) {
          setState(prev => ({ 
              ...prev, 
@@ -755,8 +765,14 @@ function App() {
   };
 
   const handleLogout = () => {
+    // --- LOGOUT SIMPLES (Mantém Cache) ---
+    // Remove apenas a sessão de autenticação. 
+    // Os dados locais (LOCAL_STORAGE_KEY) são mantidos para conveniência.
+    // Se outro usuário tentar entrar, o sistema Key Guard (no Login) detectará a troca de chave e limpará os dados automaticamente.
     localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem('sms_rush_token'); // Limpa token do SMS Rush para segurança
+    localStorage.removeItem('sms_rush_token'); 
+    // MANTIDO: localStorage.removeItem(LOCAL_STORAGE_KEY);
+    // MANTIDO: localStorage.removeItem(LAST_ACTIVE_KEY_STORAGE);
     window.location.reload();
   };
 
@@ -778,31 +794,39 @@ function App() {
             setIsAdmin(admin);
             setIsAuthenticated(true);
             
-            // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS ---
-            // 1. Tenta pegar dados LOCAIS (Chrome) primeiro
+            // --- CORREÇÃO DE RECUPERAÇÃO DE DADOS (KEY GUARD) ---
+            // 1. Tenta pegar dados LOCAIS (Chrome)
             const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
-            let restoredState = localString ? JSON.parse(localString) : null;
+            const lastActiveKey = localStorage.getItem(LAST_ACTIVE_KEY_STORAGE);
+            
+            let restoredState = null;
 
-            // 2. Tenta buscar backup na NUVEM (Supabase) em seguida (se houver)
+            // VERIFICAÇÃO CRÍTICA: Só aceita o backup local se a chave coincidir
+            if (localString && lastActiveKey === key) {
+                restoredState = JSON.parse(localString);
+            } else if (localString && lastActiveKey !== key) {
+                // Se a chave mudou, DESTROI o backup local antigo para evitar contaminação
+                console.warn("Isolamento de Sessão: Limpando dados do usuário anterior.");
+                localStorage.removeItem(LOCAL_STORAGE_KEY);
+            }
+
+            // 2. Busca da NUVEM (Supabase)
             const cloudData = await loadCloudData(key);
             
             setState(prev => {
-                // Base: Estado Inicial
                 let finalState = initialState;
 
-                // Merge 1: Nuvem (Base de backup)
+                // Merge 1: Nuvem (Prioridade de estrutura)
                 if (cloudData) {
                     finalState = mergeDeep(finalState, cloudData);
                 }
 
-                // Merge 2: Local (PRIORIDADE TOTAL PARA DADOS RECENTES NO NAVEGADOR)
-                // Isso garante que o que estava na tela antes do logout seja restaurado exatamente
+                // Merge 2: Local (Somente se passou no Key Guard)
                 if (restoredState) {
                     finalState = mergeDeep(finalState, restoredState);
                 }
                 
-                // IMPORTANTE: NÃO forçar ownerName aqui se já existir um nome salvo válido.
-                // Apenas se for nulo ou inválido, usamos o ownerName da chave.
+                // Nome padrão
                 if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) {
                     if (ownerName && !invalidNames.includes(ownerName.toUpperCase())) {
                         finalState.config.userName = ownerName;
@@ -980,7 +1004,7 @@ function App() {
                          >
                              {/* Active Indicator (Left Bar) */}
                              {activeView === item.id && (
-                                 <div className="absolute left-0 top-1/2 -translate-x-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>
+                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>
                              )}
                              
                              <div className={`transition-transform duration-300 ${activeView === item.id ? 'translate-x-2 text-primary' : ''}`}>
@@ -1092,7 +1116,7 @@ function App() {
             {activeView === 'sms' && <SmsRush notify={notify} />}
             
             {activeView === 'planejamento' && <Planning state={activeState} updateState={updateState} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
-            {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} currentUserKey={currentUserKey} />}
+            {activeView === 'controle' && <DailyControl state={activeState} updateState={updateState} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses state={activeState} updateState={updateState} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'metas' && <Goals state={activeState} updateState={updateState} privacyMode={privacyMode} />}
             {activeView === 'configuracoes' && <Settings state={activeState} updateState={updateState} notify={notify} />}

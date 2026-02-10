@@ -13,10 +13,9 @@ interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
   readOnly?: boolean;
   privacyMode?: boolean; // Nova prop
-  currentUserKey: string; // Nova prop essencial
 }
 
-const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly, privacyMode, currentUserKey }) => {
+const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCurrentDate, notify, readOnly, privacyMode }) => {
   const dayRecord = state.dailyRecords[currentDate] || { expenses: { proxy: 0, numeros: 0 }, accounts: [] };
   const isManualMode = state.config.manualBonusMode === true;
   const [sendingId, setSendingId] = useState<number | null>(null);
@@ -78,12 +77,10 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
     });
   };
 
-  // --- REPORT TO LEADER LOGIC (CORRIGIDA PARA USAR PROP) ---
+  // --- REPORT TO LEADER LOGIC ---
   const handleReportRow = async (acc: Account) => {
-      if (!currentUserKey) {
-          notify("Erro de autenticação.", "error");
-          return;
-      }
+      const myKey = localStorage.getItem('cpa_auth_session_v3_master');
+      if (!myKey) return;
       
       setSendingId(acc.id);
 
@@ -98,7 +95,7 @@ const DailyControl: React.FC<Props> = ({ state, updateState, currentDate, setCur
           const { data } = await supabase
             .from('access_keys')
             .select('leader_key, owner_name')
-            .eq('key', currentUserKey)
+            .eq('key', myKey)
             .single();
 
           if (data && data.leader_key) {

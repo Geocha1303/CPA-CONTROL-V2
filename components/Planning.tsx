@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppState, GeneratedPlayer, HistoryItem, Account } from '../types';
 import { formatarBRL, generatePlan, getHojeISO, getManualAvoidanceValues, generateConstrainedSum, regeneratePlayerValues } from '../utils';
@@ -222,7 +221,6 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       const chunksData: { accounts: Account[], history: HistoryItem[] }[] = [];
       let currentIndex = 0;
       let lotIndex = 1;
-      const isManual = state.config.manualBonusMode;
 
       while (currentIndex < plan.length) {
           const customSize = state.generator.customLotSizes[lotIndex];
@@ -242,22 +240,18 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                   if(d.type === 'deposito') dep += d.val;
                   else redep += d.val;
               });
-              ciclos += 1; // Conta jogadores
+              ciclos += 1;
           });
 
           // Gera ID único
           const uniqueId = Date.now() + Math.floor(Math.random() * 1000000) + (lotIndex * 10000);
-
-          // LÓGICA CORRIGIDA: Se for modo manual, envia 0 para 'ciclos' (que é o campo de R$)
-          // Se for modo automático, envia a contagem de jogadores.
-          const finalCiclos = isManual ? 0 : ciclos;
 
           lotAccounts.push({
               id: uniqueId,
               deposito: dep,
               redeposito: redep,
               saque: 0,
-              ciclos: finalCiclos
+              ciclos: ciclos
           });
 
           chunksData.push({ accounts: lotAccounts, history: lotHistory });
@@ -346,7 +340,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       };
 
       const Card = ({title, val, color, icon: Icon, sub}: any) => (
-          <div className="gateway-card p-6 rounded-2xl flex items-center gap-6 shadow-lg relative overflow-hidden">
+          <div className="glass-card p-6 rounded-2xl flex items-center gap-6 shadow-lg relative overflow-hidden">
                <div className="absolute top-0 right-0 p-4 opacity-5">
                    <Icon size={80} />
                </div>
@@ -367,9 +361,9 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                   <Card title="Volume Total" val={formatarBRL(totalDep)} color="text-emerald-400" icon={Target} sub={`${totalPlayers} jogadores no plano`} />
                   <Card title="Ticket Médio" val={formatarBRL(avg)} color="text-cyan-400" icon={BarChart2} sub="Média por jogador" />
               </div>
-              <div className="gateway-card border-white/5 rounded-2xl p-6">
+              <div className="glass-card border-white/5 rounded-2xl p-6">
                 <h4 className="text-sm text-gray-400 font-bold uppercase mb-6 flex items-center gap-2">
-                    <BrainCircuit size={18} className="text-primary-glow" /> Distribuição de Perfis
+                    <BrainCircuit size={18} className="text-violet-400" /> Distribuição de Perfis
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                     <div className="p-4 bg-gray-900/60 rounded-xl border border-white/5">
@@ -426,8 +420,8 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                 const avg = stats.count > 0 ? stats.total / stats.count : 0;
 
                 return (
-                    <div key={id} className="gateway-card rounded-2xl p-6 relative overflow-hidden group hover:border-primary/30 transition-all">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl -mr-10 -mt-10 rounded-full pointer-events-none"></div>
+                    <div key={id} className="glass-card rounded-2xl p-6 relative overflow-hidden group hover:border-violet-500/30 transition-all">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/10 blur-3xl -mr-10 -mt-10 rounded-full pointer-events-none"></div>
                         
                         <div className="flex justify-between items-start mb-4 relative z-10">
                             <div>
@@ -494,11 +488,11 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         const currentLotIdx = lotIndex;
         
         lots.push(
-            <div key={lotIndex} className="gateway-card rounded-2xl overflow-hidden animate-slide-up mb-6 shadow-xl border border-white/5">
+            <div key={lotIndex} className="glass-card rounded-2xl overflow-hidden animate-slide-up mb-6 shadow-xl border border-white/5">
                 {/* Header do Lote */}
                 <div className="p-4 bg-white/5 border-b border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
                             {lotNumber}
                         </div>
                         <div>
@@ -549,15 +543,12 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                 });
                                 
                                 // ID Único garantido
-                                const isManual = state.config.manualBonusMode;
-                                const finalCiclos = isManual ? 0 : ciclos;
-
                                 const newAccount = { 
                                     id: Date.now() + Math.floor(Math.random() * 100000), 
                                     deposito: dep, 
                                     redeposito: redep, 
                                     saque: 0, 
-                                    ciclos: finalCiclos // CORRIGIDO: Envia 0 se for manual 
+                                    ciclos 
                                 };
                                 
                                 // Update sem perder dados
@@ -600,7 +591,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-5 py-4">
                                             <span className={`px-2 py-1 rounded-md text-xs font-bold border ${
-                                                isAdjusted ? 'bg-primary/20 border-primary/30 text-primary-glow' :
+                                                isAdjusted ? 'bg-indigo-900/20 border-indigo-800/30 text-indigo-400' :
                                                 isTestador ? 'bg-gray-800 border-gray-700 text-gray-300' :
                                                 isCetico ? 'bg-amber-900/20 border-amber-800/30 text-amber-500' :
                                                 isAmbicioso ? 'bg-emerald-900/20 border-emerald-800/30 text-emerald-500' :
@@ -615,8 +606,8 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                                             {p.deps.map((d, depIdx) => (
                                                 <input 
                                                     key={depIdx} type="number"
-                                                    className={`w-20 px-2 py-1.5 text-center text-sm rounded-md border bg-black/40 font-bold focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all ${
-                                                        d.type === 'deposito' ? 'border-white/10 text-accent-cyan' : 'border-amber-900/50 text-amber-400'
+                                                    className={`w-20 px-2 py-1.5 text-center text-sm rounded-md border bg-black/40 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all ${
+                                                        d.type === 'deposito' ? 'border-white/10 text-cyan-400' : 'border-amber-900/50 text-amber-400'
                                                     }`}
                                                     value={d.val}
                                                     onChange={(e) => {
@@ -714,7 +705,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         
         {/* Cabeçalho */}
         <div className="flex items-center gap-4 mb-2">
-            <div className="p-3 bg-gradient-to-br from-primary to-primary-dark rounded-xl shadow-lg shadow-primary/20">
+            <div className="p-3 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-xl shadow-lg shadow-violet-900/20">
                 <Settings2 className="text-white" size={24} />
             </div>
             <div>
@@ -724,9 +715,9 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* 1. Distribuição */}
-        <div className="gateway-card rounded-2xl p-6">
+        <div className="glass-card rounded-2xl p-6">
             <div className="flex justify-between items-center mb-6">
-                <h4 className="text-sm font-bold text-primary-glow uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-sm font-bold text-violet-400 uppercase tracking-widest flex items-center gap-2">
                     <User size={16} /> Distribuição
                 </h4>
                 <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-gray-300 border border-white/10 font-bold">Total: {totalJogadoresCalculado}</span>
@@ -736,7 +727,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                 <div>
                      <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Nº de Agentes</label>
                      <input 
-                        type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-primary outline-none transition-colors" 
+                        type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-violet-500 outline-none transition-colors" 
                         value={totalAgentes} min={1} max={20}
                         onChange={e => handleTotalAgentesChange(parseInt(e.target.value)||1)}
                      />
@@ -744,7 +735,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                 <div>
                      <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Tamanho Lote</label>
                      <input 
-                        type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-primary outline-none transition-colors" 
+                        type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white font-bold focus:border-violet-500 outline-none transition-colors" 
                         value={jogadoresPorCiclo}
                         onChange={e => {
                             const val = parseInt(e.target.value)||5;
@@ -763,7 +754,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                              {/* Input de Quantidade Direta */}
                              <input 
                                 type="number" 
-                                className="w-20 bg-black/40 border border-white/10 rounded-lg p-2 text-center text-white text-sm font-bold focus:border-primary outline-none"
+                                className="w-20 bg-black/40 border border-white/10 rounded-lg p-2 text-center text-white text-sm font-bold focus:border-violet-500 outline-none"
                                 value={dist[id] || 0} 
                                 onChange={(e) => handleDistChange(id, parseInt(e.target.value) || 0)}
                                 min="0"
@@ -775,9 +766,9 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* 2. Perfis */}
-        <div className="gateway-card rounded-2xl p-6">
+        <div className="glass-card rounded-2xl p-6">
             <div className="flex justify-between items-center mb-6">
-                <h4 className="text-sm font-bold text-primary-glow uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-sm font-bold text-violet-400 uppercase tracking-widest flex items-center gap-2">
                     <BrainCircuit size={16} /> Perfis (%)
                 </h4>
                 <div className={`text-xs font-bold px-3 py-1 rounded-full ${
@@ -808,23 +799,23 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         </div>
 
         {/* 3. Lógica Numérica */}
-        <div className="gateway-card rounded-2xl p-6">
-             <h4 className="text-sm font-bold text-primary-glow uppercase tracking-widest mb-6 flex items-center gap-2">
+        <div className="glass-card rounded-2xl p-6">
+             <h4 className="text-sm font-bold text-violet-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                  <Sliders size={16} /> Lógica de Valores
              </h4>
              <div className="grid grid-cols-2 gap-4 mb-4">
                  <div className="space-y-2">
                      <label className="text-xs text-gray-500 font-bold uppercase">Baixo (Min-Max)</label>
                      <div className="flex gap-2">
-                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-primary outline-none" value={params.minBaixo} onChange={e => setParams({...params, minBaixo: +e.target.value})} />
-                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-primary outline-none" value={params.maxBaixo} onChange={e => setParams({...params, maxBaixo: +e.target.value})} />
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-violet-500 outline-none" value={params.minBaixo} onChange={e => setParams({...params, minBaixo: +e.target.value})} />
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-violet-500 outline-none" value={params.maxBaixo} onChange={e => setParams({...params, maxBaixo: +e.target.value})} />
                      </div>
                  </div>
                  <div className="space-y-2">
                      <label className="text-xs text-gray-500 font-bold uppercase">Alto (Min-Max)</label>
                      <div className="flex gap-2">
-                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-primary outline-none" value={params.minAlto} onChange={e => setParams({...params, minAlto: +e.target.value})} />
-                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-primary outline-none" value={params.maxAlto} onChange={e => setParams({...params, maxAlto: +e.target.value})} />
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-violet-500 outline-none" value={params.minAlto} onChange={e => setParams({...params, minAlto: +e.target.value})} />
+                        <input type="number" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-bold text-center focus:border-violet-500 outline-none" value={params.maxAlto} onChange={e => setParams({...params, maxAlto: +e.target.value})} />
                      </div>
                  </div>
              </div>
@@ -838,7 +829,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         <button 
             id="tour-plan-generate" // BUG FIX: ID para Tour
             onClick={handleGenerate}
-            className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-glow hover:to-primary text-white font-bold py-5 rounded-xl shadow-lg shadow-primary/40 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group text-lg"
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-5 rounded-xl shadow-lg shadow-violet-900/40 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 group text-lg"
         >
             <Play size={24} fill="currentColor" className="group-hover:translate-x-1 transition-transform" /> GERAR PLANO RÍTMICO
         </button>
@@ -846,11 +837,11 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
         {/* IA / Adjustment Sections */}
         <div className="border-t border-white/5 pt-6 space-y-6">
              {/* Avoidance */}
-            <div className="gateway-card rounded-xl p-5">
+            <div className="glass-card rounded-xl p-5">
                 <h5 className="text-xs font-bold text-gray-400 mb-3 uppercase flex items-center gap-2"><Info size={14}/> Números a Evitar</h5>
                 <textarea 
                     rows={3}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-gray-300 focus:border-primary outline-none resize-none font-mono"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-gray-300 focus:border-violet-500 outline-none resize-none font-mono"
                     placeholder="Cole valores aqui (ex: 50, 100)..."
                     value={manualAvoidance}
                     onChange={e => setManualAvoidance(e.target.value)}
@@ -888,7 +879,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
       </div>
 
       {/* --- ÁREA DE RESULTADOS (DIREITA) --- */}
-      <div className="flex-grow flex flex-col overflow-hidden gateway-card rounded-2xl">
+      <div className="flex-grow flex flex-col overflow-hidden glass-card rounded-2xl">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-white/5 p-3 bg-black/20">
              <div className="flex gap-2">
@@ -902,7 +893,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                         onClick={() => setActiveTab(tab.id as TabType)}
                         className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all ${
                             activeTab === tab.id 
-                            ? 'bg-primary/20 text-white shadow-sm border border-primary/30 text-primary-glow' 
+                            ? 'bg-violet-600/20 text-white shadow-sm border border-violet-500/30 text-violet-100' 
                             : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
                         }`}
                      >
@@ -945,7 +936,7 @@ const Planning: React.FC<Props> = ({ state, updateState, navigateToDaily, notify
                         <Layers size={80} className="stroke-1 text-gray-700" />
                     </div>
                     <p className="text-2xl font-bold text-gray-500 mb-2">Nenhum plano gerado</p>
-                    <p className="text-base">Configure os parâmetros à esquerda e clique em <span className="text-primary font-bold">GERAR PLANO</span>.</p>
+                    <p className="text-base">Configure os parâmetros à esquerda e clique em <span className="text-violet-500 font-bold">GERAR PLANO</span>.</p>
                 </div>
             ) : (
                 <>
