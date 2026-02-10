@@ -189,16 +189,16 @@ const Admin: React.FC<Props> = ({ notify }) => {
   // --- EFEITOS ---
   useEffect(() => {
       fetchKeys();
-      // Delay maior para garantir que o componente montou antes de conectar
+      // Sempre conecta no realtime, independente da aba, para garantir lista atualizada de usuários
       const timer = setTimeout(() => {
-          if (activeTab === 'monitor') connectRealtime();
+          connectRealtime();
       }, 500);
 
       return () => {
           clearTimeout(timer);
           if (channelRef.current) supabase.removeChannel(channelRef.current);
       };
-  }, [activeTab]);
+  }, []); // Executa na montagem
 
   useEffect(() => {
       if (activeTab === 'store') {
@@ -319,10 +319,18 @@ const Admin: React.FC<Props> = ({ notify }) => {
                   payload: {
                       title: broadcastTitle,
                       message: broadcastMsg,
-                      target: broadcastTarget
+                      target: broadcastTarget // Envia o alvo (Key ou ALL)
                   }
               });
-              notify('Broadcast enviado com sucesso!', 'success');
+              
+              const targetName = broadcastTarget === 'ALL' 
+                ? 'Todos os usuários' 
+                : onlineUsers.find(u => u.key === broadcastTarget)?.user ||
+                  keysList.find(k => k.key === broadcastTarget)?.owner_name || 
+                  'Usuário';
+                
+              notify(`Mensagem enviada para: ${targetName}`, 'success');
+              
               setBroadcastTitle('');
               setBroadcastMsg('');
               supabase.removeChannel(channel);
@@ -341,6 +349,14 @@ const Admin: React.FC<Props> = ({ notify }) => {
       k.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       k.key.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Helper para o nome do destinatário atual
+  const getRecipientName = () => {
+      if (broadcastTarget === 'ALL') return null;
+      return onlineUsers.find(u => u.key === broadcastTarget)?.user || 'Usuário Desconhecido';
+  };
+
+  const recipientName = getRecipientName();
 
   return (
     <div className="max-w-[1600px] mx-auto animate-fade-in pb-20">
@@ -438,7 +454,7 @@ const Admin: React.FC<Props> = ({ notify }) => {
                     {/* SYSTEM BROADCAST */}
                     <div className="gateway-card rounded-2xl p-6 border border-amber-500/20 bg-[#0f0a05]">
                         <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
-                            <Megaphone size={20} className="text-amber-400" /> Alerta Global (Broadcast)
+                            <Megaphone size={20} className="text-amber-400" /> Alerta Global (Privado)
                         </h3>
                         
                         <div className="space-y-3">
@@ -451,27 +467,45 @@ const Admin: React.FC<Props> = ({ notify }) => {
                             />
                             <textarea 
                                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-all placeholder:text-gray-600 resize-none h-24"
-                                placeholder="Mensagem para todos os usuários online..."
+                                placeholder="Mensagem para o usuário..."
                                 value={broadcastMsg}
                                 onChange={e => setBroadcastMsg(e.target.value)}
                             />
                             <div className="flex gap-2">
                                 <select 
-                                    className="bg-black/40 border border-white/10 rounded-xl px-3 text-xs text-gray-400 focus:border-amber-500 outline-none"
+                                    className="bg-black/40 border border-white/10 rounded-xl px-3 text-xs text-gray-400 focus:border-amber-500 outline-none max-w-[200px]"
                                     value={broadcastTarget}
                                     onChange={e => setBroadcastTarget(e.target.value)}
                                 >
-                                    <option value="ALL">Todos</option>
-                                    {/* Future: Add specific user IDs */}
+                                    <option value="ALL">📢 Todos (Global)</option>
+                                    {onlineUsers.map((u, i) => (
+                                        <option key={`${u.key}-${i}`} value={u.key}>
+                                            🟢 {u.user} ({u.key.slice(0,6)}...)
+                                        </option>
+                                    ))}
                                 </select>
-                                <button 
-                                    onClick={sendBroadcast}
-                                    disabled={isSendingBroadcast}
-                                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex items-center justify-center gap-2"
-                                >
-                                    {isSendingBroadcast ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />}
-                                    ENVIAR
-                                </button>
+                                <div className="flex-1 flex flex-col gap-1">
+                                    <button 
+                                        onClick={sendBroadcast}
+                                        disabled={isSendingBroadcast}
+                                        className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {isSendingBroadcast ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />}
+                                        ENVIAR
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Visual Confirmation Label */}
+                            <div className={`text-[10px] font-bold mt-1 px-2 py-1 rounded border ${
+                                recipientName 
+                                    ? 'bg-amber-900/20 text-amber-300 border-amber-500/20' 
+                                    : 'bg-indigo-900/20 text-indigo-300 border-indigo-500/20'
+                            }`}>
+                                {recipientName 
+                                    ? `🔒 CONFIRMAÇÃO: Enviando privadamente para "${recipientName}"`
+                                    : '📢 CONFIRMAÇÃO: Enviando para toda a rede (Global)'
+                                }
                             </div>
                         </div>
                     </div>
