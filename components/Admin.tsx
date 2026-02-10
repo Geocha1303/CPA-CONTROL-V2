@@ -305,40 +305,50 @@ const Admin: React.FC<Props> = ({ notify }) => {
       }
       setIsSendingBroadcast(true);
       try {
+          // Recupera ou cria o canal. Não removemos ao final para não quebrar listeners globais.
           const channel = supabase.channel('system_global_alerts');
-          const status = await new Promise((resolve) => {
+          
+          // Timeout de segurança para evitar loading infinito
+          await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                  resolve('TIMEOUT_TRY_SEND');
+              }, 2500);
+
               channel.subscribe((status) => {
-                  if(status === 'SUBSCRIBED') resolve(status);
+                  if (status === 'SUBSCRIBED') {
+                      clearTimeout(timeout);
+                      resolve(status);
+                  } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                      clearTimeout(timeout);
+                      reject(new Error(`Erro de conexão: ${status}`));
+                  }
               });
           });
 
-          if (status === 'SUBSCRIBED') {
-              await channel.send({
-                  type: 'broadcast',
-                  event: 'sys_alert',
-                  payload: {
-                      title: broadcastTitle,
-                      message: broadcastMsg,
-                      target: broadcastTarget // Envia o alvo (Key ou ALL)
-                  }
-              });
-              
-              const targetName = broadcastTarget === 'ALL' 
-                ? 'Todos os usuários' 
-                : onlineUsers.find(u => u.key === broadcastTarget)?.user ||
-                  keysList.find(k => k.key === broadcastTarget)?.owner_name || 
-                  'Usuário';
-                
-              notify(`Mensagem enviada para: ${targetName}`, 'success');
-              
-              setBroadcastTitle('');
-              setBroadcastMsg('');
-              supabase.removeChannel(channel);
-          } else {
-              throw new Error("Falha ao conectar no canal de alerta.");
-          }
+          await channel.send({
+              type: 'broadcast',
+              event: 'sys_alert',
+              payload: {
+                  title: broadcastTitle,
+                  message: broadcastMsg,
+                  target: broadcastTarget // Envia o alvo (Key ou ALL)
+              }
+          });
+          
+          const targetName = broadcastTarget === 'ALL' 
+            ? 'Todos os usuários' 
+            : onlineUsers.find(u => u.key === broadcastTarget)?.user ||
+              keysList.find(k => k.key === broadcastTarget)?.owner_name || 
+              'Usuário';
+            
+          notify(`Mensagem enviada para: ${targetName}`, 'success');
+          
+          setBroadcastTitle('');
+          setBroadcastMsg('');
+          // IMPORTANTE: NÃO REMOVER O CANAL. O App.tsx depende dele para receber.
       } catch (err: any) {
-          notify(err.message, 'error');
+          console.error("Erro broadcast:", err);
+          notify(`Falha ao enviar: ${err.message}`, 'error');
       } finally {
           setIsSendingBroadcast(false);
       }
