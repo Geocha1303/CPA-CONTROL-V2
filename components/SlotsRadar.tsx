@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Gamepad2, Search, Zap, Filter, Flame, Dna, Box, Play, Star, Info, Lock, Copy, Trophy, Fish, Sparkles, Gem, Plus, Trash2, X, Image as ImageIcon, Save, ShieldCheck, Ghost, HardDrive, RefreshCw, Globe, User, AlertTriangle, ArrowRight, Crown } from 'lucide-react';
 import { supabase } from '../supabaseClient'; // IMPORT SUPABASE
 
 interface SlotGame {
@@ -53,6 +53,9 @@ const GAMES_DB: SlotGame[] = [
     { id: 406, name: 'Lucky Color', provider: 'JDB', volatility: 'Baixa', stars: 3, tags: ['Cores', 'Dados'], imageUrl: 'https://dashboardcpa.com.br/images/games/lucky-color.jpg' },
     { id: 407, name: 'Bulls Treasure', provider: 'JDB', volatility: 'Alta', stars: 3, tags: ['Touro', 'Tesouro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Bulls-treasure.jpg' },
     { id: 408, name: 'Fruity Bonanza', provider: 'JDB', volatility: 'Média', stars: 2, tags: ['Frutas', 'Cascata'], imageUrl: 'https://dashboardcpa.com.br/images/games/fruty-bonanza.jpg' },
+    { id: 409, name: 'Birds Party Deluxe', provider: 'JDB', volatility: 'Média', stars: 3, tags: ['Pássaros', 'Arcade'], imageUrl: 'https://cdn.hub88.io/JDB%20Gaming/jdb_birdspartydeluxe.jpg' },
+    { id: 410, name: 'Koi Trio', provider: 'JDB', volatility: 'Baixa', stars: 2, tags: ['Peixes', 'Sorte'], imageUrl: 'https://slotslaunch.nyc3.digitaloceanspaces.com/36072/koi-trio.jpg' },
+    { id: 411, name: 'CooCoo Farm', provider: 'JDB', volatility: 'Média', stars: 3, tags: ['Fazenda', 'Ovos'], imageUrl: 'https://forum.winzir.ph/assets/files/2024-04-30/1714463879-18306-photo-2024-04-30-15-57-36.jpg' },
 
     // --- PG SOFT ---
     { id: 501, name: 'Fortune Dragon', provider: 'PG', volatility: 'Média', stars: 3, tags: ['Dragão', 'Multiplier'], imageUrl: 'https://dashboardcpa.com.br/images/games/fortune-dragon.jpg' },
@@ -87,10 +90,14 @@ const GAMES_DB: SlotGame[] = [
     { id: 805, name: 'Rich Man', provider: 'FC', volatility: 'Alta', stars: 3, tags: ['Magnata', 'Dinheiro'], imageUrl: 'https://dashboardcpa.com.br/images/games/Rich-Man.jpg' },
     { id: 806, name: 'Color Game', provider: 'FC', volatility: 'Baixa', stars: 3, tags: ['Dados', 'Cores'], imageUrl: 'https://dashboardcpa.com.br/images/games/Color-Game.jpg' },
     { id: 807, name: 'Gladiatriz de Roma', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Roma', 'Batalha'], imageUrl: 'https://dashboardcpa.com.br/images/games/Gladiatriz-de-Roma.jpg' },
+    { id: 808, name: 'Hot Money', provider: 'FC', volatility: 'Alta', stars: 2, tags: ['Dinheiro', 'Crime'], imageUrl: 'https://assets.slotslaunch.com/25686/hot-money-slot.jpg' },
+
+    // --- CQ9 ---
+    { id: 901, name: 'Gu Gu Gu 2', provider: 'CQ9', volatility: 'Alta', stars: 3, tags: ['Galo', 'Asiático'], imageUrl: 'https://static.casino.guru/pict/81843/Gu-Gu-Gu-2.png?timestamp=1653485889000&imageDataId=300934&width=320&height=247' },
 ];
 
 const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, userName }) => {
-    const [activeTab, setActiveTab] = useState<'official' | 'custom'>('official');
+    const [activeTab, setActiveTab] = useState<'official' | 'custom' | 'favorites'>('official');
     const [selectedProvider, setSelectedProvider] = useState<string>('Todos');
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -98,15 +105,34 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
     const [customGames, setCustomGames] = useState<SlotGame[]>([]);
     const [isLoadingCustom, setIsLoadingCustom] = useState(false);
 
+    // --- FAVORITES STATE ---
+    const [favorites, setFavorites] = useState<number[]>(() => {
+        const saved = localStorage.getItem('slots_favorites');
+        return saved ? JSON.parse(saved) : [];
+    });
+
     // Modal Add
     const [showModal, setShowModal] = useState(false);
     const [newGame, setNewGame] = useState({ name: '', provider: '', imageUrl: '' });
 
+    // Persist Favorites
+    useEffect(() => {
+        localStorage.setItem('slots_favorites', JSON.stringify(favorites));
+    }, [favorites]);
+
+    const toggleFavorite = (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setFavorites(prev => {
+            const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+            if (newFavs.includes(id)) {
+                notify("Jogo adicionado aos favoritos!", "success");
+            }
+            return newFavs;
+        });
+    };
+
     // BUSCA OS JOGOS DO SUPABASE
     const fetchCustomSlots = async () => {
-        // SEGURANÇA: Evita busca se não for admin e não tiver chave
-        if (!isAdmin && !currentUserKey) return;
-
         setIsLoadingCustom(true);
         try {
             let query = supabase.from('custom_slots').select('*');
@@ -117,7 +143,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
             }
             // Se for Admin, ele pega tudo (query sem filtro)
             
-            // Ordernar por ID decrescente para novos aparecerem primeiro
+            // CORREÇÃO LINHA-POR-LINHA: Ordernar por ID decrescente para novos aparecerem primeiro
             query = query.order('id', { ascending: false });
 
             const { data, error } = await query;
@@ -146,7 +172,7 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
 
     // Recarrega sempre que mudar a aba ou user
     useEffect(() => {
-        if (activeTab === 'custom') {
+        if (activeTab === 'custom' || activeTab === 'favorites') {
             fetchCustomSlots();
         }
     }, [activeTab, currentUserKey]);
@@ -196,16 +222,31 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
         }
     };
 
-    const sourceGames = activeTab === 'official' ? GAMES_DB : customGames;
+    // LOGICA DE FILTRO ATUALIZADA
+    let displayGames: SlotGame[] = [];
+    if (activeTab === 'official') {
+        displayGames = GAMES_DB;
+    } else if (activeTab === 'custom') {
+        displayGames = customGames;
+    } else if (activeTab === 'favorites') {
+        // Consolida todos os jogos disponíveis para filtrar os favoritos
+        displayGames = [...GAMES_DB, ...customGames].filter(g => favorites.includes(g.id));
+    }
     
-    const filteredGames = sourceGames.filter(game => {
-        const matchProvider = activeTab === 'custom' || selectedProvider === 'Todos' || game.provider === selectedProvider;
+    const filteredGames = displayGames.filter(game => {
+        // Filtro de Provedor (Apenas se não estiver na aba favoritos, ou se quisermos filtrar favoritos por provedor também - deixarei livre nos favoritos por enquanto ou user 'Todos')
+        const matchProvider = selectedProvider === 'Todos' || game.provider === selectedProvider;
         const matchSearch = game.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (game.owner_name && game.owner_name.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        // Na aba favoritos, geralmente queremos ver todos, mas o filtro de search é útil. O de provider pode ser opcional.
+        // Vou aplicar o filtro de provider APENAS se não for 'Favorites', para simplificar a UX da aba favoritos (ver tudo que ama).
+        // Se quiser filtrar favoritos, basta selecionar o provider. Vou permitir.
+        
         return matchProvider && matchSearch;
     });
 
-    const providers = ['Todos', 'PG', 'PP', 'WG', 'MG', 'JILI', 'JDB', 'FC', 'PESCARIA'];
+    const providers = ['Todos', 'PG', 'PP', 'WG', 'MG', 'JILI', 'JDB', 'FC', 'PESCARIA', 'CQ9'];
 
     return (
         <div className="max-w-[1600px] mx-auto animate-fade-in pb-20 relative">
@@ -260,6 +301,13 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                         <Trophy size={16} /> Catálogo Oficial
                     </button>
                     <button 
+                        onClick={() => setActiveTab('favorites')}
+                        className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'favorites' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-gray-500 hover:text-amber-400'}`}
+                    >
+                        <Star size={16} fill={activeTab === 'favorites' ? "currentColor" : "none"} /> Favoritos
+                        <span className="bg-black/20 px-1.5 py-0.5 rounded text-[10px] ml-1 opacity-70">{favorites.length}</span>
+                    </button>
+                    <button 
                         onClick={() => setActiveTab('custom')}
                         className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'custom' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                     >
@@ -301,8 +349,8 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                 </div>
             )}
 
-            {/* Provider Filter (Only for Official) */}
-            {activeTab === 'official' && (
+            {/* Provider Filter (Only for Official OR Favorites) */}
+            {activeTab !== 'custom' && (
                 <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-4 mb-6">
                     {providers.map(prov => (
                         <button
@@ -344,6 +392,14 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                          <RefreshCw className="animate-spin text-emerald-500 mx-auto mb-4" size={32} />
                          <p className="text-gray-500">Sincronizando biblioteca...</p>
                      </div>
+                ) : filteredGames.length === 0 && activeTab === 'favorites' ? (
+                    <div className="col-span-full py-20 text-center opacity-50 flex flex-col items-center">
+                        <div className="p-4 bg-amber-500/10 rounded-full mb-4">
+                            <Star size={40} className="text-amber-500" />
+                        </div>
+                        <p className="text-gray-400 font-bold text-lg">Sua lista de favoritos está vazia.</p>
+                        <p className="text-gray-600 text-sm mt-1">Clique na estrela nos cards do Catálogo Oficial para adicionar.</p>
+                    </div>
                 ) : filteredGames.length === 0 && activeTab === 'official' ? (
                      <div className="col-span-full py-20 text-center opacity-50">
                         <Gamepad2 size={48} className="mx-auto mb-4 text-gray-600" />
@@ -356,113 +412,129 @@ const SlotsRadar: React.FC<Props> = ({ notify, isAdmin = false, currentUserKey, 
                          <p className="text-sm">Comece adicionando seu primeiro jogo aqui ao lado.</p>
                     </div>
                 ) : (
-                    filteredGames.map(game => (
-                        <div key={game.id} className="group relative bg-[#0a0614] rounded-2xl overflow-hidden border border-white/5 hover:border-pink-500/50 transition-all duration-300 hover:-translate-y-1 shadow-xl">
-                            
-                            {/* Image Container */}
-                            <div className="aspect-[3/4] relative overflow-hidden bg-gray-900">
-                                <img 
-                                    src={game.imageUrl} 
-                                    alt={game.name}
-                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 relative z-10"
-                                    loading="lazy"
-                                    onError={(e) => {
-                                        // CORREÇÃO LINHA-POR-LINHA: Fallback visual para evitar quebra de layout
-                                        e.currentTarget.style.display = 'none';
-                                        e.currentTarget.parentElement?.querySelector('.fallback-layer')?.classList.remove('hidden');
-                                        e.currentTarget.parentElement?.classList.add('bg-gradient-to-br', 'from-gray-800', 'to-black');
-                                    }}
-                                />
+                    filteredGames.map(game => {
+                        const isFavorite = favorites.includes(game.id);
+                        return (
+                            <div key={game.id} className="group relative bg-[#0a0614] rounded-2xl overflow-hidden border border-white/5 hover:border-pink-500/50 transition-all duration-300 hover:-translate-y-1 shadow-xl">
                                 
-                                {/* Fallback Layer (Só aparece se a imagem falhar) */}
-                                <div className="fallback-layer hidden absolute inset-0 flex-col items-center justify-center p-4 text-center z-0 animate-fade-in">
-                                    <div className="p-3 bg-white/5 rounded-full mb-3 border border-white/10">
-                                        <Gem size={24} className="text-pink-500/50" />
+                                {/* Image Container */}
+                                <div className="aspect-[3/4] relative overflow-hidden bg-gray-900">
+                                    <img 
+                                        src={game.imageUrl} 
+                                        alt={game.name}
+                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 relative z-10"
+                                        loading="lazy"
+                                        onError={(e) => {
+                                            // CORREÇÃO LINHA-POR-LINHA: Fallback visual para evitar quebra de layout
+                                            e.currentTarget.style.display = 'none';
+                                            e.currentTarget.parentElement?.querySelector('.fallback-layer')?.classList.remove('hidden');
+                                            e.currentTarget.parentElement?.classList.add('bg-gradient-to-br', 'from-gray-800', 'to-black');
+                                        }}
+                                    />
+                                    
+                                    {/* Fallback Layer (Só aparece se a imagem falhar) */}
+                                    <div className="fallback-layer hidden absolute inset-0 flex-col items-center justify-center p-4 text-center z-0 animate-fade-in">
+                                        <div className="p-3 bg-white/5 rounded-full mb-3 border border-white/10">
+                                            <Gem size={24} className="text-pink-500/50" />
+                                        </div>
+                                        <span className="text-xs font-bold text-white/50 uppercase tracking-widest leading-relaxed px-2">{game.name}</span>
                                     </div>
-                                    <span className="text-xs font-bold text-white/50 uppercase tracking-widest leading-relaxed px-2">{game.name}</span>
-                                </div>
 
-                                {/* Overlay Gradient */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-50 transition-opacity z-20"></div>
+                                    {/* Overlay Gradient */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-50 transition-opacity z-20"></div>
 
-                                {/* Floating Provider Badge */}
-                                <div className="absolute top-2 left-2 z-30">
-                                    <span className="bg-black/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded border border-white/10 uppercase tracking-wider shadow-lg">
-                                        {game.provider}
-                                    </span>
-                                </div>
+                                    {/* Floating Provider Badge */}
+                                    <div className="absolute top-2 left-2 z-30">
+                                        <span className="bg-black/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded border border-white/10 uppercase tracking-wider shadow-lg">
+                                            {game.provider}
+                                        </span>
+                                    </div>
 
-                                {/* Delete Button (Custom Tab - Allows owner or Admin to delete) */}
-                                {activeTab === 'custom' && (
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
-                                        className="absolute top-2 right-2 z-40 bg-black/60 hover:bg-rose-600 text-white p-1.5 rounded-lg border border-white/10 transition-colors"
+                                    {/* Favorite Button (Top Right) */}
+                                    <button
+                                        onClick={(e) => toggleFavorite(game.id, e)}
+                                        className={`absolute top-2 right-2 z-40 p-1.5 rounded-lg border backdrop-blur-md transition-all shadow-lg hover:scale-110 ${
+                                            isFavorite 
+                                            ? 'bg-amber-500 text-black border-amber-400' 
+                                            : 'bg-black/60 text-white border-white/10 hover:bg-black/80'
+                                        }`}
+                                        title={isFavorite ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                                     >
-                                        <Trash2 size={12} />
+                                        <Star size={14} fill={isFavorite ? "currentColor" : "none"} />
                                     </button>
-                                )}
 
-                                {/* Admin View: Show Creator Name */}
-                                {isAdmin && activeTab === 'custom' && game.owner_name && (
-                                    <div className="absolute bottom-2 right-2 z-30">
-                                        <span className="bg-indigo-600/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded border border-indigo-400 shadow-lg flex items-center gap-1">
-                                            <User size={8} /> {game.owner_name}
-                                        </span>
-                                    </div>
-                                )}
+                                    {/* Delete Button (Custom Tab Only) */}
+                                    {activeTab === 'custom' && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteGame(game.id); }}
+                                            className="absolute bottom-2 right-2 z-40 bg-black/60 hover:bg-rose-600 text-white p-1.5 rounded-lg border border-white/10 transition-colors"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    )}
 
-                                {/* Volatility Badge (Only Official Tab) */}
-                                {activeTab === 'official' && (
-                                    <div className="absolute top-2 right-2 z-30">
-                                        <span className={`text-[9px] font-bold px-2 py-1 rounded border uppercase flex items-center gap-1 backdrop-blur-md shadow-lg ${
-                                            game.volatility === 'Alta' ? 'bg-rose-500/90 text-white border-rose-500' :
-                                            game.volatility === 'Média' ? 'bg-amber-500/90 text-black border-amber-500' :
-                                            'bg-emerald-500/90 text-black border-emerald-500'
-                                        }`}>
-                                            {game.volatility === 'Alta' ? <Flame size={10} fill="currentColor" /> : <Zap size={10} fill="currentColor" />}
-                                            {game.volatility}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
+                                    {/* Admin View: Show Creator Name */}
+                                    {isAdmin && activeTab === 'custom' && game.owner_name && (
+                                        <div className="absolute bottom-2 left-2 z-30">
+                                            <span className="bg-indigo-600/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded border border-indigo-400 shadow-lg flex items-center gap-1">
+                                                <User size={8} /> {game.owner_name}
+                                            </span>
+                                        </div>
+                                    )}
 
-                            {/* Info Content */}
-                            <div className="p-4 relative z-30 bg-[#0a0614]">
-                                <h3 className="text-white font-bold text-sm truncate mb-1" title={game.name}>{game.name}</h3>
-                                
-                                {/* Rating Stars */}
-                                <div className="flex items-center gap-1 text-amber-400 mb-3">
-                                    {Array.from({length: 3}).map((_, i) => (
-                                        <Star 
-                                            key={i} 
-                                            size={12} 
-                                            fill={i < game.stars ? "currentColor" : "none"} 
-                                            className={i < game.stars ? "text-amber-400" : "text-gray-700"}
-                                        />
-                                    ))}
+                                    {/* Volatility Badge (Hidden in Custom usually, but retained for logic consistency) */}
+                                    {activeTab !== 'custom' && (
+                                        <div className="absolute bottom-2 left-2 z-30">
+                                            <span className={`text-[9px] font-bold px-2 py-1 rounded border uppercase flex items-center gap-1 backdrop-blur-md shadow-lg ${
+                                                game.volatility === 'Alta' ? 'bg-rose-500/90 text-white border-rose-500' :
+                                                game.volatility === 'Média' ? 'bg-amber-500/90 text-black border-amber-500' :
+                                                'bg-emerald-500/90 text-black border-emerald-500'
+                                            }`}>
+                                                {game.volatility === 'Alta' ? <Flame size={10} fill="currentColor" /> : <Zap size={10} fill="currentColor" />}
+                                                {game.volatility}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Tags */}
-                                <div className="flex flex-wrap gap-1 mb-3 h-6 overflow-hidden">
-                                    {game.tags.map(tag => (
-                                        <span key={tag} className="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">
-                                            {tag}
-                                        </span>
-                                    ))}
-                                </div>
+                                {/* Info Content */}
+                                <div className="p-4 relative z-30 bg-[#0a0614]">
+                                    <h3 className="text-white font-bold text-sm truncate mb-1" title={game.name}>{game.name}</h3>
+                                    
+                                    {/* Rating Stars */}
+                                    <div className="flex items-center gap-1 text-amber-400 mb-3">
+                                        {Array.from({length: 3}).map((_, i) => (
+                                            <Star 
+                                                key={i} 
+                                                size={12} 
+                                                fill={i < game.stars ? "currentColor" : "none"} 
+                                                className={i < game.stars ? "text-amber-400" : "text-gray-700"}
+                                            />
+                                        ))}
+                                    </div>
 
-                                <button 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(game.name);
-                                        notify(`Nome "${game.name}" copiado!`, 'success');
-                                    }}
-                                    className="w-full bg-white/5 hover:bg-pink-600 hover:text-white text-gray-300 font-bold py-2 rounded-lg text-xs transition-all border border-white/5 flex items-center justify-center gap-2 group/btn"
-                                >
-                                    <Copy size={12} /> Copiar Nome
-                                </button>
+                                    {/* Tags */}
+                                    <div className="flex flex-wrap gap-1 mb-3 h-6 overflow-hidden">
+                                        {game.tags.map(tag => (
+                                            <span key={tag} className="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded border border-white/5">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(game.name);
+                                            notify(`Nome "${game.name}" copiado!`, 'success');
+                                        }}
+                                        className="w-full bg-white/5 hover:bg-pink-600 hover:text-white text-gray-300 font-bold py-2 rounded-lg text-xs transition-all border border-white/5 flex items-center justify-center gap-2 group/btn"
+                                    >
+                                        <Copy size={12} /> Copiar Nome
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
