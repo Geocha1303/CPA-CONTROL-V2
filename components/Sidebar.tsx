@@ -78,6 +78,7 @@ const Sidebar: React.FC<Props> = ({
                     return (
                         <button
                             key={item.id}
+                            id={item.id} 
                             onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative overflow-hidden ${activeView === item.id ? 'text-white font-bold bg-white/[0.03]' : 'text-gray-500 hover:text-white hover:bg-white/[0.02]'}`}
                             aria-label={`Navegar para ${item.label}`}

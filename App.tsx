@@ -40,9 +40,10 @@ function App() {
   const [currentUserKey, setCurrentUserKey] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Zustand Store Actions
+  // Zustand Store Actions & State
   const setAll = useStore(s => s.setAll);
   const updateState = useStore(s => s.updateState);
+  const fullState = useStore(); // Access full state for watchers
   
   // Selectors for specific checks
   const config = useStore(s => s.config);
@@ -108,22 +109,17 @@ function App() {
                       setIsAdmin(data.is_admin);
                       setIsAuthenticated(true);
                       
-                      // LOGICA DE SYNC INTELIGENTE (Race Condition Fix)
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
                       let localData = null;
 
                       if (localString) {
-                          try {
-                              localData = JSON.parse(localString);
-                          } catch(e) {}
+                          try { localData = JSON.parse(localString); } catch(e) {}
                       }
 
                       const cloudResult = await loadCloudData(savedKey);
-                      let finalData = useStore.getState(); // Estado inicial
+                      let finalData = useStore.getState();
 
                       if (localData && cloudResult) {
-                          // Híbrido: Prioriza Local para evitar perda de dados offline recentes,
-                          // mas se local estiver vazio/inválido, usa nuvem.
                           finalData = mergeDeep(finalData, localData);
                       } else if (localData) {
                           finalData = mergeDeep(finalData, localData);
@@ -174,17 +170,15 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey, isLoaded, config.userName, isAdmin, isDemoMode]);
 
-  // --- AUTO-SAVE (ZUSTAND SUBSCRIPTION) ---
+  // --- AUTO-SAVE ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
-    // Subscreve a mudanças na store para salvar localmente e na nuvem
     const unsubscribe = useStore.subscribe((state) => {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
         setLastSaved(new Date());
 
-        // Debounce Cloud Save
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
         if (!isAdmin && currentUserKey && currentUserKey !== 'TROPA-FREE') {
@@ -214,7 +208,7 @@ function App() {
     return () => unsubscribe();
   }, [isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode]);
 
-  // --- GARANTIA DE INTEGRIDADE ---
+  // --- INTEGRIDADE ---
   useEffect(() => {
     if (!isLoaded) return;
     if(!config.userTag) {
@@ -225,7 +219,7 @@ function App() {
     }
   }, [isLoaded]);
 
-  // System Broadcast
+  // --- SYSTEM BROADCAST ---
   useEffect(() => {
       if (!isAuthenticated) return;
       const channel = supabase.channel('system_global_alerts');
@@ -244,21 +238,142 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey]);
 
+  // --- TOUR LOGIC & AUTO-ADVANCE ---
   useEffect(() => {
+      // Inicia Tour se necessário
       if (isAuthenticated && isLoaded && onboarding && onboarding.dismissed === false && !tourOpen) {
           setTourOpen(true);
       }
   }, [isAuthenticated, isLoaded, onboarding]);
 
+  // Effect para avançar automaticamente o Tour quando o usuário completa a ação
+  useEffect(() => {
+      if (!tourOpen) return;
+
+      const currentStep = tourSteps[tourStepIndex];
+      
+      // Passo 3: Esperando gerar plano
+      if (tourStepIndex === 3 && currentStep.targetId === 'tour-plan-generate') {
+          if (fullState.generator.plan.length > 0) {
+              const timer = setTimeout(() => setTourStepIndex(4), 1500); // Delay maior para ver o resultado
+              return () => clearTimeout(timer);
+          }
+      }
+
+      // Passo 4: Esperando enviar lote (Detector de Mudança de View)
+      if (tourStepIndex === 4 && currentStep.targetId === 'tour-lot-send-1') {
+          if (activeView === 'controle') {
+              const timer = setTimeout(() => setTourStepIndex(5), 600); // Delay para a transição de tela ocorrer
+              return () => clearTimeout(timer);
+          }
+      }
+
+      // Passo 6: Esperando registro no controle
+      if (tourStepIndex === 6 && currentStep.targetId === 'daily-add-btn') {
+          const today = getHojeISO();
+          if (fullState.dailyRecords[today]?.accounts?.length > 0) {
+              const timer = setTimeout(() => setTourStepIndex(7), 1500); // Delay maior
+              return () => clearTimeout(timer);
+          }
+      }
+
+  }, [tourOpen, tourStepIndex, fullState.generator.plan, fullState.dailyRecords, activeView]); 
+
+  // --- FUNÇÃO DE FINALIZAÇÃO E LIMPEZA ---
+  const finishTour = () => {
+      setTourOpen(false);
+      
+      // CRÍTICO: Usa getState para pegar o estado mais atual e setAll para SUBSTITUIR (não merge)
+      // Isso garante que os objetos sejam zerados de verdade.
+      const currentState = useStore.getState();
+      
+      const newState = {
+          ...currentState,
+          onboarding: { 
+              ...(currentState.onboarding || {}), 
+              dismissed: true 
+          },
+          // FORÇA OBJETO VAZIO (setAll substitui, updateState mesclaria mantendo chaves antigas)
+          dailyRecords: {}, 
+          generator: { 
+              ...currentState.generator, 
+              plan: [], // Limpa o Plano
+              history: [], 
+              lotWithdrawals: {}, 
+              customLotSizes: {} 
+          }
+      };
+
+      setAll(newState);
+
+      notify("Tutorial concluído! Sistema limpo para uso real.", "success");
+      setActiveView('dashboard');
+  };
+
   const tourSteps: TourStep[] = [
-      { targetId: 'dashboard', title: 'Visão Geral', content: 'Bem-vindo ao CPA Gateway Pro. Este é seu painel de controle principal.', view: 'dashboard', position: 'right' },
-      { targetId: 'configuracoes', title: 'Identidade', content: 'Configure seu nome e preferências aqui.', view: 'configuracoes', action: () => setActiveView('configuracoes'), position: 'right' },
-      { targetId: 'tour-settings-name', title: 'Quem é você?', content: 'Defina seu nome de operador aqui.', view: 'configuracoes', position: 'bottom' },
-      { targetId: 'tour-settings-bonus-toggle', title: 'Modo de Trabalho', content: 'Escolha entre valor exato ou ciclos.', view: 'configuracoes', position: 'bottom' },
-      { targetId: 'planejamento', title: 'Estratégia', content: 'Crie seu plano de ataque diário.', view: 'planejamento', action: () => setActiveView('planejamento'), position: 'right' },
-      { targetId: 'tour-plan-generate', title: 'Gerador', content: 'Gere valores inteligentes baseados em perfil.', view: 'planejamento', position: 'top' },
-      { targetId: 'controle', title: 'Execução', content: 'Registre seus resultados reais aqui.', view: 'controle', action: () => setActiveView('controle'), position: 'right' },
-      { targetId: 'tour-daily-table', title: 'Livro Caixa', content: 'Seus registros aparecerão aqui.', view: 'controle', position: 'top' }
+      { 
+          targetId: 'dashboard', 
+          title: 'Inicialização do Sistema', 
+          content: 'Bem-vindo ao CPA Gateway Pro. Vou guiá-lo na configuração inicial do seu ambiente de trabalho. Clique em "PRÓXIMO" para começar.', 
+          view: 'dashboard', 
+          position: 'right' 
+      },
+      { 
+          targetId: 'tour-settings-name', 
+          title: 'Credencial de Operador', 
+          content: 'Digite seu nome ou apelido no campo destacado. Quando terminar de digitar, clique em "PRÓXIMO" abaixo.', 
+          view: 'configuracoes', 
+          position: 'bottom',
+          action: () => setActiveView('configuracoes'),
+          waitForAction: false 
+      },
+      { 
+          targetId: 'planejamento', 
+          title: 'Módulo de Estratégia', 
+          content: 'Identidade confirmada. Agora vamos ao coração do sistema: o Planejamento. Aqui você define quanto vai movimentar.', 
+          view: 'planejamento', 
+          action: () => setActiveView('planejamento'), 
+          position: 'right' 
+      },
+      { 
+          targetId: 'tour-plan-generate', 
+          title: 'Gerador de Lotes', 
+          content: 'O sistema cria valores inteligentes para evitar padrões. Clique em "GERAR PLANO" para criar sua primeira lista de trabalho.', 
+          view: 'planejamento', 
+          position: 'top',
+          waitForAction: true // TRAVA AQUI
+      },
+      { 
+          targetId: 'tour-lot-send-1', 
+          title: 'Execução de Lote', 
+          content: 'Plano gerado! Clique no botão "ENVIAR" do primeiro lote para processar os dados e registrá-los no financeiro.', 
+          view: 'planejamento', 
+          position: 'bottom',
+          waitForAction: true // TRAVA AQUI: Obriga clicar em enviar
+      },
+      { 
+          targetId: 'controle', 
+          title: 'Livro Caixa', 
+          content: 'Os dados foram enviados com sucesso! Esta é a tela de Controle Diário, onde seus registros financeiros ficam salvos.', 
+          view: 'controle', 
+          // Action removida pois o passo anterior já navega para cá
+          position: 'right' 
+      },
+      { 
+          targetId: 'daily-add-btn', 
+          title: 'Registro Manual', 
+          content: 'Além dos lotes automáticos, você pode lançar entradas avulsas. Clique em "NOVO REGISTRO" para adicionar uma entrada teste agora.', 
+          view: 'controle', 
+          position: 'left',
+          waitForAction: true // TRAVA AQUI
+      },
+      { 
+          targetId: 'tour-daily-table', 
+          title: 'Operação Iniciada', 
+          content: 'Excelente. Você já sabe o fluxo básico: Planejar > Executar > Registrar. Ao clicar em FINALIZAR, limparei esses dados de teste.', 
+          view: 'controle', 
+          position: 'top' 
+      }
   ];
 
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -286,8 +401,10 @@ function App() {
   };
 
   const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
+  // Show Identity Check APENAS se o Tour não estiver ativo (para não encavalar)
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
-                            (!config.userName || invalidNames.includes(config.userName.toUpperCase()));
+                            (!config.userName || invalidNames.includes(config.userName.toUpperCase())) &&
+                            onboarding?.dismissed === true; // Só mostra modal se o tour já tiver sido dispensado ou finalizado
 
   if (!isAuthenticated) {
     return <LoginScreen 
@@ -337,11 +454,7 @@ function App() {
           <IdentityModal 
             currentName={config.userName}
             onSave={(name) => {
-                updateState({ 
-                    config: { ...config, userName: name },
-                    onboarding: { ...onboarding, dismissed: false }
-                });
-                setTourOpen(true);
+                updateState({ config: { ...config, userName: name } });
                 notify("Identidade definida com sucesso!", "success");
             }} 
           />
@@ -446,8 +559,8 @@ function App() {
                     currentStepIndex={tourStepIndex}
                     setCurrentStepIndex={setTourStepIndex}
                     onClose={() => setTourOpen(false)}
-                    onComplete={() => { setTourOpen(false); updateState({ onboarding: { ...onboarding, dismissed: true } }); }}
-                    onSkip={() => { setTourOpen(false); updateState({ onboarding: { ...onboarding, dismissed: true } }); }}
+                    onComplete={finishTour}
+                    onSkip={finishTour}
                 />
             )}
         </main>
