@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useLayoutEffect, useCallback } from 'react';
-import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock, SkipForward, Cpu, Loader2, MousePointerClick } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, CheckCircle2, Lock, SkipForward, Cpu } from 'lucide-react';
 
 export interface TourStep {
   targetId: string;
@@ -8,7 +8,7 @@ export interface TourStep {
   view: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   action?: () => void;
-  waitForAction?: boolean; // Se true, esconde o botão próximo e espera o App avançar
+  requiresInteraction?: boolean;
 }
 
 interface Props {
@@ -77,7 +77,7 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
   if (!targetRect) return null;
 
   const handleNext = () => {
-    if (disableNext || step.waitForAction) return;
+    if (disableNext) return;
     if (currentStepIndex < steps.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     } else {
@@ -105,7 +105,7 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
           top = targetRect.top;
           left = targetRect.left - cardWidth - gap;
       } else if (step.position === 'top') {
-          top = targetRect.top - gap - 280; // Mais espaço para o card maior
+          top = targetRect.top - gap - 250; // Mais espaço para o card maior
           left = targetRect.left;
       } else {
           top = targetRect.bottom + gap;
@@ -116,7 +116,7 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
       if (left + cardWidth > window.innerWidth) left = window.innerWidth - cardWidth - 20;
       if (left < 20) left = 20;
       if (top < 20) top = 20;
-      if (top + 280 > window.innerHeight) top = window.innerHeight - 320;
+      if (top + 250 > window.innerHeight) top = window.innerHeight - 300;
   }
 
   const progressPercent = ((currentStepIndex + 1) / steps.length) * 100;
@@ -149,7 +149,7 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
       {/* Target Highlighter */}
       {targetRect && (
           <div 
-            className={`absolute border-2 shadow-[0_0_50px_rgba(112,0,255,0.6)] rounded-xl pointer-events-none transition-all duration-500 ${step.waitForAction ? 'border-amber-400 animate-pulse' : 'border-primary'}`}
+            className="absolute border-2 border-primary shadow-[0_0_50px_rgba(112,0,255,0.6)] rounded-xl pointer-events-none transition-all duration-500"
             style={{
                 top: targetRect.top,
                 left: targetRect.left,
@@ -161,12 +161,6 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
               <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-white"></div>
               <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-white"></div>
               <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-white"></div>
-              
-              {step.waitForAction && (
-                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-2 animate-bounce">
-                      <MousePointerClick size={12} /> AÇÃO NECESSÁRIA
-                  </div>
-              )}
           </div>
       )}
 
@@ -176,11 +170,11 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
             className="absolute transition-all duration-500 pointer-events-auto ease-out"
             style={{ top, left, width: cardWidth }}
           >
-              <div className="bg-[#0f0a1e]/95 border border-primary/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl animate-fade-in relative group">
+              <div className="bg-[#0f0a1e]/90 border border-primary/30 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl animate-fade-in relative group">
                   
                   {/* Progress Bar Top */}
                   <div className="h-1 w-full bg-gray-800">
-                      <div className={`h-full transition-all duration-500 shadow-[0_0_10px_#7000FF] ${step.waitForAction ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${progressPercent}%` }}></div>
+                      <div className="h-full bg-primary transition-all duration-500 shadow-[0_0_10px_#7000FF]" style={{ width: `${progressPercent}%` }}></div>
                   </div>
 
                   <div className="p-6 relative">
@@ -192,76 +186,68 @@ const TourGuide: React.FC<Props> = ({ steps, isOpen, onClose, onComplete, onSkip
                       {/* Header */}
                       <div className="flex justify-between items-start mb-4 relative z-10">
                           <div>
-                              <div className={`text-[9px] font-bold uppercase tracking-[0.2em] mb-1 flex items-center gap-1 ${step.waitForAction ? 'text-amber-400' : 'text-primary'}`}>
-                                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${step.waitForAction ? 'bg-amber-400' : 'bg-primary'}`}></div>
-                                  {step.waitForAction ? 'AGUARDANDO USUÁRIO' : 'PROTOCOLO DE INÍCIO'}
+                              <div className="text-[9px] text-primary font-bold uppercase tracking-[0.2em] mb-1 flex items-center gap-1">
+                                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
+                                  System Onboarding
                               </div>
                               <h3 className="font-bold text-white text-xl tracking-tight">{step.title}</h3>
                           </div>
-                          {!step.waitForAction && (
-                              <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors bg-white/5 p-1.5 rounded-lg hover:bg-white/10">
-                                  <X size={14} />
-                              </button>
-                          )}
+                          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors bg-white/5 p-1.5 rounded-lg hover:bg-white/10">
+                              <X size={14} />
+                          </button>
                       </div>
                       
                       {/* Content */}
-                      <div className={`text-sm text-gray-300 leading-relaxed mb-6 font-medium border-l-2 pl-3 ${step.waitForAction ? 'border-amber-500/50' : 'border-primary/20'}`}>
+                      <div className="text-sm text-gray-300 leading-relaxed mb-6 font-medium border-l-2 border-primary/20 pl-3">
                           {step.content}
                       </div>
 
                       {/* Footer Actions */}
-                      <div className="flex items-center justify-between mt-auto h-10">
+                      <div className="flex items-center justify-between mt-auto">
                           
                           {/* Paginator */}
                           <div className="flex items-center gap-1">
                               {steps.map((_, i) => (
                                   <div 
                                     key={i} 
-                                    className={`h-1.5 rounded-full transition-all ${i === currentStepIndex ? (step.waitForAction ? 'w-4 bg-amber-500' : 'w-4 bg-primary') : 'w-1.5 bg-gray-700'}`}
+                                    className={`h-1.5 rounded-full transition-all ${i === currentStepIndex ? 'w-4 bg-primary' : 'w-1.5 bg-gray-700'}`}
                                   ></div>
                               ))}
                           </div>
                           
                           <div className="flex gap-2">
-                              {!step.waitForAction && (
-                                  <button 
-                                    onClick={handlePrev}
-                                    disabled={currentStepIndex === 0}
-                                    className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 disabled:opacity-20 transition-colors"
-                                  >
-                                      <ChevronLeft size={16} />
-                                  </button>
-                              )}
+                              <button 
+                                onClick={handlePrev}
+                                disabled={currentStepIndex === 0}
+                                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 disabled:opacity-20 transition-colors"
+                              >
+                                  <ChevronLeft size={16} />
+                              </button>
                               
-                              {step.waitForAction ? (
-                                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold animate-pulse">
-                                      <Loader2 size={14} className="animate-spin" />
-                                      Realize a ação...
-                                  </div>
-                              ) : (
-                                  <button 
-                                    onClick={handleNext}
-                                    disabled={disableNext}
-                                    className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg border relative overflow-hidden group/btn
-                                        ${disableNext 
-                                            ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' 
-                                            : 'bg-primary hover:bg-primary-glow text-white border-primary/50 shadow-primary/20 cursor-pointer'}
-                                    `}
-                                  >
-                                      <span className="relative z-10 flex items-center gap-2">
-                                          {disableNext && <Lock size={12} />}
-                                          {currentStepIndex === steps.length - 1 ? 'FINALIZAR' : 'PRÓXIMO'}
-                                          {!disableNext && (currentStepIndex === steps.length - 1 ? <CheckCircle2 size={14} /> : <ChevronRight size={14} />)}
-                                      </span>
-                                  </button>
-                              )}
+                              <button 
+                                onClick={handleNext}
+                                disabled={disableNext}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg border relative overflow-hidden group/btn
+                                    ${disableNext 
+                                        ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed' 
+                                        : 'bg-primary hover:bg-primary-glow text-white border-primary/50 shadow-primary/20 cursor-pointer'}
+                                `}
+                              >
+                                  <span className="relative z-10 flex items-center gap-2">
+                                      {disableNext && <Lock size={12} />}
+                                      {currentStepIndex === steps.length - 1 ? 'FINALIZAR' : 'PRÓXIMO'}
+                                      {!disableNext && (currentStepIndex === steps.length - 1 ? <CheckCircle2 size={14} /> : <ChevronRight size={14} />)}
+                                  </span>
+                                  {disableNext && (
+                                      <div className="absolute inset-0 bg-black/20"></div>
+                                  )}
+                              </button>
                           </div>
                       </div>
                   </div>
                   
                   {/* Skip Option */}
-                  {onSkip && !step.waitForAction && (
+                  {onSkip && (
                       <div className="bg-black/20 px-6 py-2 border-t border-white/5 flex justify-center">
                           <button 
                             onClick={onSkip}

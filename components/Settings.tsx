@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { AppState } from '../types';
-import { mergeDeep, LOCAL_STORAGE_KEY } from '../utils';
+import { mergeDeep } from '../utils'; // Importado de utils
 import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle } from 'lucide-react';
 import { useStore } from '../store';
 
@@ -34,15 +34,9 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
 
   const handleResetTutorial = () => {
       if(confirm("Deseja ver o guia de introdução novamente?")) {
-          // Força a atualização do estado e salvamento síncrono antes do reload
-          const currentState = useStore.getState();
-          const newState = { ...currentState, onboarding: { ...currentState.onboarding, dismissed: false } };
-          
           updateState({ onboarding: { ...state.onboarding, dismissed: false } });
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
-          
           notify("Tutorial reativado! O guia iniciará em instantes.", "success");
-          setTimeout(() => window.location.reload(), 500);
+          setTimeout(() => window.location.reload(), 1000);
       }
   };
 

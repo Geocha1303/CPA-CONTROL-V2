@@ -36,9 +36,8 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // OTIMIZAÇÃO: Atualiza apenas a cada minuto para não travar animações de gráfico
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000); 
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -274,7 +273,6 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
                     <div className="flex items-center gap-3 text-sm text-gray-400">
                         <Clock size={14} />
                         <span>{currentTime.toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}</span>
-                        <span className="opacity-50 text-xs">| {currentTime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                 </div>
                 

@@ -175,12 +175,12 @@ const DailyControl: React.FC<Props> = ({ currentDate, setCurrentDate, notify, re
                 <div className="bg-[#0c0818] rounded-2xl p-6 border border-white/10 shadow-lg relative overflow-hidden group">
                     <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     <div className="flex items-center justify-between mb-4 relative z-10">
-                        <button onClick={() => changeDate(-1)} aria-label="Dia Anterior" className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
+                        <button onClick={() => changeDate(-1)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
                         <div className="text-center">
                             <h2 className="text-2xl font-black text-white tracking-tight">{new Date(currentDate).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}</h2>
                             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(currentDate).toLocaleDateString('pt-BR', { weekday: 'long' })}</p>
                         </div>
-                        <button onClick={() => changeDate(1)} aria-label="Próximo Dia" className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
+                        <button onClick={() => changeDate(1)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
                     </div>
                     <div className="relative group/date">
                         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-violet-400"><Calendar size={16} /></div>
@@ -235,7 +235,7 @@ const DailyControl: React.FC<Props> = ({ currentDate, setCurrentDate, notify, re
                     <h3 className="text-lg font-bold text-white flex items-center gap-3 font-mono">LIVRO CAIXA <span className="bg-primary/20 text-primary-glow text-xs px-2 py-0.5 rounded-full border border-primary/30">{dayRecord.accounts.length}</span></h3>
                     {myLeaderKey && <div className={`hidden md:flex items-center gap-2 text-[10px] font-bold px-3 py-1 rounded-full border transition-all ${syncStatus === 'synced' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : syncStatus === 'syncing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-white/5 text-gray-500 border-white/10'}`}><Cloud size={12} className={syncStatus === 'syncing' ? 'animate-pulse' : ''} />{syncStatus === 'synced' ? 'Sincronizado' : syncStatus === 'syncing' ? 'Enviando...' : syncStatus === 'waiting' ? 'Aguardando envio...' : 'Conectado'}</div>}
                 </div>
-                {!readOnly && <button id="daily-add-btn" onClick={handleAddAccount} aria-label="Adicionar novo registro" className="gateway-btn-primary px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 font-mono shadow-lg hover:shadow-primary/40 transition-all"><Plus size={14} /> NOVO REGISTRO</button>}
+                {!readOnly && <button onClick={handleAddAccount} className="gateway-btn-primary px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 font-mono shadow-lg hover:shadow-primary/40 transition-all"><Plus size={14} /> NOVO REGISTRO</button>}
                 {readOnly && <div className="text-xs text-amber-500 font-bold flex items-center gap-1 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20"><Lock size={12}/> MODO LEITURA</div>}
             </div>
             
@@ -246,10 +246,10 @@ const DailyControl: React.FC<Props> = ({ currentDate, setCurrentDate, notify, re
                             <th className="px-6 pb-2 font-bold">Investimento (Dep + Re)</th>
                             <th className="px-6 pb-2 font-bold text-accent-cyan">Saque</th>
                             <th className="px-6 pb-2 font-bold text-primary-glow">
-                                    <div className="flex items-center gap-2">
-                                        {isManualMode ? 'Bônus (R$)' : 'Ciclos'}
-                                        {!readOnly && <div className="group relative"><AlertCircle size={14} className="cursor-help text-gray-600 hover:text-white transition-colors" /><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-xl text-left leading-relaxed">{isManualMode ? "Modo Manual: Digite o valor monetário exato." : "Modo Auto: Digite a quantidade de ciclos."}</div></div>}
-                                    </div>
+                                 <div className="flex items-center gap-2">
+                                     {isManualMode ? 'Bônus (R$)' : 'Ciclos'}
+                                     {!readOnly && <div className="group relative"><AlertCircle size={14} className="cursor-help text-gray-600 hover:text-white transition-colors" /><div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-gray-900 border border-primary/30 p-3 rounded-xl text-[10px] text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-all z-50 shadow-xl text-left leading-relaxed">{isManualMode ? "Modo Manual: Digite o valor monetário exato." : "Modo Auto: Digite a quantidade de ciclos."}</div></div>}
+                                 </div>
                             </th>
                             <th className="px-6 pb-2 font-bold text-right">Performance</th>
                             <th className="px-6 pb-2 text-center w-28">Ações</th>
@@ -299,7 +299,7 @@ const DailyControl: React.FC<Props> = ({ currentDate, setCurrentDate, notify, re
                                         </td>
                                         <td className="px-6 py-4 bg-[#0c0818] border-y border-r border-white/5 rounded-r-2xl text-center">
                                             <div className="flex items-center justify-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                                {!readOnly && <button onClick={() => handleDeleteAccount(acc.id)} aria-label="Excluir registro" className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors border border-transparent hover:border-rose-500/20"><Trash2 size={16} /></button>}
+                                                {!readOnly && <button onClick={() => handleDeleteAccount(acc.id)} className="p-2 rounded-lg bg-transparent hover:bg-rose-500/10 text-gray-600 hover:text-rose-500 transition-colors border border-transparent hover:border-rose-500/20"><Trash2 size={16} /></button>}
                                             </div>
                                         </td>
                                     </tr>
