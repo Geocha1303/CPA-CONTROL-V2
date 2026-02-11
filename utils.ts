@@ -1,5 +1,12 @@
 import { AppState, GeneratedPlayer, GeneratorParams, HistoryItem, DayRecord, Config, GeneralExpense, DreamGoal } from './types';
 
+// --- CONSTANTES GLOBAIS ---
+export const LOCAL_STORAGE_KEY = 'cpaControlV2_react_backup_auto';
+export const LAST_ACTIVE_KEY_STORAGE = 'cpa_last_active_key_guard';
+export const AUTH_STORAGE_KEY = 'cpa_auth_session_v3_master'; 
+export const DEVICE_ID_KEY = 'cpa_device_fingerprint';
+export const FREE_KEY_STORAGE = 'cpa_free_unique_key';
+
 // Utility para mesclar objetos profundamente (Deep Merge)
 export const mergeDeep = (target: any, source: any): any => {
     if (typeof target !== 'object' || target === null) return source !== undefined ? source : target;
