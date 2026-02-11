@@ -1,26 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Receipt, 
-  Target, 
-  Settings as SettingsIcon, 
   Menu, 
   CheckCircle2,
   AlertCircle,
   Info,
   RefreshCw,
   LogOut,
-  ShieldCheck,
   Activity,
   Eye,
   EyeOff,
   X,
-  Megaphone,
-  Users, 
-  ShoppingBag, 
-  Smartphone, 
-  Link as LinkIcon 
+  Megaphone
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY } from './utils';
@@ -42,6 +32,7 @@ import SmsRush from './components/SmsRush';
 import TourGuide, { TourStep } from './components/TourGuide';
 import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
+import Sidebar from './components/Sidebar';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -120,14 +111,10 @@ function App() {
                       // LOGICA DE SYNC INTELIGENTE (Race Condition Fix)
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
                       let localData = null;
-                      let localTimestamp = 0; // Epoch
 
                       if (localString) {
                           try {
                               localData = JSON.parse(localString);
-                              // Assume que o local storage sempre tem dados 'recentes' se o user usou o app
-                              // Para ser mais preciso, poderiamos salvar um timestamp no local, mas usaremos a data de hoje como fallback
-                              localTimestamp = Date.now(); 
                           } catch(e) {}
                       }
 
@@ -135,11 +122,8 @@ function App() {
                       let finalData = useStore.getState(); // Estado inicial
 
                       if (localData && cloudResult) {
-                          const cloudTimestamp = new Date(cloudResult.updatedAt).getTime();
-                          // Se a nuvem for mais recente que a ultima vez que abrimos (aprox), usa nuvem.
-                          // Mas como não temos timestamp local confiável salvo, vamos usar a estratégia HIBRIDA:
-                          // Local vence por padrão para evitar perda de trabalho offline, 
-                          // A MENOS que local esteja vazio e nuvem tenha dados.
+                          // Híbrido: Prioriza Local para evitar perda de dados offline recentes,
+                          // mas se local estiver vazio/inválido, usa nuvem.
                           finalData = mergeDeep(finalData, localData);
                       } else if (localData) {
                           finalData = mergeDeep(finalData, localData);
@@ -289,6 +273,18 @@ function App() {
     window.location.reload();
   };
 
+  const handleEnterDemo = () => {
+      setIsDemoMode(true);
+      setAll(generateDemoState(useStore.getState().config));
+      setCurrentUserKey('DEMO-USER-KEY');
+      setActiveView('dashboard');
+  };
+
+  const handleExitDemo = () => {
+      setIsDemoMode(false);
+      window.location.reload();
+  };
+
   const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
                             (!config.userName || invalidNames.includes(config.userName.toUpperCase()));
@@ -333,10 +329,6 @@ function App() {
         autoLoginCheck={isCheckingAuth} 
     />;
   }
-
-  // Se estiver em modo espectador, usamos os dados dele, senão usamos o store (que é acessado via useStore() dentro dos componentes, mas aqui passamos state para compatibilidade se necessário, mas idealmente componentes puxam do store)
-  // Para manter compatibilidade com componentes que ainda esperam props (se houver), ou para passar o estado do espectador:
-  // Truque: Se spectating, criamos um objeto 'state' falso. Se não, os componentes usam useStore internamente.
   
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden relative font-sans text-gray-200">
@@ -405,56 +397,18 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        <nav className={`fixed md:relative z-40 w-full md:w-20 lg:w-64 bg-[#05030a] md:bg-transparent border-r border-white/5 flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0 inset-0' : '-translate-x-full md:translate-x-0'}`}>
-             <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1">
-                 {[
-                     { type: 'header', label: 'VISÃO GERAL' },
-                     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                     { id: 'sms', label: 'SMS RUSH', icon: Smartphone, badge: 'NOVO' },
-                     { type: 'header', label: 'FINANCEIRO' },
-                     { id: 'planejamento', label: 'Planejamento', icon: Target },
-                     { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
-                     { id: 'despesas', label: 'Despesas', icon: Receipt },
-                     { id: 'metas', label: 'Metas', icon: SettingsIcon },
-                     { type: 'header', label: 'FERRAMENTAS' },
-                     { id: 'slots', label: 'Slots Radar', icon: Activity },
-                     { id: 'squad', label: 'Squad', icon: Users },
-                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag },
-                     { type: 'header', label: 'SISTEMA' },
-                     ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }] : []),
-                     { id: 'configuracoes', label: 'Ajustes', icon: SettingsIcon },
-                 ].map((item, index) => {
-                     if (item.type === 'header') return <div key={`header-${index}`} className="pt-4 pb-2 px-2"><p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{item.label}</p></div>;
-                     return (
-                         <button
-                            key={item.id}
-                            onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative overflow-hidden ${activeView === item.id ? 'text-white font-bold bg-white/[0.03]' : 'text-gray-500 hover:text-white hover:bg-white/[0.02]'}`}
-                         >
-                             {activeView === item.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>}
-                             <div className={`transition-transform duration-300 ${activeView === item.id ? 'translate-x-2 text-primary' : ''}`}><item.icon size={18} /></div>
-                             <span className={`text-sm md:hidden lg:block transition-transform duration-300 ${activeView === item.id ? 'translate-x-2' : ''}`}>{item.label}</span>
-                             {item.badge === 'NOVO' && <span className="ml-auto flex items-center gap-1.5 md:hidden lg:flex"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span></span><span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">NOVO</span></span>}
-                         </button>
-                     );
-                 })}
-             </div>
-             <div className="p-4 border-t border-white/5 hidden lg:block">
-                 {!isDemoMode ? (
-                     <button onClick={() => { if(confirm("Entrar no Modo Demonstração?")) { setIsDemoMode(true); setAll(generateDemoState(useStore.getState().config)); setCurrentUserKey('DEMO-USER-KEY'); setActiveView('dashboard'); } }} className="w-full mb-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-400 hover:text-white transition-all group uppercase tracking-wide">
-                         <Eye size={14} className="group-hover:text-amber-400 transition-colors" /> Modo Demonstração
-                     </button>
-                 ) : (
-                     <button onClick={() => { setIsDemoMode(false); window.location.reload(); }} className="w-full mb-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-red-400 hover:text-white transition-all group uppercase tracking-wide">
-                         <LogOut size={14} /> Sair do Demo
-                     </button>
-                 )}
-                 <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                     <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Licença Ativa</p>
-                     <p className="text-xs text-white font-mono truncate" title={currentUserKey}>{currentUserKey === 'TROPA-FREE' ? 'GRATUITA' : currentUserKey}</p>
-                 </div>
-             </div>
-        </nav>
+        <Sidebar 
+            activeView={activeView}
+            setActiveView={setActiveView}
+            mobileMenuOpen={mobileMenuOpen}
+            setMobileMenuOpen={setMobileMenuOpen}
+            isAdmin={isAdmin}
+            isDemoMode={isDemoMode}
+            currentUserKey={currentUserKey}
+            onLogout={handleLogout}
+            onEnterDemo={handleEnterDemo}
+            onExitDemo={handleExitDemo}
+        />
 
         <main ref={mainContentRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-background relative scroll-smooth p-4 lg:p-8">
             {spectatingData && (
@@ -472,16 +426,6 @@ function App() {
                     </div>
                 ))}
             </div>
-
-            {/* SE ESTIVER ESPECTANDO, PASSA O STATE FAKE VIA PROPS (Componentes devem suportar prioridade de props sobre store ou apenas usar store local se prop for undefined) */}
-            {/* Como os componentes agora usam useStore, o modo espectador precisa injetar dados na store temporariamente ou o design precisa mudar. 
-                SOLUÇÃO RÁPIDA: Se spectatingData existe, usamos ele. 
-                Os componentes abaixo foram atualizados para aceitar `forcedState` opcional ou usar o hook.
-            */}
-            {/* ATENÇÃO: Devido à restrição de não mudar muito os arquivos filhos além do necessário, a melhor abordagem é injetar os dados do espectador na Store principal temporariamente, mas impedir o salvamento.
-                Isso já é tratado pelo 'isDemoMode' ou 'readOnly'.
-                Vamos injetar o spectatingData no store se ele existir.
-            */}
             
             {activeView === 'dashboard' && <Dashboard forcedState={spectatingData?.data} privacyMode={privacyMode} />}
             {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
