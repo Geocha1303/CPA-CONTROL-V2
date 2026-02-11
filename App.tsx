@@ -1,26 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Receipt, 
-  Target, 
-  Settings as SettingsIcon, 
   Menu, 
   CheckCircle2,
   AlertCircle,
   Info,
   RefreshCw,
   LogOut,
-  ShieldCheck,
   Activity,
   Eye,
   EyeOff,
   X,
-  Megaphone,
-  Users, 
-  ShoppingBag, 
-  Smartphone, 
-  Link as LinkIcon 
+  Megaphone
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY } from './utils';
@@ -42,6 +32,7 @@ import SmsRush from './components/SmsRush';
 import TourGuide, { TourStep } from './components/TourGuide';
 import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
+import Sidebar from './components/Sidebar';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -49,9 +40,10 @@ function App() {
   const [currentUserKey, setCurrentUserKey] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
-  // Zustand Store Actions
+  // Zustand Store Actions & State
   const setAll = useStore(s => s.setAll);
   const updateState = useStore(s => s.updateState);
+  const fullState = useStore(); // Access full state for watchers
   
   // Selectors for specific checks
   const config = useStore(s => s.config);
@@ -117,29 +109,17 @@ function App() {
                       setIsAdmin(data.is_admin);
                       setIsAuthenticated(true);
                       
-                      // LOGICA DE SYNC INTELIGENTE (Race Condition Fix)
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
                       let localData = null;
-                      let localTimestamp = 0; // Epoch
 
                       if (localString) {
-                          try {
-                              localData = JSON.parse(localString);
-                              // Assume que o local storage sempre tem dados 'recentes' se o user usou o app
-                              // Para ser mais preciso, poderiamos salvar um timestamp no local, mas usaremos a data de hoje como fallback
-                              localTimestamp = Date.now(); 
-                          } catch(e) {}
+                          try { localData = JSON.parse(localString); } catch(e) {}
                       }
 
                       const cloudResult = await loadCloudData(savedKey);
-                      let finalData = useStore.getState(); // Estado inicial
+                      let finalData = useStore.getState();
 
                       if (localData && cloudResult) {
-                          const cloudTimestamp = new Date(cloudResult.updatedAt).getTime();
-                          // Se a nuvem for mais recente que a ultima vez que abrimos (aprox), usa nuvem.
-                          // Mas como não temos timestamp local confiável salvo, vamos usar a estratégia HIBRIDA:
-                          // Local vence por padrão para evitar perda de trabalho offline, 
-                          // A MENOS que local esteja vazio e nuvem tenha dados.
                           finalData = mergeDeep(finalData, localData);
                       } else if (localData) {
                           finalData = mergeDeep(finalData, localData);
@@ -190,17 +170,15 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey, isLoaded, config.userName, isAdmin, isDemoMode]);
 
-  // --- AUTO-SAVE (ZUSTAND SUBSCRIPTION) ---
+  // --- AUTO-SAVE ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
-    // Subscreve a mudanças na store para salvar localmente e na nuvem
     const unsubscribe = useStore.subscribe((state) => {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
         setLastSaved(new Date());
 
-        // Debounce Cloud Save
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
         if (!isAdmin && currentUserKey && currentUserKey !== 'TROPA-FREE') {
@@ -230,18 +208,32 @@ function App() {
     return () => unsubscribe();
   }, [isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode]);
 
-  // --- GARANTIA DE INTEGRIDADE ---
+  // --- INTEGRIDADE ---
   useEffect(() => {
     if (!isLoaded) return;
+    
+    // Gera TAG única se não existir
     if(!config.userTag) {
         updateState({ config: { ...config, userTag: generateUserTag() } });
     }
+
+    // Gerencia estado do Onboarding (Tutorial) - Lógica Simplificada
     if (!onboarding) {
-         updateState({ onboarding: { steps: { configName: false, generatedPlan: false, sentLot: false, addedExpense: false }, dismissed: false } });
+         // Verifica se o usuário já possui histórico de dados (se tem dados, pula o tour)
+         const hasDailyData = fullState.dailyRecords && Object.keys(fullState.dailyRecords).length > 0;
+         const hasPlanData = fullState.generator.plan && fullState.generator.plan.length > 0;
+         const isExistingUser = hasDailyData || hasPlanData;
+
+         updateState({ 
+             onboarding: { 
+                 steps: { configName: false, generatedPlan: false, sentLot: false, addedExpense: false }, 
+                 dismissed: !!isExistingUser 
+             } 
+         });
     }
   }, [isLoaded]);
 
-  // System Broadcast
+  // --- SYSTEM BROADCAST ---
   useEffect(() => {
       if (!isAuthenticated) return;
       const channel = supabase.channel('system_global_alerts');
@@ -260,21 +252,143 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey]);
 
+  // --- TOUR LOGIC & AUTO-ADVANCE ---
   useEffect(() => {
+      // Inicia Tour se necessário
       if (isAuthenticated && isLoaded && onboarding && onboarding.dismissed === false && !tourOpen) {
           setTourOpen(true);
       }
   }, [isAuthenticated, isLoaded, onboarding]);
 
+  // Effect para avançar automaticamente o Tour quando o usuário completa a ação
+  useEffect(() => {
+      if (!tourOpen) return;
+
+      const currentStep = tourSteps[tourStepIndex];
+      
+      // Passo 3: Esperando gerar plano
+      if (tourStepIndex === 3 && currentStep.targetId === 'tour-plan-generate') {
+          if (fullState.generator.plan.length > 0) {
+              const timer = setTimeout(() => setTourStepIndex(4), 1500); // Delay maior para ver o resultado
+              return () => clearTimeout(timer);
+          }
+      }
+
+      // Passo 6: Esperando registro no controle
+      if (tourStepIndex === 6 && currentStep.targetId === 'daily-add-btn') {
+          const today = getHojeISO();
+          if (fullState.dailyRecords[today]?.accounts?.length > 0) {
+              const timer = setTimeout(() => setTourStepIndex(7), 1500); // Delay maior
+              return () => clearTimeout(timer);
+          }
+      }
+
+  }, [tourOpen, tourStepIndex, fullState.generator.plan, fullState.dailyRecords, activeView]); 
+
+  // --- FUNÇÃO DE FINALIZAÇÃO E LIMPEZA (Para o botão FINALIZAR) ---
+  const finishTour = () => {
+      setTourOpen(false);
+      
+      const currentState = useStore.getState();
+      
+      const newState = {
+          ...currentState,
+          onboarding: { 
+              ...(currentState.onboarding || {}), 
+              dismissed: true 
+          },
+          // FORÇA OBJETO VAZIO para limpar dados de teste
+          dailyRecords: {}, 
+          generator: { 
+              ...currentState.generator, 
+              plan: [], 
+              history: [], 
+              lotWithdrawals: {}, 
+              customLotSizes: {} 
+          }
+      };
+
+      setAll(newState);
+      notify("Tutorial concluído! Sistema limpo para uso real.", "success");
+      setActiveView('dashboard');
+  };
+
+  // --- NOVA FUNÇÃO PARA O BOTÃO X (Apenas fecha e não mostra mais) ---
+  const handleTourDismiss = () => {
+      setTourOpen(false);
+      // Salva no estado que o usuário dispensou, mas NÃO apaga os dados (caso tenha feito algo útil)
+      // Se quiser apagar dados também, pode chamar finishTour, mas geralmente 'X' é só fechar.
+      // Vou manter apenas a flag dismissed = true para garantir que não volte.
+      const currentOnboarding = useStore.getState().onboarding || { steps: {}, dismissed: false };
+      updateState({
+          onboarding: { ...currentOnboarding, dismissed: true }
+      });
+  };
+
   const tourSteps: TourStep[] = [
-      { targetId: 'dashboard', title: 'Visão Geral', content: 'Bem-vindo ao CPA Gateway Pro. Este é seu painel de controle principal.', view: 'dashboard', position: 'right' },
-      { targetId: 'configuracoes', title: 'Identidade', content: 'Configure seu nome e preferências aqui.', view: 'configuracoes', action: () => setActiveView('configuracoes'), position: 'right' },
-      { targetId: 'tour-settings-name', title: 'Quem é você?', content: 'Defina seu nome de operador aqui.', view: 'configuracoes', position: 'bottom' },
-      { targetId: 'tour-settings-bonus-toggle', title: 'Modo de Trabalho', content: 'Escolha entre valor exato ou ciclos.', view: 'configuracoes', position: 'bottom' },
-      { targetId: 'planejamento', title: 'Estratégia', content: 'Crie seu plano de ataque diário.', view: 'planejamento', action: () => setActiveView('planejamento'), position: 'right' },
-      { targetId: 'tour-plan-generate', title: 'Gerador', content: 'Gere valores inteligentes baseados em perfil.', view: 'planejamento', position: 'top' },
-      { targetId: 'controle', title: 'Execução', content: 'Registre seus resultados reais aqui.', view: 'controle', action: () => setActiveView('controle'), position: 'right' },
-      { targetId: 'tour-daily-table', title: 'Livro Caixa', content: 'Seus registros aparecerão aqui.', view: 'controle', position: 'top' }
+      { 
+          targetId: 'dashboard', 
+          title: 'Inicialização do Sistema', 
+          content: 'Bem-vindo ao CPA Gateway Pro. Vou guiá-lo na configuração inicial do seu ambiente de trabalho. Clique em "PRÓXIMO" para começar.', 
+          view: 'dashboard', 
+          position: 'right' 
+      },
+      { 
+          targetId: 'tour-settings-name', 
+          title: 'Credencial de Operador', 
+          content: 'Digite seu nome ou apelido no campo destacado. Quando terminar de digitar, clique em "PRÓXIMO" abaixo.', 
+          view: 'configuracoes', 
+          position: 'bottom',
+          action: () => setActiveView('configuracoes'),
+          waitForAction: false 
+      },
+      { 
+          targetId: 'planejamento', 
+          title: 'Módulo de Estratégia', 
+          content: 'Identidade confirmada. Agora vamos ao coração do sistema: o Planejamento. Aqui você define quanto vai movimentar.', 
+          view: 'planejamento', 
+          action: () => setActiveView('planejamento'), 
+          position: 'right' 
+      },
+      { 
+          targetId: 'tour-plan-generate', 
+          title: 'Gerador de Lotes', 
+          content: 'O sistema cria valores inteligentes para evitar padrões. Clique em "GERAR PLANO" para criar sua primeira lista de trabalho.', 
+          view: 'planejamento', 
+          position: 'top',
+          waitForAction: true // TRAVA AQUI
+      },
+      { 
+          targetId: 'tour-lot-send-1', 
+          title: 'Execução de Lote', 
+          content: 'Plano gerado! Clique no botão "ENVIAR" do primeiro lote para processar os dados e registrá-los no financeiro.', 
+          view: 'planejamento', 
+          position: 'bottom',
+          waitForAction: true // TRAVA AQUI: Obriga clicar em enviar
+      },
+      { 
+          targetId: 'controle', 
+          title: 'Livro Caixa', 
+          content: 'Os dados foram enviados com sucesso! Esta é a tela de Controle Diário, onde seus registros financeiros ficam salvos.', 
+          view: 'controle', 
+          // Action removida pois o passo anterior já navega para cá
+          position: 'right' 
+      },
+      { 
+          targetId: 'daily-add-btn', 
+          title: 'Registro Manual', 
+          content: 'Além dos lotes automáticos, você pode lançar entradas avulsas. Clique em "NOVO REGISTRO" para adicionar uma entrada teste agora.', 
+          view: 'controle', 
+          position: 'left',
+          waitForAction: true // TRAVA AQUI
+      },
+      { 
+          targetId: 'tour-daily-table', 
+          title: 'Operação Iniciada', 
+          content: 'Excelente. Você já sabe o fluxo básico: Planejar > Executar > Registrar. Ao clicar em FINALIZAR, limparei esses dados de teste.', 
+          view: 'controle', 
+          position: 'top' 
+      }
   ];
 
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -289,9 +403,23 @@ function App() {
     window.location.reload();
   };
 
+  const handleEnterDemo = () => {
+      setIsDemoMode(true);
+      setAll(generateDemoState(useStore.getState().config));
+      setCurrentUserKey('DEMO-USER-KEY');
+      setActiveView('dashboard');
+  };
+
+  const handleExitDemo = () => {
+      setIsDemoMode(false);
+      window.location.reload();
+  };
+
   const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
+  // Show Identity Check APENAS se o Tour não estiver ativo (para não encavalar)
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
-                            (!config.userName || invalidNames.includes(config.userName.toUpperCase()));
+                            (!config.userName || invalidNames.includes(config.userName.toUpperCase())) &&
+                            onboarding?.dismissed === true; // Só mostra modal se o tour já tiver sido dispensado ou finalizado
 
   if (!isAuthenticated) {
     return <LoginScreen 
@@ -333,10 +461,6 @@ function App() {
         autoLoginCheck={isCheckingAuth} 
     />;
   }
-
-  // Se estiver em modo espectador, usamos os dados dele, senão usamos o store (que é acessado via useStore() dentro dos componentes, mas aqui passamos state para compatibilidade se necessário, mas idealmente componentes puxam do store)
-  // Para manter compatibilidade com componentes que ainda esperam props (se houver), ou para passar o estado do espectador:
-  // Truque: Se spectating, criamos um objeto 'state' falso. Se não, os componentes usam useStore internamente.
   
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden relative font-sans text-gray-200">
@@ -345,11 +469,7 @@ function App() {
           <IdentityModal 
             currentName={config.userName}
             onSave={(name) => {
-                updateState({ 
-                    config: { ...config, userName: name },
-                    onboarding: { ...onboarding, dismissed: false }
-                });
-                setTourOpen(true);
+                updateState({ config: { ...config, userName: name } });
                 notify("Identidade definida com sucesso!", "success");
             }} 
           />
@@ -405,56 +525,18 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        <nav className={`fixed md:relative z-40 w-full md:w-20 lg:w-64 bg-[#05030a] md:bg-transparent border-r border-white/5 flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0 inset-0' : '-translate-x-full md:translate-x-0'}`}>
-             <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1">
-                 {[
-                     { type: 'header', label: 'VISÃO GERAL' },
-                     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                     { id: 'sms', label: 'SMS RUSH', icon: Smartphone, badge: 'NOVO' },
-                     { type: 'header', label: 'FINANCEIRO' },
-                     { id: 'planejamento', label: 'Planejamento', icon: Target },
-                     { id: 'controle', label: 'Controle Diário', icon: CalendarDays },
-                     { id: 'despesas', label: 'Despesas', icon: Receipt },
-                     { id: 'metas', label: 'Metas', icon: SettingsIcon },
-                     { type: 'header', label: 'FERRAMENTAS' },
-                     { id: 'slots', label: 'Slots Radar', icon: Activity },
-                     { id: 'squad', label: 'Squad', icon: Users },
-                     { id: 'store', label: 'Loja Oficial', icon: ShoppingBag },
-                     { type: 'header', label: 'SISTEMA' },
-                     ...(isAdmin ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldCheck }] : []),
-                     { id: 'configuracoes', label: 'Ajustes', icon: SettingsIcon },
-                 ].map((item, index) => {
-                     if (item.type === 'header') return <div key={`header-${index}`} className="pt-4 pb-2 px-2"><p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{item.label}</p></div>;
-                     return (
-                         <button
-                            key={item.id}
-                            onClick={() => { setActiveView(item.id as ViewType); setMobileMenuOpen(false); }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative overflow-hidden ${activeView === item.id ? 'text-white font-bold bg-white/[0.03]' : 'text-gray-500 hover:text-white hover:bg-white/[0.02]'}`}
-                         >
-                             {activeView === item.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full shadow-[0_0_10px_rgba(112,0,255,0.5)]"></div>}
-                             <div className={`transition-transform duration-300 ${activeView === item.id ? 'translate-x-2 text-primary' : ''}`}><item.icon size={18} /></div>
-                             <span className={`text-sm md:hidden lg:block transition-transform duration-300 ${activeView === item.id ? 'translate-x-2' : ''}`}>{item.label}</span>
-                             {item.badge === 'NOVO' && <span className="ml-auto flex items-center gap-1.5 md:hidden lg:flex"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span></span><span className="text-[9px] font-bold text-orange-400 uppercase tracking-wider bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">NOVO</span></span>}
-                         </button>
-                     );
-                 })}
-             </div>
-             <div className="p-4 border-t border-white/5 hidden lg:block">
-                 {!isDemoMode ? (
-                     <button onClick={() => { if(confirm("Entrar no Modo Demonstração?")) { setIsDemoMode(true); setAll(generateDemoState(useStore.getState().config)); setCurrentUserKey('DEMO-USER-KEY'); setActiveView('dashboard'); } }} className="w-full mb-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-400 hover:text-white transition-all group uppercase tracking-wide">
-                         <Eye size={14} className="group-hover:text-amber-400 transition-colors" /> Modo Demonstração
-                     </button>
-                 ) : (
-                     <button onClick={() => { setIsDemoMode(false); window.location.reload(); }} className="w-full mb-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl p-3 flex items-center justify-center gap-2 text-[10px] font-bold text-red-400 hover:text-white transition-all group uppercase tracking-wide">
-                         <LogOut size={14} /> Sair do Demo
-                     </button>
-                 )}
-                 <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                     <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Licença Ativa</p>
-                     <p className="text-xs text-white font-mono truncate" title={currentUserKey}>{currentUserKey === 'TROPA-FREE' ? 'GRATUITA' : currentUserKey}</p>
-                 </div>
-             </div>
-        </nav>
+        <Sidebar 
+            activeView={activeView}
+            setActiveView={setActiveView}
+            mobileMenuOpen={mobileMenuOpen}
+            setMobileMenuOpen={setMobileMenuOpen}
+            isAdmin={isAdmin}
+            isDemoMode={isDemoMode}
+            currentUserKey={currentUserKey}
+            onLogout={handleLogout}
+            onEnterDemo={handleEnterDemo}
+            onExitDemo={handleExitDemo}
+        />
 
         <main ref={mainContentRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-background relative scroll-smooth p-4 lg:p-8">
             {spectatingData && (
@@ -472,21 +554,24 @@ function App() {
                     </div>
                 ))}
             </div>
-
-            {/* SE ESTIVER ESPECTANDO, PASSA O STATE FAKE VIA PROPS (Componentes devem suportar prioridade de props sobre store ou apenas usar store local se prop for undefined) */}
-            {/* Como os componentes agora usam useStore, o modo espectador precisa injetar dados na store temporariamente ou o design precisa mudar. 
-                SOLUÇÃO RÁPIDA: Se spectatingData existe, usamos ele. 
-                Os componentes abaixo foram atualizados para aceitar `forcedState` opcional ou usar o hook.
-            */}
-            {/* ATENÇÃO: Devido à restrição de não mudar muito os arquivos filhos além do necessário, a melhor abordagem é injetar os dados do espectador na Store principal temporariamente, mas impedir o salvamento.
-                Isso já é tratado pelo 'isDemoMode' ou 'readOnly'.
-                Vamos injetar o spectatingData no store se ele existir.
-            */}
             
             {activeView === 'dashboard' && <Dashboard forcedState={spectatingData?.data} privacyMode={privacyMode} />}
             {activeView === 'store' && <Store currentUserKey={currentUserKey} />}
             {activeView === 'sms' && <SmsRush notify={notify} />}
-            {activeView === 'planejamento' && <Planning forcedState={spectatingData?.data} navigateToDaily={(d) => { setActiveView('controle'); setCurrentDate(d); }} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
+            {activeView === 'planejamento' && <Planning 
+                forcedState={spectatingData?.data} 
+                navigateToDaily={(d) => { 
+                    // TOUR FIX: Força o avanço do passo antes de trocar a view
+                    if (tourOpen && tourStepIndex === 4) {
+                        setTourStepIndex(5);
+                    }
+                    setActiveView('controle'); 
+                    setCurrentDate(d); 
+                }} 
+                notify={notify} 
+                readOnly={!!spectatingData || isDemoMode} 
+                privacyMode={privacyMode} 
+            />}
             {activeView === 'controle' && <DailyControl forcedState={spectatingData?.data} currentDate={currentDate} setCurrentDate={setCurrentDate} notify={notify} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'despesas' && <Expenses forcedState={spectatingData?.data} readOnly={!!spectatingData || isDemoMode} privacyMode={privacyMode} />}
             {activeView === 'metas' && <Goals forcedState={spectatingData?.data} privacyMode={privacyMode} />}
@@ -501,9 +586,9 @@ function App() {
                     isOpen={tourOpen}
                     currentStepIndex={tourStepIndex}
                     setCurrentStepIndex={setTourStepIndex}
-                    onClose={() => setTourOpen(false)}
-                    onComplete={() => { setTourOpen(false); updateState({ onboarding: { ...onboarding, dismissed: true } }); }}
-                    onSkip={() => { setTourOpen(false); updateState({ onboarding: { ...onboarding, dismissed: true } }); }}
+                    onClose={handleTourDismiss}
+                    onComplete={finishTour}
+                    onSkip={finishTour}
                 />
             )}
         </main>

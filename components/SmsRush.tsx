@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Smartphone, RefreshCw, Search, Copy, X, LogIn, Wifi, Activity, ShoppingBag, Database, Download, Landmark, ExternalLink, Lock, ShieldCheck, CreditCard, Wallet, CloudLightning, XCircle, Star, Timer, Trash2, Server, CheckCircle2, ArrowRight, Zap, Info, Signal, MessageSquare, ChevronRight, LayoutList, Grid, Globe, Play, ToggleLeft, ToggleRight, Repeat } from 'lucide-react';
 
@@ -601,7 +600,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
         }, 4000); 
         
         return () => clearInterval(pollInterval);
-    }, [token, requestBridge, activeNumbers]); // Re-bind if activeNumbers changes isn't strictly necessary if using functional update, but safer here
+    }, [token, requestBridge, activeNumbers]); 
 
     useEffect(() => {
         if (!searchTerm.trim()) {
@@ -737,10 +736,10 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
     }
 
     return (
-        <div className="max-w-[1600px] mx-auto animate-fade-in pb-20 px-4 h-full flex flex-col">
+        <div className="max-w-[1600px] mx-auto animate-fade-in pb-20 px-4 h-full flex flex-col overflow-hidden">
             
             {/* HEADER TÁTICO (KPIs) - NOVO VISUAL */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 shrink-0">
                 {/* 1. Saldo & Status */}
                 <div className="bg-[#0c0818] rounded-2xl p-5 border border-white/10 flex flex-col justify-between shadow-lg relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform"><Wallet size={60}/></div>
@@ -752,7 +751,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></span>
                             </h2>
                         </div>
-                        <button onClick={refreshData} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><RefreshCw size={14}/></button>
+                        <button onClick={refreshData} aria-label="Atualizar saldo" className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><RefreshCw size={14}/></button>
                     </div>
                 </div>
 
@@ -778,16 +777,15 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 <div className="bg-[#0c0818] rounded-2xl p-5 border border-white/10 flex flex-col justify-center gap-3 shadow-lg">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-gray-400 flex items-center gap-2"><Copy size={14} /> Auto Copy</span>
-                        <button onClick={() => setAutoCopy(!autoCopy)} className={`${autoCopy ? 'text-emerald-400' : 'text-gray-600'} transition-colors`}>
+                        <button onClick={() => setAutoCopy(!autoCopy)} aria-label="Alternar cópia automática" className={`${autoCopy ? 'text-emerald-400' : 'text-gray-600'} transition-colors`}>
                             {autoCopy ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                         </button>
                     </div>
-                    {/* Add more controls here if needed */}
                 </div>
             </div>
 
             {/* NAVIGATION TABS */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-4 shrink-0">
                 <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                     <button 
                         onClick={() => setActiveTab('catalog')}
@@ -822,11 +820,11 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
             </div>
 
             {activeTab === 'catalog' ? (
-                <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[500px]">
+                <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden min-h-0">
                     
                     {/* LEFT: CATALOG GRID (Banks Only) */}
                     <div className="w-full lg:w-[400px] flex flex-col bg-[#0a0516] border border-white/5 rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
-                        <div className="p-4 border-b border-white/5 bg-black/20">
+                        <div className="p-4 border-b border-white/5 bg-black/20 shrink-0">
                             <div className="relative group">
                                 <Search className="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-indigo-400 transition-colors" size={16} />
                                 <input 
@@ -853,6 +851,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                 key={s.id}
                                                 onClick={() => buyNumber(s)}
                                                 disabled={isBuying}
+                                                aria-label={`Comprar número para ${s.name}`}
                                                 className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all text-center gap-2 group relative overflow-hidden min-h-[100px]
                                                     ${hasStock 
                                                         ? 'bg-gradient-to-br from-[#18181b] to-black border-white/5 hover:border-indigo-500/50 hover:shadow-[0_0_15px_rgba(79,70,229,0.15)]' 
@@ -876,11 +875,11 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                     </div>
 
                     {/* RIGHT: ACTIVE CARDS (Credit Card Style) */}
-                    <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative">
+                    <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative min-h-0">
                         {/* Background Grid */}
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none"></div>
                         
-                        <div className="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center z-10">
+                        <div className="p-4 border-b border-white/5 bg-black/20 flex justify-between items-center z-10 shrink-0">
                             <h3 className="text-sm font-bold text-white flex items-center gap-2">
                                 <Activity size={16} className="text-emerald-400" /> Monitoramento Ativo
                             </h3>
@@ -917,15 +916,16 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                             <h3 className="text-lg font-black text-white tracking-tight">{num.service_name}</h3>
                                                             <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded border border-white/10 text-gray-400 font-mono">ID {num.id}</span>
                                                         </div>
-                                                        <div 
-                                                            className="flex items-center gap-3 cursor-pointer group/number w-fit"
+                                                        <button 
+                                                            className="flex items-center gap-3 cursor-pointer group/number w-fit hover:bg-white/5 px-2 py-1 -ml-2 rounded-lg transition-colors"
                                                             onClick={() => {navigator.clipboard.writeText(num.number); notify('Número copiado!', 'success')}}
+                                                            aria-label="Copiar número de telefone"
                                                         >
                                                             <span className="text-2xl font-mono font-bold text-white/90 group-hover/number:text-indigo-400 transition-colors tracking-widest">
                                                                 {num.number}
                                                             </span>
                                                             <Copy size={14} className="text-gray-600 group-hover/number:text-white" />
-                                                        </div>
+                                                        </button>
                                                     </div>
                                                 </div>
 
@@ -933,12 +933,13 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                     {num.status === 'RECEIVED' ? (
                                                         <div className="flex flex-col items-end animate-in fade-in zoom-in duration-500">
                                                             <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mb-1">Código de Acesso</span>
-                                                            <div 
+                                                            <button 
                                                                 onClick={() => {navigator.clipboard.writeText(num.code || ''); notify('Código Copiado!', 'success')}}
-                                                                className="text-5xl font-mono font-black text-emerald-400 tracking-widest drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] cursor-pointer hover:scale-105 transition-transform"
+                                                                className="text-5xl font-mono font-black text-emerald-400 tracking-widest drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] cursor-pointer hover:scale-105 transition-transform bg-transparent border-none p-0"
+                                                                aria-label="Copiar código SMS"
                                                             >
                                                                 {num.code}
-                                                            </div>
+                                                            </button>
                                                         </div>
                                                     ) : num.status === 'CANCELED' ? (
                                                         <span className="text-red-500 font-bold text-lg flex items-center gap-2 uppercase tracking-widest border border-red-500/30 px-4 py-2 rounded-lg bg-red-500/10">
@@ -964,7 +965,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                 <div className="flex gap-2">
                                                     {num.status === 'WAITING' && (
                                                         isLocked ? (
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-500 cursor-not-allowed">
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-500 cursor-not-allowed" title="Aguardando tempo mínimo da operadora">
                                                                 <Timer size={14} />
                                                                 <span className="text-xs font-mono">{remainingTime}s</span>
                                                             </div>
@@ -972,6 +973,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                             <button 
                                                                 onClick={() => cancelNumber(num.id)}
                                                                 disabled={isCancelling}
+                                                                aria-label="Cancelar número"
                                                                 className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all text-xs font-bold hover:shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                                                             >
                                                                 {isCancelling ? <RefreshCw className="animate-spin" size={14} /> : <XCircle size={14} />}
@@ -983,6 +985,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                     {(num.status === 'RECEIVED' || num.status === 'CANCELED') && (
                                                         <button 
                                                             onClick={() => removeCard(num.id)}
+                                                            aria-label="Remover do histórico"
                                                             className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition-all text-xs font-bold"
                                                         >
                                                             <Trash2 size={14} /> LIMPAR
@@ -994,6 +997,7 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                                                 {(num.status === 'RECEIVED' || num.status === 'CANCELED') && (
                                                     <button 
                                                         onClick={() => buyNumber({ id: num.service_id, name: num.service_name, price: 0, quantity: 1 })} // Price ignored in buyNumber logic from static DB usually
+                                                        aria-label="Comprar novamente"
                                                         className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg hover:shadow-indigo-500/20"
                                                     >
                                                         <Repeat size={14} /> COMPRAR NOVAMENTE
@@ -1009,21 +1013,21 @@ const SmsRush: React.FC<Props> = ({ notify }) => {
                 </div>
             ) : (
                 // --- VAULT VIEW ---
-                <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
-                    <div className="p-6 border-b border-white/5 bg-black/20 flex justify-between items-center">
+                <div className="flex-1 bg-[#0a0516] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-2xl min-h-0">
+                    <div className="p-6 border-b border-white/5 bg-black/20 flex justify-between items-center shrink-0">
                         <div>
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
                                 <Database size={20} className="text-emerald-400" /> Cofre de Dados
                             </h3>
                             <p className="text-xs text-gray-400 mt-1">Todos os SMS recebidos são salvos aqui automaticamente.</p>
                         </div>
-                        <button onClick={exportPixKeys} className="bg-white hover:bg-gray-200 text-black px-6 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 shadow-lg">
+                        <button onClick={exportPixKeys} aria-label="Exportar chaves para TXT" className="bg-white hover:bg-gray-200 text-black px-6 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 shadow-lg">
                             <Download size={16} /> Exportar TXT
                         </button>
                     </div>
-                    <div className="flex-1 overflow-auto">
+                    <div className="flex-1 overflow-auto custom-scrollbar">
                         <table className="w-full text-left text-sm text-gray-400">
-                            <thead className="bg-black/40 text-gray-500 uppercase font-bold sticky top-0 text-xs">
+                            <thead className="bg-black/40 text-gray-500 uppercase font-bold sticky top-0 text-xs z-10 backdrop-blur-sm">
                                 <tr>
                                     <th className="px-8 py-4">Banco</th>
                                     <th className="px-8 py-4">Número</th>
