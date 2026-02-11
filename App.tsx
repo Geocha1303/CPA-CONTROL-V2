@@ -190,7 +190,9 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
         setError('');
         
         const rawKey = inputKey.trim().toUpperCase();
-        const isMasterKey = rawKey === 'ADMIN-GROCHA013';
+        
+        // --- SEGURANÇA ATUALIZADA: Validação 100% via Banco de Dados ---
+        // A chave mestra não é mais verificada no front-end.
 
         try {
             const { data, error } = await supabase
@@ -208,7 +210,8 @@ const LoginScreen = ({ onLogin, onDemo, autoLoginCheck }: { onLogin: (key: strin
                  throw new Error('Acesso suspenso administrativamente.');
             }
 
-            if (!isMasterKey) {
+            // Se NÃO for admin (verificado no banco), aplica trava de HWID
+            if (!data.is_admin) {
                 if (data.hwid && data.hwid !== deviceId) {
                     throw new Error('Chave vinculada a outro dispositivo. Solicite reset ao suporte.');
                 }

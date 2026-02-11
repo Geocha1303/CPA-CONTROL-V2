@@ -1,13 +1,17 @@
+
 import React, { useRef } from 'react';
 import { AppState } from '../types';
 import { mergeDeep } from '../utils'; // Importado de utils
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle } from 'lucide-react';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle } from 'lucide-react';
 
 interface Props {
   state: AppState;
   updateState: (s: Partial<AppState>) => void;
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
+
+// --- CONFIGURE SEU NÚMERO AQUI (DDD + NÚMERO) ---
+const SUPPORT_NUMBER = "5528999876428"; 
 
 const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,8 +219,10 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                 </div>
             </div>
 
-            {/* Coluna 2: Backup */}
+            {/* Coluna 2: Backup & Suporte */}
             <div className="space-y-8">
+                
+                {/* BACKUP CARD */}
                 <div className="glass-card rounded-2xl overflow-hidden border border-emerald-500/20 h-fit shadow-2xl shadow-emerald-900/10">
                     <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-900/20 to-transparent">
                         <h3 className="font-bold text-emerald-400 flex items-center gap-2"><ShieldCheck size={20} /> Cofre de Dados</h3>
@@ -259,6 +265,38 @@ const Settings: React.FC<Props> = ({ state, updateState, notify }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* SUPORTE WHATSAPP CARD */}
+                <div className="glass-card rounded-2xl overflow-hidden border border-emerald-500/30 shadow-lg shadow-emerald-500/10 relative group">
+                    <div className="absolute inset-0 bg-emerald-500/5 opacity-50 group-hover:opacity-80 transition-opacity"></div>
+                    <div className="p-6 border-b border-white/5 relative z-10 flex justify-between items-center">
+                        <h3 className="font-bold text-emerald-400 flex items-center gap-2">
+                            <MessageCircle size={20} /> Central de Suporte
+                        </h3>
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_#10b981]"></div>
+                    </div>
+                    <div className="p-6 text-center relative z-10">
+                        <div className="mb-6 bg-white/5 rounded-xl p-4 border border-white/10 backdrop-blur-sm">
+                            <p className="text-base text-white font-bold mb-2 flex items-center justify-center gap-2">
+                                <AlertTriangle size={16} className="text-emerald-400" />
+                                Encontrou algum BUG?
+                            </p>
+                            <p className="text-xs text-gray-300 leading-relaxed font-medium">
+                                Entre em contato diretamente com o desenvolvedor para suporte prioritário.
+                            </p>
+                        </div>
+                        <a
+                            href={`https://wa.me/${SUPPORT_NUMBER}?text=Olá,%20encontrei%20um%20bug%20ou%20tenho%20uma%20dúvida%20sobre%20o%20CPA%20Gateway.`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-4 rounded-xl shadow-xl shadow-emerald-900/30 transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:scale-95 group/btn"
+                        >
+                            <MessageCircle size={20} className="group-hover/btn:scale-110 transition-transform" /> 
+                            CHAMAR NO WHATSAPP
+                        </a>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
