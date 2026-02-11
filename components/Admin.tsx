@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Key, Copy, Check, Database, Upload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorOff, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag } from 'lucide-react';
+import { Key, Copy, Check, Database, Upload, RefreshCw, Power, Search, List, ShieldCheck, Trash2, User, MonitorOff, Link, Unlink, Activity, Radio, Cpu, Wifi, WifiOff, RotateCcw, Zap, Crown, Megaphone, Send, Globe, Lock, Smartphone, ShoppingBag, FileJson, Download, X, Eye } from 'lucide-react';
+import { AppState } from '../types';
+import { formatarBRL } from '../utils';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -58,6 +60,17 @@ const Admin: React.FC<Props> = ({ notify }) => {
   // State Analytics
   const [storeAnalytics, setStoreAnalytics] = useState<StoreAnalyticsItem[]>([]);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  // --- INSPECTOR STATE (NOVO) ---
+  const [inspectModalOpen, setInspectModalOpen] = useState(false);
+  const [inspectedData, setInspectedData] = useState<{
+      key: string;
+      updated_at: string;
+      data: AppState;
+      stats: { days: number; totalInvest: number; totalProfit: number };
+  } | null>(null);
+  const [isLoadingInspect, setIsLoadingInspect] = useState(false);
+  const [manualInspectKey, setManualInspectKey] = useState('');
 
   // --- FUNCTIONS ---
 
@@ -354,6 +367,69 @@ const Admin: React.FC<Props> = ({ notify }) => {
       }
   };
 
+  // --- INSPECT LOGIC (NEW) ---
+  const handleInspect = async (key: string) => {
+      setIsLoadingInspect(true);
+      setInspectModalOpen(true);
+      setInspectedData(null);
+
+      try {
+          const { data, error } = await supabase
+              .from('user_data')
+              .select('raw_json, updated_at')
+              .eq('access_key', key)
+              .single();
+
+          if (error) throw error;
+
+          if (data && data.raw_json) {
+              const appData = data.raw_json as AppState;
+              
+              // Calculate simple stats
+              const days = Object.keys(appData.dailyRecords || {}).length;
+              let totalInvest = 0;
+              let totalProfit = 0;
+              
+              Object.values(appData.dailyRecords || {}).forEach(day => {
+                  if(day.accounts) {
+                      day.accounts.forEach(acc => {
+                          totalInvest += (acc.deposito||0) + (acc.redeposito||0);
+                          // Estimativa bruta
+                          totalProfit += ((acc.saque||0) + ((acc.ciclos||0) * (appData.config.valorBonus||20))) - ((acc.deposito||0) + (acc.redeposito||0));
+                      });
+                  }
+              });
+
+              setInspectedData({
+                  key,
+                  updated_at: data.updated_at,
+                  data: appData,
+                  stats: { days, totalInvest, totalProfit }
+              });
+          } else {
+              notify("Nenhum dado encontrado para esta chave na nuvem.", "info");
+              setInspectModalOpen(false);
+          }
+      } catch (err: any) {
+          notify(`Erro ao inspecionar: ${err.message}`, "error");
+          setInspectModalOpen(false);
+      } finally {
+          setIsLoadingInspect(false);
+      }
+  };
+
+  const handleDownloadBackup = () => {
+      if (!inspectedData) return;
+      const dataStr = JSON.stringify(inspectedData.data, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      const exportFileDefaultName = `BACKUP_${inspectedData.key}_${new Date().toISOString().slice(0,10)}.json`;
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      notify('Backup baixado com sucesso!', 'success');
+  };
+
   // --- RENDER ---
   const filteredKeys = keysList.filter(k => 
       k.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -409,8 +485,35 @@ const Admin: React.FC<Props> = ({ notify }) => {
         {activeTab === 'keys' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 
-                {/* COLUMN 1: GENERATOR & BROADCAST */}
+                {/* COLUMN 1: TOOLS */}
                 <div className="space-y-8">
+                    
+                    {/* NEW: MANUAL INSPECTOR */}
+                    <div className="gateway-card rounded-2xl p-6 border border-blue-500/20 bg-[#080a10]">
+                        <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                            <Database size={20} className="text-blue-400" /> Recuperação / Inspector
+                        </h3>
+                        <p className="text-gray-400 text-xs mb-4">
+                            Busque dados brutos de qualquer chave na nuvem, mesmo se não estiver na lista.
+                        </p>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Digite a chave (Ex: ADMIN-GROCHA013)..."
+                                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none text-sm font-mono font-bold"
+                                value={manualInspectKey}
+                                onChange={(e) => setManualInspectKey(e.target.value)}
+                            />
+                            <button 
+                                onClick={() => handleInspect(manualInspectKey)}
+                                disabled={!manualInspectKey}
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+                            >
+                                <Search size={20} />
+                            </button>
+                        </div>
+                    </div>
+
                     {/* KEY GENERATOR */}
                     <div className="gateway-card rounded-2xl p-6 border border-indigo-500/20 bg-[#0a0614]">
                         <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">
@@ -575,6 +678,15 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                         )}
                                         
                                         <div className="flex gap-1">
+                                            {/* BUTTON INSPECT */}
+                                            <button 
+                                                onClick={() => handleInspect(key.key)}
+                                                className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white transition-all"
+                                                title="Inspecionar Backup (Ver Dados)"
+                                            >
+                                                <Eye size={14} />
+                                            </button>
+
                                             <button 
                                                 onClick={() => toggleStatus(key.id, key.active)}
                                                 className={`p-2 rounded-lg border transition-all ${key.active ? 'bg-emerald-500/10 border-emerald-500/20 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 hover:text-emerald-400'}`}
@@ -603,6 +715,72 @@ const Admin: React.FC<Props> = ({ notify }) => {
                                 </div>
                             ))
                         )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* --- MODAL INSPECTOR --- */}
+        {inspectModalOpen && (
+            <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-[#0f0a1e] border border-blue-500/30 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500"></div>
+                    
+                    <div className="flex justify-between items-start mb-6 shrink-0">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Database size={24} className="text-blue-400" /> Inspetor de Backup
+                            </h3>
+                            <p className="text-sm text-gray-400">Visualização direta dos dados na nuvem.</p>
+                        </div>
+                        <button onClick={() => setInspectModalOpen(false)} className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-white/5"><X size={20}/></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-black/40 rounded-xl p-4 border border-white/5 font-mono text-xs text-gray-300">
+                        {isLoadingInspect ? (
+                            <div className="flex items-center justify-center h-40">
+                                <RefreshCw className="animate-spin text-blue-500 mr-2" /> Carregando backup...
+                            </div>
+                        ) : inspectedData ? (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+                                        <p className="text-[10px] text-blue-300 font-bold uppercase">Última Sincronização</p>
+                                        <p className="text-white font-bold">{new Date(inspectedData.updated_at).toLocaleString()}</p>
+                                    </div>
+                                    <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                                        <p className="text-[10px] text-emerald-300 font-bold uppercase">Resumo Financeiro</p>
+                                        <p className="text-white font-bold">Invest: {formatarBRL(inspectedData.stats.totalInvest)} | Lucro: {formatarBRL(inspectedData.stats.totalProfit)}</p>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">JSON RAW PREVIEW (Topo)</p>
+                                    <pre className="whitespace-pre-wrap break-all text-[10px] text-gray-400 leading-relaxed max-h-60 overflow-hidden relative">
+                                        {JSON.stringify(inspectedData.data, null, 2).slice(0, 1500)}...
+                                        <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-black/80 to-transparent"></div>
+                                    </pre>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-center text-gray-500">Dados indisponíveis.</p>
+                        )}
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3 shrink-0">
+                        <button 
+                            onClick={() => setInspectModalOpen(false)}
+                            className="px-4 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                            Fechar
+                        </button>
+                        <button 
+                            onClick={handleDownloadBackup}
+                            disabled={!inspectedData}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-900/20 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Download size={16} /> Baixar JSON de Segurança
+                        </button>
                     </div>
                 </div>
             </div>
