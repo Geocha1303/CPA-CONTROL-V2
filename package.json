@@ -1,7 +1,7 @@
 {
   "name": "cpa-gateway-pro",
   "private": true,
-  "version": "3.8.0",
+  "version": "3.8.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "react-dom": "^18.2.0",
     "lucide-react": "^0.344.0",
     "recharts": "^2.12.0",
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
