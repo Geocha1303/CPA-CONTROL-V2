@@ -14,12 +14,11 @@ import {
   Cloud,
   Download,
   Upload,
-  Smartphone,
   Monitor,
   ArrowRightLeft
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
-import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, deepEqual, calculateDayMetrics, formatarBRL } from './utils';
+import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, calculateDayMetrics, formatarBRL } from './utils';
 import { supabase } from './supabaseClient';
 import { useStore } from './store';
 
@@ -39,6 +38,20 @@ import TourGuide, { TourStep } from './components/TourGuide';
 import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
 import Sidebar from './components/Sidebar';
+
+// Função auxiliar simples para comparação profunda (Deep Equal)
+// Adicionada aqui localmente ou garantida no utils para evitar erro de importação se não existir no utils atual
+const deepEqual = (obj1: any, obj2: any): boolean => {
+    if (obj1 === obj2) return true;
+    if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+    if (keys1.length !== keys2.length) return false;
+    for (let key of keys1) {
+        if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) return false;
+    }
+    return true;
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -134,12 +147,12 @@ function App() {
                           
                           // Se temos dados locais E dados na nuvem, comparamos com DEEP EQUAL
                           if (cloudResult && cloudResult.data) {
-                              // Se os objetos forem estruturalmente diferentes, mesmo que em ordens diferentes
+                              // Se os objetos forem estruturalmente diferentes
                               if (!deepEqual(localData, cloudResult.data)) {
                                   console.log("Diferença estrutural detectada entre Local e Nuvem na inicialização.");
                                   setPendingCloudData({
                                       data: cloudResult.data,
-                                      time: new Date(cloudResult.updatedAt).toLocaleString() // Data completa na inicialização
+                                      time: new Date(cloudResult.updatedAt).toLocaleString()
                                   });
                               }
                           }
@@ -173,7 +186,7 @@ function App() {
       restoreSession();
   }, []);
 
-  // --- REALTIME SYNC LISTENER (NOVO) ---
+  // --- REALTIME SYNC LISTENER ---
   useEffect(() => {
       if (!isAuthenticated || !currentUserKey || isDemoMode) return;
 
@@ -191,11 +204,9 @@ function App() {
                   const newUpdatedAt = payload.new.updated_at;
                   
                   // Verifica se os dados são realmente diferentes do atual usando Deep Equal
-                  // Evita falsos positivos por ordem de chaves
                   const currentData = useStore.getState();
 
                   if (!deepEqual(currentData, newCloudData)) {
-                      // DETECTOU ALTERAÇÃO EXTERNA REAL (Outro dispositivo salvou dados diferentes)
                       setPendingCloudData({
                           data: newCloudData,
                           time: new Date(newUpdatedAt).toLocaleTimeString()
@@ -233,7 +244,6 @@ function App() {
           notify("Dados do PC atualizados com a versão da nuvem.", "success");
       } else {
           // Opção B: Manter Local (Sobrescrever Nuvem)
-          // Força um save imediato para a nuvem com os dados atuais
           const currentState = useStore.getState();
           try {
               await supabase.from('user_data').upsert({
@@ -284,8 +294,6 @@ function App() {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
-        // Se houver um conflito pendente, NÃO salva automaticamente para evitar sobrescrever sem querer
-        // a menos que o usuário explicitamente resolva.
         if (pendingCloudData) return;
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -294,8 +302,6 @@ function App() {
 
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
-        // REMOVIDA A RESTRIÇÃO "currentUserKey !== 'TROPA-FREE'"
-        // Agora todos os usuários autenticados (não-admin, não-demo) salvam na nuvem
         if (!isAdmin && currentUserKey) {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
@@ -485,7 +491,7 @@ function App() {
           />
       )}
 
-      {/* --- SYNC CONFLICT MODAL --- */}
+      {/* --- SYNC CONFLICT MODAL (VERSÃO DETALHADA) --- */}
       {pendingCloudData && (
           <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
               <div className="bg-[#0f0a1e] border border-amber-500/50 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">
