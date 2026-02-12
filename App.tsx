@@ -265,7 +265,9 @@ function App() {
 
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
-        if (!isAdmin && currentUserKey && currentUserKey !== 'TROPA-FREE') {
+        // REMOVIDA A RESTRIÇÃO "currentUserKey !== 'TROPA-FREE'"
+        // Agora todos os usuários autenticados (não-admin, não-demo) salvam na nuvem
+        if (!isAdmin && currentUserKey) {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
                 try {

@@ -98,8 +98,8 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
 
   const handleForceBackup = async () => {
       const key = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!key || key.includes('FREE')) {
-          notify('Backup em nuvem indisponível para usuários gratuitos.', 'info');
+      if (!key) {
+          notify('Erro: Chave de acesso não encontrada.', 'error');
           return;
       }
       
