@@ -10,7 +10,12 @@ import {
   Eye,
   EyeOff,
   X,
-  Megaphone
+  Megaphone,
+  Cloud,
+  Download,
+  Upload,
+  Smartphone,
+  Monitor
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY } from './utils';
@@ -59,6 +64,7 @@ function App() {
   
   const [lastSaved, setLastSaved] = useState<Date>(new Date());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string>(''); 
   const syncTimeoutRef = useRef<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -67,13 +73,16 @@ function App() {
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [systemAlert, setSystemAlert] = useState<{title: string, message: string} | null>(null);
 
+  // --- SYNC CONFLICT STATE ---
+  const [pendingCloudData, setPendingCloudData] = useState<{data: AppState, time: string} | null>(null);
+
   const mainContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
       if (mainContentRef.current) mainContentRef.current.scrollTo(0, 0);
   }, [activeView]);
 
-  // Função para carregar da nuvem com timestamp
+  // Função para carregar da nuvem
   const loadCloudData = async (key: string): Promise<{ data: AppState, updatedAt: string } | null> => {
       try {
           const { data, error } = await supabase
@@ -111,7 +120,6 @@ function App() {
                       
                       const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
                       let localData = null;
-
                       if (localString) {
                           try { localData = JSON.parse(localString); } catch(e) {}
                       }
@@ -119,12 +127,17 @@ function App() {
                       const cloudResult = await loadCloudData(savedKey);
                       let finalData = useStore.getState();
 
-                      if (localData && cloudResult) {
-                          finalData = mergeDeep(finalData, localData);
-                      } else if (localData) {
+                      // LÓGICA REVERTIDA E SIMPLIFICADA DE CARREGAMENTO
+                      // Carrega o local primeiro para velocidade, depois verifica nuvem
+                      if (localData) {
                           finalData = mergeDeep(finalData, localData);
                       } else if (cloudResult) {
-                          finalData = cloudResult.data;
+                          finalData = mergeDeep(finalData, cloudResult.data);
+                      }
+
+                      if (cloudResult && cloudResult.updatedAt) {
+                          const dateObj = new Date(cloudResult.updatedAt);
+                          setLastCloudSyncTime(dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
                       }
 
                       if (data.owner_name && (!finalData.config.userName || finalData.config.userName === 'OPERADOR')) {
@@ -147,6 +160,67 @@ function App() {
       restoreSession();
   }, []);
 
+  // --- REALTIME SYNC LISTENER (NOVO) ---
+  useEffect(() => {
+      if (!isAuthenticated || !currentUserKey || isDemoMode) return;
+
+      const channel = supabase.channel(`sync-${currentUserKey}`)
+          .on(
+              'postgres_changes',
+              {
+                  event: 'UPDATE',
+                  schema: 'public',
+                  table: 'user_data',
+                  filter: `access_key=eq.${currentUserKey}`
+              },
+              (payload) => {
+                  const newCloudData = payload.new.raw_json as AppState;
+                  const newUpdatedAt = payload.new.updated_at;
+                  
+                  // Verifica se os dados são realmente diferentes do atual
+                  // Evita abrir o modal se foi este próprio dispositivo que salvou
+                  const currentStr = JSON.stringify(useStore.getState());
+                  const newStr = JSON.stringify(newCloudData);
+
+                  if (currentStr !== newStr) {
+                      // DETECTOU ALTERAÇÃO EXTERNA (Outro dispositivo salvou)
+                      setPendingCloudData({
+                          data: newCloudData,
+                          time: new Date(newUpdatedAt).toLocaleTimeString()
+                      });
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
+  }, [isAuthenticated, currentUserKey, isDemoMode]);
+
+  const handleResolveConflict = async (choice: 'cloud' | 'local') => {
+      if (choice === 'cloud' && pendingCloudData) {
+          // Opção A: Aceitar Nuvem (Atualizar PC)
+          setAll(pendingCloudData.data);
+          setLastCloudSyncTime(pendingCloudData.time);
+          notify("Dados atualizados com a versão da nuvem.", "success");
+      } else {
+          // Opção B: Manter Local (Sobrescrever Nuvem)
+          // Força um save imediato para a nuvem com os dados atuais
+          const currentState = useStore.getState();
+          try {
+              await supabase.from('user_data').upsert({
+                  access_key: currentUserKey,
+                  raw_json: currentState,
+                  updated_at: new Date().toISOString()
+              });
+              notify("Sua versão local sobrescreveu a nuvem.", "success");
+          } catch (e) {
+              notify("Erro ao forçar atualização na nuvem.", "error");
+          }
+      }
+      setPendingCloudData(null);
+  };
+
+  // --- PRESENCE (ONLINE USERS) ---
   useEffect(() => {
       if (!isAuthenticated || !currentUserKey || !isLoaded || isDemoMode) return;
 
@@ -170,11 +244,21 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey, isLoaded, config.userName, isAdmin, isDemoMode]);
 
+  const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
+  }, []);
+
   // --- AUTO-SAVE ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
+        // Se houver um conflito pendente, NÃO salva automaticamente para evitar sobrescrever sem querer
+        // a menos que o usuário explicitamente resolva.
+        if (pendingCloudData) return;
+
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
         setLastSaved(new Date());
@@ -194,9 +278,12 @@ function App() {
                         }, { onConflict: 'access_key' });
                     
                     if(error) throw error;
+                    
                     setSaveStatus('saved');
-                    setTimeout(() => setSaveStatus('idle'), 2000);
-                } catch (err) {
+                    setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                    setTimeout(() => setSaveStatus('idle'), 3000);
+                } catch (err: any) {
+                    console.error("Backup Cloud Error:", err);
                     setSaveStatus('error');
                 }
             }, 3000);
@@ -206,20 +293,15 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode]);
+  }, [isAuthenticated, isLoaded, isAdmin, currentUserKey, isDemoMode, pendingCloudData]);
 
   // --- INTEGRIDADE ---
   useEffect(() => {
     if (!isLoaded) return;
-    
-    // Gera TAG única se não existir
     if(!config.userTag) {
         updateState({ config: { ...config, userTag: generateUserTag() } });
     }
-
-    // Gerencia estado do Onboarding (Tutorial) - Lógica Simplificada
     if (!onboarding) {
-         // Verifica se o usuário já possui histórico de dados (se tem dados, pula o tour)
          const hasDailyData = fullState.dailyRecords && Object.keys(fullState.dailyRecords).length > 0;
          const hasPlanData = fullState.generator.plan && fullState.generator.plan.length > 0;
          const isExistingUser = hasDailyData || hasPlanData;
@@ -252,150 +334,61 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey]);
 
-  // --- TOUR LOGIC & AUTO-ADVANCE ---
+  // --- TOUR LOGIC ---
   useEffect(() => {
-      // Inicia Tour se necessário
       if (isAuthenticated && isLoaded && onboarding && onboarding.dismissed === false && !tourOpen) {
           setTourOpen(true);
       }
   }, [isAuthenticated, isLoaded, onboarding]);
 
-  // Effect para avançar automaticamente o Tour quando o usuário completa a ação
   useEffect(() => {
       if (!tourOpen) return;
-
       const currentStep = tourSteps[tourStepIndex];
-      
-      // Passo 3: Esperando gerar plano
       if (tourStepIndex === 3 && currentStep.targetId === 'tour-plan-generate') {
           if (fullState.generator.plan.length > 0) {
-              const timer = setTimeout(() => setTourStepIndex(4), 1500); // Delay maior para ver o resultado
+              const timer = setTimeout(() => setTourStepIndex(4), 1500); 
               return () => clearTimeout(timer);
           }
       }
-
-      // Passo 6: Esperando registro no controle
       if (tourStepIndex === 6 && currentStep.targetId === 'daily-add-btn') {
           const today = getHojeISO();
           if (fullState.dailyRecords[today]?.accounts?.length > 0) {
-              const timer = setTimeout(() => setTourStepIndex(7), 1500); // Delay maior
+              const timer = setTimeout(() => setTourStepIndex(7), 1500);
               return () => clearTimeout(timer);
           }
       }
-
   }, [tourOpen, tourStepIndex, fullState.generator.plan, fullState.dailyRecords, activeView]); 
 
-  // --- FUNÇÃO DE FINALIZAÇÃO E LIMPEZA (Para o botão FINALIZAR) ---
   const finishTour = () => {
       setTourOpen(false);
-      
       const currentState = useStore.getState();
-      
       const newState = {
           ...currentState,
-          onboarding: { 
-              ...(currentState.onboarding || {}), 
-              dismissed: true 
-          },
-          // FORÇA OBJETO VAZIO para limpar dados de teste
+          onboarding: { ...(currentState.onboarding || {}), dismissed: true },
           dailyRecords: {}, 
-          generator: { 
-              ...currentState.generator, 
-              plan: [], 
-              history: [], 
-              lotWithdrawals: {}, 
-              customLotSizes: {} 
-          }
+          generator: { ...currentState.generator, plan: [], history: [], lotWithdrawals: {}, customLotSizes: {} }
       };
-
       setAll(newState);
       notify("Tutorial concluído! Sistema limpo para uso real.", "success");
       setActiveView('dashboard');
   };
 
-  // --- NOVA FUNÇÃO PARA O BOTÃO X (Apenas fecha e não mostra mais) ---
   const handleTourDismiss = () => {
       setTourOpen(false);
-      // Salva no estado que o usuário dispensou, mas NÃO apaga os dados (caso tenha feito algo útil)
-      // Se quiser apagar dados também, pode chamar finishTour, mas geralmente 'X' é só fechar.
-      // Vou manter apenas a flag dismissed = true para garantir que não volte.
       const currentOnboarding = useStore.getState().onboarding || { steps: {}, dismissed: false };
-      updateState({
-          onboarding: { ...currentOnboarding, dismissed: true }
-      });
+      updateState({ onboarding: { ...currentOnboarding, dismissed: true } });
   };
 
   const tourSteps: TourStep[] = [
-      { 
-          targetId: 'dashboard', 
-          title: 'Inicialização do Sistema', 
-          content: 'Bem-vindo ao CPA Gateway Pro. Vou guiá-lo na configuração inicial do seu ambiente de trabalho. Clique em "PRÓXIMO" para começar.', 
-          view: 'dashboard', 
-          position: 'right' 
-      },
-      { 
-          targetId: 'tour-settings-name', 
-          title: 'Credencial de Operador', 
-          content: 'Digite seu nome ou apelido no campo destacado. Quando terminar de digitar, clique em "PRÓXIMO" abaixo.', 
-          view: 'configuracoes', 
-          position: 'bottom',
-          action: () => setActiveView('configuracoes'),
-          waitForAction: false 
-      },
-      { 
-          targetId: 'planejamento', 
-          title: 'Módulo de Estratégia', 
-          content: 'Identidade confirmada. Agora vamos ao coração do sistema: o Planejamento. Aqui você define quanto vai movimentar.', 
-          view: 'planejamento', 
-          action: () => setActiveView('planejamento'), 
-          position: 'right' 
-      },
-      { 
-          targetId: 'tour-plan-generate', 
-          title: 'Gerador de Lotes', 
-          content: 'O sistema cria valores inteligentes para evitar padrões. Clique em "GERAR PLANO" para criar sua primeira lista de trabalho.', 
-          view: 'planejamento', 
-          position: 'top',
-          waitForAction: true // TRAVA AQUI
-      },
-      { 
-          targetId: 'tour-lot-send-1', 
-          title: 'Execução de Lote', 
-          content: 'Plano gerado! Clique no botão "ENVIAR" do primeiro lote para processar os dados e registrá-los no financeiro.', 
-          view: 'planejamento', 
-          position: 'bottom',
-          waitForAction: true // TRAVA AQUI: Obriga clicar em enviar
-      },
-      { 
-          targetId: 'controle', 
-          title: 'Livro Caixa', 
-          content: 'Os dados foram enviados com sucesso! Esta é a tela de Controle Diário, onde seus registros financeiros ficam salvos.', 
-          view: 'controle', 
-          // Action removida pois o passo anterior já navega para cá
-          position: 'right' 
-      },
-      { 
-          targetId: 'daily-add-btn', 
-          title: 'Registro Manual', 
-          content: 'Além dos lotes automáticos, você pode lançar entradas avulsas. Clique em "NOVO REGISTRO" para adicionar uma entrada teste agora.', 
-          view: 'controle', 
-          position: 'left',
-          waitForAction: true // TRAVA AQUI
-      },
-      { 
-          targetId: 'tour-daily-table', 
-          title: 'Operação Iniciada', 
-          content: 'Excelente. Você já sabe o fluxo básico: Planejar > Executar > Registrar. Ao clicar em FINALIZAR, limparei esses dados de teste.', 
-          view: 'controle', 
-          position: 'top' 
-      }
+      { targetId: 'dashboard', title: 'Inicialização do Sistema', content: 'Bem-vindo ao CPA Gateway Pro. Vou guiá-lo na configuração inicial do seu ambiente de trabalho. Clique em "PRÓXIMO" para começar.', view: 'dashboard', position: 'right' },
+      { targetId: 'tour-settings-name', title: 'Credencial de Operador', content: 'Digite seu nome ou apelido no campo destacado. Quando terminar de digitar, clique em "PRÓXIMO" abaixo.', view: 'configuracoes', position: 'bottom', action: () => setActiveView('configuracoes'), waitForAction: false },
+      { targetId: 'planejamento', title: 'Módulo de Estratégia', content: 'Identidade confirmada. Agora vamos ao coração do sistema: o Planejamento. Aqui você define quanto vai movimentar.', view: 'planejamento', action: () => setActiveView('planejamento'), position: 'right' },
+      { targetId: 'tour-plan-generate', title: 'Gerador de Lotes', content: 'O sistema cria valores inteligentes para evitar padrões. Clique em "GERAR PLANO" para criar sua primeira lista de trabalho.', view: 'planejamento', position: 'top', waitForAction: true },
+      { targetId: 'tour-lot-send-1', title: 'Execução de Lote', content: 'Plano gerado! Clique no botão "ENVIAR" do primeiro lote para processar os dados e registrá-los no financeiro.', view: 'planejamento', position: 'bottom', waitForAction: true },
+      { targetId: 'controle', title: 'Livro Caixa', content: 'Os dados foram enviados com sucesso! Esta é a tela de Controle Diário, onde seus registros financeiros ficam salvos.', view: 'controle', position: 'right' },
+      { targetId: 'daily-add-btn', title: 'Registro Manual', content: 'Além dos lotes automáticos, você pode lançar entradas avulsas. Clique em "NOVO REGISTRO" para adicionar uma entrada teste agora.', view: 'controle', position: 'left', waitForAction: true },
+      { targetId: 'tour-daily-table', title: 'Operação Iniciada', content: 'Excelente. Você já sabe o fluxo básico: Planejar > Executar > Registrar. Ao clicar em FINALIZAR, limparei esses dados de teste.', view: 'controle', position: 'top' }
   ];
-
-  const notify = useCallback((message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
-  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -416,10 +409,9 @@ function App() {
   };
 
   const invalidNames = ['OPERADOR', 'VISITANTE', 'VISITANTE GRATUITO', 'TESTE', 'ADMIN', 'USUARIO'];
-  // Show Identity Check APENAS se o Tour não estiver ativo (para não encavalar)
   const showIdentityCheck = isAuthenticated && isLoaded && !isDemoMode && 
                             (!config.userName || invalidNames.includes(config.userName.toUpperCase())) &&
-                            onboarding?.dismissed === true; // Só mostra modal se o tour já tiver sido dispensado ou finalizado
+                            onboarding?.dismissed === true;
 
   if (!isAuthenticated) {
     return <LoginScreen 
@@ -427,26 +419,13 @@ function App() {
             setCurrentUserKey(key);
             setIsAdmin(admin);
             setIsAuthenticated(true);
-            
             const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
             let restoredState = null;
-
-            if (localString) {
-                try { restoredState = JSON.parse(localString); localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key); } catch(e) {}
-            }
-
-            if (!restoredState) {
-                const cloudResult = await loadCloudData(key);
-                if (cloudResult) restoredState = cloudResult.data;
-            }
-            
+            if (localString) { try { restoredState = JSON.parse(localString); localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key); } catch(e) {} }
+            if (!restoredState) { const cloudResult = await loadCloudData(key); if (cloudResult) restoredState = cloudResult.data; }
             let finalState = useStore.getState();
             if (restoredState) finalState = mergeDeep(finalState, restoredState);
-            
-            if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) {
-                finalState.config.userName = (ownerName && !invalidNames.includes(ownerName.toUpperCase())) ? ownerName : 'OPERADOR';
-            }
-            
+            if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) { finalState.config.userName = (ownerName && !invalidNames.includes(ownerName.toUpperCase())) ? ownerName : 'OPERADOR'; }
             setAll(finalState);
             setIsLoaded(true);
         }} 
@@ -473,6 +452,56 @@ function App() {
                 notify("Identidade definida com sucesso!", "success");
             }} 
           />
+      )}
+
+      {/* --- SYNC CONFLICT MODAL --- */}
+      {pendingCloudData && (
+          <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-amber-500/50 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center gap-4 mb-6">
+                      <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 animate-pulse">
+                          <RefreshCw size={32} />
+                      </div>
+                      <div>
+                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito de Sincronização</h3>
+                          <p className="text-sm text-gray-400">Alterações detectadas em outro dispositivo.</p>
+                      </div>
+                  </div>
+
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10 mb-8 space-y-4">
+                      <div className="flex items-start gap-3">
+                          <Smartphone size={20} className="text-indigo-400 mt-1 shrink-0" />
+                          <div>
+                              <strong className="block text-white text-sm">Versão da Nuvem (Celular/Outro)</strong>
+                              <p className="text-xs text-gray-400">Salvo às {pendingCloudData.time}. Contém alterações recentes feitas externamente.</p>
+                          </div>
+                      </div>
+                      <div className="w-full h-px bg-white/10"></div>
+                      <div className="flex items-start gap-3">
+                          <Monitor size={20} className="text-emerald-400 mt-1 shrink-0" />
+                          <div>
+                              <strong className="block text-white text-sm">Versão Local (Este PC)</strong>
+                              <p className="text-xs text-gray-400">Contém o que está na sua tela agora. Se escolher esta, apagará o que foi feito no outro dispositivo.</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                      <button 
+                          onClick={() => handleResolveConflict('cloud')}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                      >
+                          <Download size={18} /> USAR DA NUVEM (Sim)
+                      </button>
+                      <button 
+                          onClick={() => handleResolveConflict('local')}
+                          className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                          <Upload size={18} /> MANTER TELA ATUAL (Não)
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -512,7 +541,7 @@ function App() {
             {!spectatingData && !isDemoMode && (
                 <div className="hidden md:flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-gray-500">
                     {saveStatus === 'saving' && <><RefreshCw size={10} className="animate-spin text-primary"/> Syncing...</>}
-                    {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-emerald-500"/> Saved</>}
+                    {saveStatus === 'saved' && <><Cloud size={10} className="text-emerald-500"/> Saved <span className="text-[9px] opacity-70">({lastCloudSyncTime})</span></>}
                     {saveStatus === 'error' && <><AlertCircle size={10} className="text-rose-500"/> Sync Error</>}
                 </div>
             )}
@@ -561,7 +590,6 @@ function App() {
             {activeView === 'planejamento' && <Planning 
                 forcedState={spectatingData?.data} 
                 navigateToDaily={(d) => { 
-                    // TOUR FIX: Força o avanço do passo antes de trocar a view
                     if (tourOpen && tourStepIndex === 4) {
                         setTourStepIndex(5);
                     }

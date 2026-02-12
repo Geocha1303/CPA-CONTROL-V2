@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppState } from '../types';
-import { mergeDeep, LOCAL_STORAGE_KEY } from '../utils';
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle } from 'lucide-react';
+import { mergeDeep, LOCAL_STORAGE_KEY, AUTH_STORAGE_KEY } from '../utils';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle, CloudLightning } from 'lucide-react';
 import { useStore } from '../store';
+import { supabase } from '../supabaseClient';
 
 interface Props {
   notify: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -18,6 +19,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   const resetStore = useStore(s => s.reset);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isBackingUp, setIsBackingUp] = useState(false);
   
   const handleConfigChange = (key: 'valorBonus' | 'taxaImposto', value: number) => {
     updateState({ config: { ...state.config, [key]: value } });
@@ -94,6 +96,34 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
     }
   };
 
+  const handleForceBackup = async () => {
+      const key = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!key || key.includes('FREE')) {
+          notify('Backup em nuvem indisponível para usuários gratuitos.', 'info');
+          return;
+      }
+      
+      setIsBackingUp(true);
+      notify('Iniciando teste de conexão e backup...', 'info');
+      
+      try {
+          const { error } = await supabase.from('user_data').upsert({
+              access_key: key,
+              raw_json: state,
+              updated_at: new Date().toISOString()
+          }, { onConflict: 'access_key' });
+          
+          if (error) throw error;
+          
+          notify('✅ Conexão Verificada: Dados salvos na nuvem com sucesso!', 'success');
+      } catch (e: any) {
+          console.error(e);
+          notify(`❌ Falha no Backup: ${e.message || 'Erro de conexão'}`, 'error');
+      } finally {
+          setIsBackingUp(false);
+      }
+  };
+
   const InfoTooltip = ({ text }: { text: string }) => (
       <div className="group relative ml-2 inline-flex">
           <HelpCircle size={14} className="text-gray-500 hover:text-white cursor-help" />
@@ -131,9 +161,41 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                 <div className="glass-card rounded-2xl overflow-hidden border border-emerald-500/20 h-fit shadow-2xl shadow-emerald-900/10">
                     <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-900/20 to-transparent"><h3 className="font-bold text-emerald-400 flex items-center gap-2"><ShieldCheck size={20} /> Cofre de Dados</h3><p className="text-xs text-gray-400 mt-1">Exportação e Importação de dados locais.</p></div>
                     <div className="p-8 space-y-6">
-                        <div><div className="flex items-center gap-4 mb-3"><div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20"><Download size={24} /></div><div><h4 className="font-bold text-white">Baixar Backup</h4><p className="text-xs text-gray-400">Salvar arquivo .JSON</p></div></div><button onClick={handleExportData} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-3"><FileJson size={20} /> BAIXAR DADOS</button></div>
+                        <div>
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20"><Download size={24} /></div>
+                                <div><h4 className="font-bold text-white">Baixar Backup</h4><p className="text-xs text-gray-400">Salvar arquivo .JSON</p></div>
+                            </div>
+                            <button onClick={handleExportData} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-3"><FileJson size={20} /> BAIXAR DADOS</button>
+                        </div>
+                        
                         <div className="h-px bg-white/5 w-full"></div>
-                        <div><div className="flex items-center gap-4 mb-3"><div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 border border-violet-500/20"><Upload size={24} /></div><div><h4 className="font-bold text-white">Restaurar</h4><p className="text-xs text-gray-400">Carregar arquivo .JSON</p></div></div><input type="file" accept=".json" ref={fileInputRef} style={{display: 'none'}} onChange={handleImportData} /><button onClick={() => fileInputRef.current?.click()} className="w-full bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-3"><Upload size={20} /> SELECIONAR ARQUIVO</button></div>
+                        
+                        <div>
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20"><CloudLightning size={24} /></div>
+                                <div><h4 className="font-bold text-white">Verificação de Nuvem</h4><p className="text-xs text-gray-400">Testar conexão com Supabase</p></div>
+                            </div>
+                            <button 
+                                onClick={handleForceBackup} 
+                                disabled={isBackingUp}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                            >
+                                {isBackingUp ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Upload size={20} />}
+                                {isBackingUp ? 'ENVIANDO...' : 'TESTAR CONEXÃO E FORÇAR BACKUP'}
+                            </button>
+                        </div>
+
+                        <div className="h-px bg-white/5 w-full"></div>
+                        
+                        <div>
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 border border-violet-500/20"><Upload size={24} /></div>
+                                <div><h4 className="font-bold text-white">Restaurar</h4><p className="text-xs text-gray-400">Carregar arquivo .JSON</p></div>
+                            </div>
+                            <input type="file" accept=".json" ref={fileInputRef} style={{display: 'none'}} onChange={handleImportData} />
+                            <button onClick={() => fileInputRef.current?.click()} className="w-full bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-3"><Upload size={20} /> SELECIONAR ARQUIVO</button>
+                        </div>
                     </div>
                 </div>
 
