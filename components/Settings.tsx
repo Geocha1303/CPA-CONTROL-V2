@@ -1,7 +1,8 @@
+
 import React, { useRef, useState } from 'react';
-import { AppState } from '../types';
-import { mergeDeep, LOCAL_STORAGE_KEY, AUTH_STORAGE_KEY } from '../utils';
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle, CloudLightning } from 'lucide-react';
+import { AppState, DayRecord } from '../types';
+import { mergeDeep, LOCAL_STORAGE_KEY, AUTH_STORAGE_KEY, calculateDayMetrics, formatarBRL } from '../utils';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle, CloudLightning, Eye, X, RefreshCw, Clock, CalendarDays, TrendingUp, ChevronDown, ChevronRight, Code } from 'lucide-react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
 
@@ -16,11 +17,18 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   const storeState = useStore();
   const state = forcedState || storeState;
   const updateState = useStore(s => s.updateState);
+  const setAll = useStore(s => s.setAll);
   const resetStore = useStore(s => s.reset);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
   
+  // --- CLOUD INSPECTOR STATE ---
+  const [showCloudInspector, setShowCloudInspector] = useState(false);
+  const [cloudData, setCloudData] = useState<{timestamp: string, data: AppState} | null>(null);
+  const [isLoadingCloudData, setIsLoadingCloudData] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false); // Toggle para JSON bruto
+
   const handleConfigChange = (key: 'valorBonus' | 'taxaImposto', value: number) => {
     updateState({ config: { ...state.config, [key]: value } });
   };
@@ -36,13 +44,10 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
 
   const handleResetTutorial = () => {
       if(confirm("Deseja ver o guia de introdução novamente?")) {
-          // Força a atualização do estado e salvamento síncrono antes do reload
           const currentState = useStore.getState();
           const newState = { ...currentState, onboarding: { ...currentState.onboarding, dismissed: false } };
-          
           updateState({ onboarding: { ...state.onboarding, dismissed: false } });
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newState));
-          
           notify("Tutorial reativado! O guia iniciará em instantes.", "success");
           setTimeout(() => window.location.reload(), 500);
       }
@@ -98,10 +103,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
 
   const handleForceBackup = async () => {
       const key = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!key) {
-          notify('Erro: Chave de acesso não encontrada.', 'error');
-          return;
-      }
+      if (!key) { notify('Erro: Chave de acesso não encontrada.', 'error'); return; }
       
       setIsBackingUp(true);
       notify('Iniciando teste de conexão e backup...', 'info');
@@ -112,9 +114,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
               raw_json: state,
               updated_at: new Date().toISOString()
           }, { onConflict: 'access_key' });
-          
           if (error) throw error;
-          
           notify('✅ Conexão Verificada: Dados salvos na nuvem com sucesso!', 'success');
       } catch (e: any) {
           console.error(e);
@@ -124,12 +124,133 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       }
   };
 
+  const handleInspectCloud = async () => {
+      const key = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!key) { notify("Erro: Sem chave de acesso.", "error"); return; }
+
+      setIsLoadingCloudData(true);
+      setShowCloudInspector(true);
+      setCloudData(null);
+      setShowRawJson(false);
+
+      try {
+          const { data, error } = await supabase
+              .from('user_data')
+              .select('raw_json, updated_at')
+              .eq('access_key', key)
+              .single();
+
+          if (error) throw error;
+
+          if (data) {
+              setCloudData({
+                  timestamp: data.updated_at,
+                  data: data.raw_json as AppState
+              });
+          } else {
+              notify("Nenhum dado encontrado na nuvem.", "info");
+              setShowCloudInspector(false);
+          }
+      } catch (e: any) {
+          notify("Erro ao buscar dados na nuvem.", "error");
+          setShowCloudInspector(false);
+      } finally {
+          setIsLoadingCloudData(false);
+      }
+  };
+
+  const handleOverwriteLocal = () => {
+      if (!cloudData) return;
+      if (confirm("PERIGO IRREVERSÍVEL:\n\nTem certeza que deseja substituir TUDO que está na sua tela agora pelos dados da nuvem?\n\nQualquer alteração local não salva será perdida para sempre.")) {
+          setAll(cloudData.data);
+          setShowCloudInspector(false);
+          notify("Dados restaurados com sucesso!", "success");
+          const key = localStorage.getItem(AUTH_STORAGE_KEY);
+          if (key) {
+              notify("Sincronização de segurança agendada para 1 minuto.", "info");
+              setTimeout(async () => {
+                  try {
+                      await supabase.from('user_data').upsert({
+                          access_key: key,
+                          raw_json: cloudData.data,
+                          updated_at: new Date().toISOString()
+                      }, { onConflict: 'access_key' });
+                  } catch (e) { console.error("Erro no auto-save pós-restauração", e); }
+              }, 60000);
+          }
+      }
+  };
+
   const InfoTooltip = ({ text }: { text: string }) => (
       <div className="group relative ml-2 inline-flex">
           <HelpCircle size={14} className="text-gray-500 hover:text-white cursor-help" />
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-900 border border-white/10 p-2 rounded-lg text-xs text-gray-300 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 text-center shadow-xl">{text}</div>
       </div>
   );
+
+  // Helper para renderizar resumo do backup
+  const renderCloudSummary = () => {
+      if (!cloudData) return null;
+      const { data } = cloudData;
+      const dates = Object.keys(data.dailyRecords || {}).sort().reverse().slice(0, 3);
+      
+      let totalProfit = 0;
+      Object.values(data.dailyRecords || {}).forEach((day) => {
+          const m = calculateDayMetrics(day as DayRecord, data.config?.valorBonus);
+          totalProfit += m.lucro;
+      });
+
+      return (
+          <div className="space-y-4">
+              <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
+                  <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400"><User size={24} /></div>
+                  <div>
+                      <p className="text-[10px] text-gray-500 uppercase font-bold">Operador no Backup</p>
+                      <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          {data.config?.userName || 'Desconhecido'} 
+                          <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-mono">#{data.config?.userTag}</span>
+                      </h4>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                      <p className="text-[10px] text-emerald-400/70 font-bold uppercase mb-1">Lucro Total Acumulado</p>
+                      <p className="text-2xl font-bold text-emerald-400">{formatarBRL(totalProfit)}</p>
+                  </div>
+                  <div className="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
+                      <p className="text-[10px] text-blue-400/70 font-bold uppercase mb-1 flex items-center gap-1"><CalendarDays size={10} /> Dias Registrados</p>
+                      <p className="text-2xl font-bold text-blue-400">{Object.keys(data.dailyRecords || {}).length}</p>
+                  </div>
+              </div>
+
+              <div>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2 ml-1">Últimos Registros (Preview)</p>
+                  <div className="space-y-2">
+                      {dates.map(date => {
+                          const record = data.dailyRecords[date];
+                          const metrics = calculateDayMetrics(record, data.config?.valorBonus);
+                          return (
+                              <div key={date} className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-sm">
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-white/20"></div>
+                                      <span className="text-gray-300 font-medium">{new Date(date).toLocaleDateString('pt-BR')}</span>
+                                  </div>
+                                  <div className="flex gap-4 text-xs font-mono">
+                                      <span className="text-gray-500">Fat: {formatarBRL(metrics.ret)}</span>
+                                      <span className={metrics.lucro >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                                          {formatarBRL(metrics.lucro)}
+                                      </span>
+                                  </div>
+                              </div>
+                          );
+                      })}
+                      {dates.length === 0 && <p className="text-center text-gray-600 text-xs py-2">Sem registros diários no backup.</p>}
+                  </div>
+              </div>
+          </div>
+      );
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
@@ -171,19 +292,21 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                         
                         <div className="h-px bg-white/5 w-full"></div>
                         
-                        <div>
-                            <div className="flex items-center gap-4 mb-3">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-4 mb-1">
                                 <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20"><CloudLightning size={24} /></div>
-                                <div><h4 className="font-bold text-white">Verificação de Nuvem</h4><p className="text-xs text-gray-400">Testar conexão com Supabase</p></div>
+                                <div><h4 className="font-bold text-white">Nuvem & Sincronização</h4><p className="text-xs text-gray-400">Gestão avançada do servidor.</p></div>
                             </div>
-                            <button 
-                                onClick={handleForceBackup} 
-                                disabled={isBackingUp}
-                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                            >
-                                {isBackingUp ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Upload size={20} />}
-                                {isBackingUp ? 'ENVIANDO...' : 'TESTAR CONEXÃO E FORÇAR BACKUP'}
-                            </button>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={handleForceBackup} disabled={isBackingUp} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-[10px] md:text-xs">
+                                    {isBackingUp ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Upload size={16} />}
+                                    FORÇAR BACKUP
+                                </button>
+                                <button onClick={handleInspectCloud} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl border border-white/10 transition-all flex items-center justify-center gap-2 text-[10px] md:text-xs">
+                                    <Eye size={16} /> INSPECIONAR NUVEM
+                                </button>
+                            </div>
                         </div>
 
                         <div className="h-px bg-white/5 w-full"></div>
@@ -209,6 +332,82 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                 </div>
             </div>
         </div>
+
+        {/* --- MODAL DE INSPEÇÃO DE NUVEM (ATUALIZADO) --- */}
+        {showCloudInspector && (
+            <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-[#0f0a1e] border border-blue-500/30 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500"></div>
+                    
+                    <div className="flex justify-between items-start mb-4 shrink-0">
+                        <div>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <CloudLightning size={24} className="text-blue-400" /> Inspetor de Nuvem
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                                <Clock size={12} />
+                                {cloudData ? `Salvo em: ${new Date(cloudData.timestamp).toLocaleString()}` : 'Carregando...'}
+                            </div>
+                        </div>
+                        <button onClick={() => setShowCloudInspector(false)} className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-white/5"><X size={20}/></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-white/5 bg-[#050505] p-1">
+                        {isLoadingCloudData ? (
+                            <div className="flex items-center justify-center h-40 text-blue-400">
+                                <RefreshCw className="animate-spin mr-2" /> Recuperando dados do servidor...
+                            </div>
+                        ) : cloudData ? (
+                            <div className="p-4">
+                                {renderCloudSummary()}
+                                
+                                <div className="mt-6 border-t border-white/10 pt-4">
+                                    <button 
+                                        onClick={() => setShowRawJson(!showRawJson)} 
+                                        className="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 font-bold uppercase tracking-wider mb-2"
+                                    >
+                                        <Code size={14} /> {showRawJson ? 'Ocultar Código Bruto' : 'Ver Código Bruto (JSON)'} 
+                                        {showRawJson ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </button>
+                                    
+                                    {showRawJson && (
+                                        <div className="bg-black/50 p-3 rounded-lg border border-white/5 overflow-hidden">
+                                            <pre className="whitespace-pre-wrap break-all text-[10px] text-gray-500 font-mono leading-relaxed max-h-40 overflow-y-auto custom-scrollbar">
+                                                {JSON.stringify(cloudData.data, null, 2)}
+                                            </pre>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-10 text-center text-gray-500">Dados indisponíveis.</div>
+                        )}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0 bg-[#0f0a1e]">
+                        <div className="flex items-center gap-2 text-[10px] text-rose-400 bg-rose-500/10 px-3 py-2 rounded-lg border border-rose-500/20 w-full md:w-auto">
+                            <AlertTriangle size={14} className="shrink-0" />
+                            <span>Atenção: Restaurar substituirá os dados atuais.</span>
+                        </div>
+                        <div className="flex gap-3 w-full md:w-auto">
+                            <button 
+                                onClick={() => setShowCloudInspector(false)}
+                                className="flex-1 md:flex-none px-4 py-3 rounded-lg text-sm font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleOverwriteLocal}
+                                disabled={!cloudData}
+                                className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg text-xs font-bold shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Download size={16} /> RESTAURAR ESTE BACKUP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
