@@ -16,9 +16,7 @@ import {
   Upload,
   Smartphone,
   Monitor,
-  ArrowRightLeft,
-  Calendar,
-  DollarSign
+  ArrowRightLeft
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, deepEqual, calculateDayMetrics, formatarBRL } from './utils';
