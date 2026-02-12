@@ -15,7 +15,8 @@ import {
   Download,
   Upload,
   Smartphone,
-  Monitor
+  Monitor,
+  ArrowRightLeft
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY } from './utils';
@@ -127,11 +128,26 @@ function App() {
                       const cloudResult = await loadCloudData(savedKey);
                       let finalData = useStore.getState();
 
-                      // LÓGICA REVERTIDA E SIMPLIFICADA DE CARREGAMENTO
-                      // Carrega o local primeiro para velocidade, depois verifica nuvem
+                      // LÓGICA DE INTEGRIDADE (Startup Conflict Check)
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
+                          
+                          // Se temos dados locais E dados na nuvem, comparamos
+                          if (cloudResult && cloudResult.data) {
+                              // Pequena limpeza para comparação justa (remove nulls/undefineds que o JSON stringify pode tratar diferente)
+                              const localStr = JSON.stringify(localData);
+                              const cloudStr = JSON.stringify(cloudResult.data);
+                              
+                              if (localStr !== cloudStr) {
+                                  console.log("Diferença detectada entre Local e Nuvem na inicialização.");
+                                  setPendingCloudData({
+                                      data: cloudResult.data,
+                                      time: new Date(cloudResult.updatedAt).toLocaleString() // Data completa na inicialização
+                                  });
+                              }
+                          }
                       } else if (cloudResult) {
+                          // Se não tem local (limpou cache ou pc novo), pega direto da nuvem
                           finalData = mergeDeep(finalData, cloudResult.data);
                       }
 
@@ -201,7 +217,7 @@ function App() {
           // Opção A: Aceitar Nuvem (Atualizar PC)
           setAll(pendingCloudData.data);
           setLastCloudSyncTime(pendingCloudData.time);
-          notify("Dados atualizados com a versão da nuvem.", "success");
+          notify("Dados do PC atualizados com a versão da nuvem.", "success");
       } else {
           // Opção B: Manter Local (Sobrescrever Nuvem)
           // Força um save imediato para a nuvem com os dados atuais
@@ -212,7 +228,7 @@ function App() {
                   raw_json: currentState,
                   updated_at: new Date().toISOString()
               });
-              notify("Sua versão local sobrescreveu a nuvem.", "success");
+              notify("Nuvem atualizada com os dados deste PC.", "success");
           } catch (e) {
               notify("Erro ao forçar atualização na nuvem.", "error");
           }
@@ -462,11 +478,11 @@ function App() {
               <div className="bg-[#0f0a1e] border border-amber-500/50 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">
                   <div className="flex items-center gap-4 mb-6">
                       <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 animate-pulse">
-                          <RefreshCw size={32} />
+                          <ArrowRightLeft size={32} />
                       </div>
                       <div>
-                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito de Sincronização</h3>
-                          <p className="text-sm text-gray-400">Alterações detectadas em outro dispositivo.</p>
+                          <h3 className="text-2xl font-black text-white tracking-tight">Decisão de Sincronização</h3>
+                          <p className="text-sm text-gray-400">Existem dados diferentes entre seu PC e a Nuvem.</p>
                       </div>
                   </div>
 
@@ -474,32 +490,34 @@ function App() {
                       <div className="flex items-start gap-3">
                           <Smartphone size={20} className="text-indigo-400 mt-1 shrink-0" />
                           <div>
-                              <strong className="block text-white text-sm">Versão da Nuvem (Celular/Outro)</strong>
-                              <p className="text-xs text-gray-400">Salvo às {pendingCloudData.time}. Contém alterações recentes feitas externamente.</p>
+                              <strong className="block text-white text-sm">Versão da Nuvem (Backup)</strong>
+                              <p className="text-xs text-gray-400">Dados salvos anteriormente. Escolha isso se trocou de PC recentemente.</p>
+                              <span className="text-[10px] text-indigo-400 font-mono mt-1 block">Salvo em: {pendingCloudData.time}</span>
                           </div>
                       </div>
                       <div className="w-full h-px bg-white/10"></div>
                       <div className="flex items-start gap-3">
                           <Monitor size={20} className="text-emerald-400 mt-1 shrink-0" />
                           <div>
-                              <strong className="block text-white text-sm">Versão Local (Este PC)</strong>
-                              <p className="text-xs text-gray-400">Contém o que está na sua tela agora. Se escolher esta, apagará o que foi feito no outro dispositivo.</p>
+                              <strong className="block text-white text-sm">Versão Local (Este Dispositivo)</strong>
+                              <p className="text-xs text-gray-400">Dados atuais do seu navegador. Escolha isso se trabalhou offline.</p>
+                              <span className="text-[10px] text-emerald-400 font-bold mt-1 block uppercase">⚠️ Sobrescreverá a Nuvem</span>
                           </div>
                       </div>
                   </div>
 
-                  <div className="flex gap-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
                       <button 
                           onClick={() => handleResolveConflict('cloud')}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm"
                       >
-                          <Download size={18} /> USAR DA NUVEM (Sim)
+                          <Download size={18} /> BAIXAR DA NUVEM
                       </button>
                       <button 
                           onClick={() => handleResolveConflict('local')}
-                          className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                          className="flex-1 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 text-emerald-400 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
                       >
-                          <Upload size={18} /> MANTER TELA ATUAL (Não)
+                          <Upload size={18} /> USAR LOCAL (ENVIAR)
                       </button>
                   </div>
               </div>
