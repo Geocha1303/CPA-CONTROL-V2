@@ -108,12 +108,41 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       setIsBackingUp(true);
       notify('Iniciando teste de conexão e backup...', 'info');
       
+      // CRÍTICO: Pega o estado mais recente diretamente da memória, ignorando props ou renderizações antigas
+      const currentFreshState = useStore.getState();
+
       try {
-          const { error } = await supabase.from('user_data').upsert({
-              access_key: key,
-              raw_json: state,
-              updated_at: new Date().toISOString()
-          }, { onConflict: 'access_key' });
+          // 1. Verifica se já existe registro para esta chave
+          const { data: existing } = await supabase
+              .from('user_data')
+              .select('id')
+              .eq('access_key', key)
+              .maybeSingle(); // maybeSingle evita erro 406 se não existir
+
+          let error;
+
+          if (existing) {
+              // 2. Se existe, ATUALIZA (UPDATE)
+              const res = await supabase
+                  .from('user_data')
+                  .update({ 
+                      raw_json: currentFreshState, 
+                      updated_at: new Date().toISOString() 
+                  })
+                  .eq('access_key', key);
+              error = res.error;
+          } else {
+              // 3. Se não existe, CRIA (INSERT)
+              const res = await supabase
+                  .from('user_data')
+                  .insert({
+                      access_key: key, 
+                      raw_json: currentFreshState, 
+                      updated_at: new Date().toISOString()
+                  });
+              error = res.error;
+          }
+
           if (error) throw error;
           notify('✅ Conexão Verificada: Dados salvos na nuvem com sucesso!', 'success');
       } catch (e: any) {
@@ -162,7 +191,6 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   const handleOverwriteLocal = () => {
       if (!cloudData) return;
       if (confirm("PERIGO IRREVERSÍVEL:\n\nTem certeza que deseja substituir TUDO que está na sua tela agora pelos dados da nuvem?\n\nQualquer alteração local não salva será perdida para sempre.")) {
-          // CORREÇÃO CRÍTICA (PROTOCOLO NUCLEAR):
           // 1. Grava DIRETAMENTE no LocalStorage, garantindo persistência física
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData.data));
           
@@ -330,7 +358,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
             </div>
         </div>
 
-        {/* --- MODAL DE INSPEÇÃO DE NUVEM (ATUALIZADO) --- */}
+        {/* --- MODAL DE INSPEÇÃO DE NUVEM --- */}
         {showCloudInspector && (
             <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-[#0f0a1e] border border-blue-500/30 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">

@@ -40,16 +40,38 @@ import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
 import Sidebar from './components/Sidebar';
 
-// Deep Equal Simplificado (Mantido para evitar re-renders desnecessários, mas sem lógica complexa de ordem)
+// Deep Equal Robusto (Ignora diferenças entre null/undefined e chaves ausentes)
 const deepEqual = (obj1: any, obj2: any): boolean => {
+    // 1. Igualdade estrita
     if (obj1 === obj2) return true;
+    
+    // 2. Tratar null e undefined como equivalentes
+    if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
+
+    // 3. Se um for objeto/array e o outro não, são diferentes
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
+
+    // 4. Comparação de Arrays
+    if (Array.isArray(obj1) && Array.isArray(obj2)) {
+        if (obj1.length !== obj2.length) return false;
+        for (let i = 0; i < obj1.length; i++) {
+            if (!deepEqual(obj1[i], obj2[i])) return false;
+        }
+        return true;
+    }
+
+    // 5. Comparação de Objetos (Union das chaves)
     const keys1 = Object.keys(obj1);
     const keys2 = Object.keys(obj2);
-    if (keys1.length !== keys2.length) return false;
-    for (let key of keys1) {
-        if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) return false;
+    const allKeys = new Set([...keys1, ...keys2]);
+
+    for (let key of allKeys) {
+        // Ignora funções
+        if (typeof obj1[key] === 'function' || typeof obj2[key] === 'function') continue;
+        
+        if (!deepEqual(obj1[key], obj2[key])) return false;
     }
+
     return true;
 };
 
@@ -146,7 +168,6 @@ function App() {
                           
                           if (cloudResult && cloudResult.data) {
                               // Se houver diferença, mostra modal de conflito
-                              // removemos a lógica complexa de null/undefined aqui para ser mais direto
                               if (!deepEqual(localData, cloudResult.data)) {
                                   setPendingCloudData({
                                       data: cloudResult.data,
@@ -202,7 +223,7 @@ function App() {
                   
                   const currentData = useStore.getState();
 
-                  // Verifica se os dados são diferentes do estado atual
+                  // Verifica se os dados são REALMENTE diferentes
                   if (!deepEqual(currentData, newCloudData)) {
                       setPendingCloudData({
                           data: newCloudData,
@@ -242,14 +263,38 @@ function App() {
 
       } else {
           // UPLOAD (LOCAL -> CLOUD)
-          // Revertido: Removida a trava ignoreRemoteUpdate
+          // Implementação EXPLÍCITA: Check -> Update/Insert
           const currentState = useStore.getState();
           try {
-              const { error } = await supabase.from('user_data').upsert({
-                  access_key: currentUserKey,
-                  raw_json: currentState,
-                  updated_at: new Date().toISOString()
-              });
+              // 1. Check
+              const { data: existing } = await supabase
+                  .from('user_data')
+                  .select('id')
+                  .eq('access_key', currentUserKey)
+                  .maybeSingle();
+
+              let error;
+              if (existing) {
+                  // 2. Update
+                  const res = await supabase
+                      .from('user_data')
+                      .update({
+                          raw_json: currentState,
+                          updated_at: new Date().toISOString()
+                      })
+                      .eq('access_key', currentUserKey);
+                  error = res.error;
+              } else {
+                  // 3. Insert
+                  const res = await supabase
+                      .from('user_data')
+                      .insert({
+                          access_key: currentUserKey,
+                          raw_json: currentState,
+                          updated_at: new Date().toISOString()
+                      });
+                  error = res.error;
+              }
               
               if (error) throw error;
 
@@ -293,7 +338,7 @@ function App() {
     setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
   }, []);
 
-  // --- AUTO-SAVE (REVERTIDO: SEM TRAVA DE INICIALIZAÇÃO) ---
+  // --- AUTO-SAVE (CORRIGIDO: Lógica Explícita) ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
@@ -311,13 +356,33 @@ function App() {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
                 try {
-                    const { error } = await supabase
+                    // VERIFICA SE EXISTE E DEPOIS ATUALIZA
+                    const { data: existing } = await supabase
                         .from('user_data')
-                        .upsert({ 
-                            access_key: currentUserKey, 
-                            raw_json: state, 
-                            updated_at: new Date().toISOString()
-                        }, { onConflict: 'access_key' });
+                        .select('id')
+                        .eq('access_key', currentUserKey)
+                        .maybeSingle();
+
+                    let error;
+                    if (existing) {
+                        const res = await supabase
+                            .from('user_data')
+                            .update({ 
+                                raw_json: state, 
+                                updated_at: new Date().toISOString() 
+                            })
+                            .eq('access_key', currentUserKey);
+                        error = res.error;
+                    } else {
+                        const res = await supabase
+                            .from('user_data')
+                            .insert({ 
+                                access_key: currentUserKey, 
+                                raw_json: state, 
+                                updated_at: new Date().toISOString() 
+                            });
+                        error = res.error;
+                    }
                     
                     if(error) throw error;
                     
