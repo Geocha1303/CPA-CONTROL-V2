@@ -106,24 +106,26 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       if (!key) { notify('Erro: Chave de acesso não encontrada.', 'error'); return; }
       
       setIsBackingUp(true);
-      notify('Iniciando envio seguro para a nuvem...', 'info');
+      notify('Forçando sincronização com a nuvem...', 'info');
       
-      // Pega estado fresco
+      // CRÍTICO: Pega o estado mais recente diretamente da memória (Zustand)
+      // Isso evita salvar dados "velhos" que o componente React possa ter em cache
       const currentFreshState = useStore.getState();
 
       try {
-          // CORREÇÃO: Usar UPSERT com onConflict explícito na coluna access_key (que é PK ou Unique)
+          // USO DE UPSERT ATÔMICO COM CONFLITO EXPLÍCITO
+          // Isso diz ao banco: "Se a chave já existir, cale a boca e atualize o JSON. Se não, crie."
           const { error } = await supabase
               .from('user_data')
               .upsert({
                   access_key: key, 
                   raw_json: currentFreshState, 
                   updated_at: new Date().toISOString()
-              }, { onConflict: 'access_key' });
+              }, { onConflict: 'access_key' }); // Importante: deve corresponder à coluna UNIQUE no banco
 
           if (error) throw error;
           
-          notify('✅ Backup Confirmado: Nuvem atualizada com sucesso!', 'success');
+          notify('✅ Backup Confirmado: Dados atualizados na nuvem!', 'success');
       } catch (e: any) {
           console.error(e);
           notify(`❌ Falha no Backup: ${e.message || 'Erro de conexão'}`, 'error');
