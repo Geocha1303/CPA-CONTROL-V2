@@ -40,16 +40,39 @@ import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
 import Sidebar from './components/Sidebar';
 
-// Função auxiliar simples para comparação profunda (Deep Equal)
+// Função auxiliar ROBUSTA para comparação profunda (Ignora diferenças entre null/undefined)
 const deepEqual = (obj1: any, obj2: any): boolean => {
+    // 1. Igualdade referencial ou valor primitivo
     if (obj1 === obj2) return true;
+    
+    // 2. Tratar null e undefined como iguais (Crucial para JSON de DB vs Local)
+    if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
+
+    // 3. Se um for objeto e o outro não (e não caiu no null/undefined acima), são diferentes
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
+
+    // 4. Comparação de Arrays
+    if (Array.isArray(obj1) && Array.isArray(obj2)) {
+        if (obj1.length !== obj2.length) return false;
+        for (let i = 0; i < obj1.length; i++) {
+            if (!deepEqual(obj1[i], obj2[i])) return false;
+        }
+        return true;
+    }
+
+    // 5. Comparação de Objetos
+    // Pega chaves únicas de ambos os objetos
     const keys1 = Object.keys(obj1);
     const keys2 = Object.keys(obj2);
-    if (keys1.length !== keys2.length) return false;
-    for (let key of keys1) {
-        if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) return false;
+    const allKeys = new Set([...keys1, ...keys2]);
+
+    for (let key of allKeys) {
+        // Ignora funções
+        if (typeof obj1[key] === 'function' || typeof obj2[key] === 'function') continue;
+        
+        if (!deepEqual(obj1[key], obj2[key])) return false;
     }
+
     return true;
 };
 
@@ -89,6 +112,8 @@ function App() {
 
   // --- SYNC CONFLICT STATE ---
   const [pendingCloudData, setPendingCloudData] = useState<{data: AppState, time: string} | null>(null);
+  // REF PARA EVITAR ECO DO REALTIME
+  const ignoreRemoteUpdate = useRef(false);
 
   const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -139,12 +164,13 @@ function App() {
                       }
 
                       const cloudResult = await loadCloudData(savedKey);
-                      let finalData = { ...initialState }; // Use clean initial state as base
+                      let finalData = { ...initialState }; 
 
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
                           
                           if (cloudResult && cloudResult.data) {
+                              // Se houver diferença REAL, avisa
                               if (!deepEqual(localData, cloudResult.data)) {
                                   setPendingCloudData({
                                       data: cloudResult.data,
@@ -195,6 +221,12 @@ function App() {
                   filter: `access_key=eq.${currentUserKey}`
               },
               (payload) => {
+                  // Se acabamos de enviar, ignoramos o "eco" que vem do servidor
+                  if (ignoreRemoteUpdate.current) {
+                      console.log("Ignorando atualização remota (Eco do próprio upload)");
+                      return;
+                  }
+
                   const newCloudData = payload.new.raw_json as AppState;
                   const newUpdatedAt = payload.new.updated_at;
                   
@@ -231,34 +263,41 @@ function App() {
 
   const handleResolveConflict = async (choice: 'cloud' | 'local') => {
       if (choice === 'cloud' && pendingCloudData) {
-          // CORREÇÃO CRÍTICA (PROTOCOLO NUCLEAR):
-          // 1. Grava DIRETAMENTE no LocalStorage, garantindo persistência física
+          // PROTOCOLO NUCLEAR (RESTORE)
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingCloudData.data));
-          
-          // 2. Atualiza memória (visual)
           setAll(pendingCloudData.data);
-          
-          // 3. RELOAD FORÇADO: A única forma de garantir que o estado em memória limpe completamente
-          // e o app reidrate limpo do LocalStorage com os dados novos.
-          notify("Dados restaurados. Reiniciando sistema para aplicar...", "success");
-          
-          setTimeout(() => {
-              window.location.reload();
-          }, 800);
+          notify("Dados restaurados. Reiniciando sistema...", "success");
+          setTimeout(() => { window.location.reload(); }, 800);
 
       } else {
-          // Upload Local to Cloud
+          // UPLOAD (LOCAL -> CLOUD)
+          
+          // 1. Bloqueia o listener de "eco" temporariamente
+          ignoreRemoteUpdate.current = true;
+          
           const currentState = useStore.getState();
           try {
-              await supabase.from('user_data').upsert({
+              const { error } = await supabase.from('user_data').upsert({
                   access_key: currentUserKey,
                   raw_json: currentState,
                   updated_at: new Date().toISOString()
               });
-              notify("Nuvem atualizada com os dados deste PC.", "success");
-              setPendingCloudData(null); // Só limpa aqui se for upload
-          } catch (e) {
-              notify("Erro ao forçar atualização na nuvem.", "error");
+              
+              if (error) throw error;
+
+              notify("Nuvem atualizada com sucesso!", "success");
+              setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+              
+              // 2. Fecha o modal imediatamente para feedback visual
+              setPendingCloudData(null); 
+
+          } catch (e: any) {
+              notify(`Erro ao enviar para nuvem: ${e.message}`, "error");
+          } finally {
+              // 3. Libera o listener após 3 segundos (tempo suficiente para o eco passar)
+              setTimeout(() => {
+                  ignoreRemoteUpdate.current = false;
+              }, 3000);
           }
       }
   };
@@ -298,7 +337,6 @@ function App() {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
-        // Bloqueia salvamento automático se houver conflito pendente para não sobrescrever a decisão
         if (pendingCloudData) return;
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -311,6 +349,10 @@ function App() {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
                 try {
+                    // Aqui também usamos o ignoreRemoteUpdate, mas sem bloquear por tanto tempo
+                    // pois o auto-save é frequente.
+                    // O ideal é que o auto-save NÃO acione o conflito modal a menos que seja outra pessoa.
+                    
                     const { error } = await supabase
                         .from('user_data')
                         .upsert({ 
