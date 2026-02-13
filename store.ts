@@ -3,13 +3,19 @@ import { create } from 'zustand';
 import { AppState } from './types';
 import { mergeDeep } from './utils';
 
-// Estado Inicial (Movido do App.tsx)
-const initialState: AppState = {
+// Definição do Estado Inicial Padrão (Limpo)
+export const initialState: AppState = {
   dailyRecords: {},
   generalExpenses: [],
   monthlyGoals: {},
   dreamGoals: [], 
-  config: { valorBonus: 20.00, taxaImposto: 0.06, userName: 'OPERADOR', userTag: '', manualBonusMode: false },
+  config: { 
+      valorBonus: 20.00, 
+      taxaImposto: 0.06, 
+      userName: 'OPERADOR', 
+      userTag: '', 
+      manualBonusMode: false 
+  },
   generator: {
     plan: [],
     totalAgentes: 2,
@@ -42,9 +48,21 @@ interface Store extends AppState {
 
 export const useStore = create<Store>((set) => ({
     ...initialState,
+    
+    // Atualização parcial com merge profundo
     updateState: (updates) => set((prev) => mergeDeep(prev, updates)),
-    // CORREÇÃO: Spread simples para garantir que os dados da nuvem sobrescrevam o estado atual
-    // Mantém as funções (actions) do store pois elas não existem no newState (JSON puro)
-    setAll: (newState) => set((state) => ({ ...state, ...newState })),
+    
+    // Substituição TOTAL do estado (Usado em backups/restauração)
+    setAll: (newState) => set((state) => ({
+        // Mantém as funções do store, substitui os dados
+        ...state,
+        ...newState,
+        // Garante que se o backup vier sem alguma chave, usa o default para evitar quebras
+        config: { ...initialState.config, ...(newState.config || {}) },
+        generator: { ...initialState.generator, ...(newState.generator || {}) },
+        onboarding: newState.onboarding || initialState.onboarding
+    })),
+    
+    // Reset para estado inicial
     reset: () => set(initialState)
 }));

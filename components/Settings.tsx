@@ -162,27 +162,19 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   const handleOverwriteLocal = () => {
       if (!cloudData) return;
       if (confirm("PERIGO IRREVERSÍVEL:\n\nTem certeza que deseja substituir TUDO que está na sua tela agora pelos dados da nuvem?\n\nQualquer alteração local não salva será perdida para sempre.")) {
-          setAll(cloudData.data);
-          // CORREÇÃO: Força o salvamento local IMEDIATO, pois o auto-save pode estar travado
+          // CORREÇÃO CRÍTICA (PROTOCOLO NUCLEAR):
+          // 1. Grava DIRETAMENTE no LocalStorage, garantindo persistência física
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData.data));
           
-          setShowCloudInspector(false);
-          notify("Dados restaurados com sucesso!", "success");
+          // 2. Atualiza memória visualmente
+          setAll(cloudData.data);
           
-          // Agendamento de backup de segurança
-          const key = localStorage.getItem(AUTH_STORAGE_KEY);
-          if (key) {
-              notify("Sincronização de segurança agendada para 1 minuto.", "info");
-              setTimeout(async () => {
-                  try {
-                      await supabase.from('user_data').upsert({
-                          access_key: key,
-                          raw_json: cloudData.data,
-                          updated_at: new Date().toISOString()
-                      }, { onConflict: 'access_key' });
-                  } catch (e) { console.error("Erro no auto-save pós-restauração", e); }
-              }, 60000);
-          }
+          // 3. Reload forçado para reidratação limpa
+          notify("Restauração completa. Reiniciando...", "success");
+          
+          setTimeout(() => {
+              window.location.reload();
+          }, 800);
       }
   };
 

@@ -21,7 +21,7 @@ import {
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, calculateDayMetrics, formatarBRL } from './utils';
 import { supabase } from './supabaseClient';
-import { useStore } from './store';
+import { useStore, initialState } from './store'; // Import initialState
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -139,7 +139,7 @@ function App() {
                       }
 
                       const cloudResult = await loadCloudData(savedKey);
-                      let finalData = useStore.getState();
+                      let finalData = { ...initialState }; // Use clean initial state as base
 
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
@@ -231,17 +231,23 @@ function App() {
 
   const handleResolveConflict = async (choice: 'cloud' | 'local') => {
       if (choice === 'cloud' && pendingCloudData) {
-          // CORREÇÃO CRÍTICA:
-          // 1. Atualiza o estado em memória
-          setAll(pendingCloudData.data);
-          // 2. FORÇA a gravação no LocalStorage IMEDIATAMENTE.
-          // Isso é necessário porque o subscriber do useEffect abaixo está bloqueado
-          // enquanto 'pendingCloudData' não for null.
+          // CORREÇÃO CRÍTICA (PROTOCOLO NUCLEAR):
+          // 1. Grava DIRETAMENTE no LocalStorage, garantindo persistência física
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingCloudData.data));
           
-          setLastCloudSyncTime(pendingCloudData.time);
-          notify("Dados do PC atualizados com a versão da nuvem.", "success");
+          // 2. Atualiza memória (visual)
+          setAll(pendingCloudData.data);
+          
+          // 3. RELOAD FORÇADO: A única forma de garantir que o estado em memória limpe completamente
+          // e o app reidrate limpo do LocalStorage com os dados novos.
+          notify("Dados restaurados. Reiniciando sistema para aplicar...", "success");
+          
+          setTimeout(() => {
+              window.location.reload();
+          }, 800);
+
       } else {
+          // Upload Local to Cloud
           const currentState = useStore.getState();
           try {
               await supabase.from('user_data').upsert({
@@ -250,11 +256,11 @@ function App() {
                   updated_at: new Date().toISOString()
               });
               notify("Nuvem atualizada com os dados deste PC.", "success");
+              setPendingCloudData(null); // Só limpa aqui se for upload
           } catch (e) {
               notify("Erro ao forçar atualização na nuvem.", "error");
           }
       }
-      setPendingCloudData(null);
   };
 
   // --- PRESENCE (ONLINE USERS) ---
@@ -292,7 +298,7 @@ function App() {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
-        // Bloqueia salvamento automático se houver conflito pendente
+        // Bloqueia salvamento automático se houver conflito pendente para não sobrescrever a decisão
         if (pendingCloudData) return;
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
@@ -465,7 +471,7 @@ function App() {
             let restoredState = null;
             if (localString) { try { restoredState = JSON.parse(localString); localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key); } catch(e) {} }
             if (!restoredState) { const cloudResult = await loadCloudData(key); if (cloudResult) restoredState = cloudResult.data; }
-            let finalState = useStore.getState();
+            let finalState = { ...initialState };
             if (restoredState) finalState = mergeDeep(finalState, restoredState);
             if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) { finalState.config.userName = (ownerName && !invalidNames.includes(ownerName.toUpperCase())) ? ownerName : 'OPERADOR'; }
             setAll(finalState);
