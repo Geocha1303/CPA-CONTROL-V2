@@ -263,38 +263,14 @@ function App() {
 
       } else {
           // UPLOAD (LOCAL -> CLOUD)
-          // Implementação EXPLÍCITA: Check -> Update/Insert
+          // CORREÇÃO: UPSERT ATÔMICO COM onConflict
           const currentState = useStore.getState();
           try {
-              // 1. Check
-              const { data: existing } = await supabase
-                  .from('user_data')
-                  .select('id')
-                  .eq('access_key', currentUserKey)
-                  .maybeSingle();
-
-              let error;
-              if (existing) {
-                  // 2. Update
-                  const res = await supabase
-                      .from('user_data')
-                      .update({
-                          raw_json: currentState,
-                          updated_at: new Date().toISOString()
-                      })
-                      .eq('access_key', currentUserKey);
-                  error = res.error;
-              } else {
-                  // 3. Insert
-                  const res = await supabase
-                      .from('user_data')
-                      .insert({
-                          access_key: currentUserKey,
-                          raw_json: currentState,
-                          updated_at: new Date().toISOString()
-                      });
-                  error = res.error;
-              }
+              const { error } = await supabase.from('user_data').upsert({
+                  access_key: currentUserKey,
+                  raw_json: currentState,
+                  updated_at: new Date().toISOString()
+              }, { onConflict: 'access_key' });
               
               if (error) throw error;
 
@@ -338,7 +314,7 @@ function App() {
     setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
   }, []);
 
-  // --- AUTO-SAVE (CORRIGIDO: Lógica Explícita) ---
+  // --- AUTO-SAVE (CORRIGIDO: UPSERT) ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
@@ -356,33 +332,14 @@ function App() {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
                 try {
-                    // VERIFICA SE EXISTE E DEPOIS ATUALIZA
-                    const { data: existing } = await supabase
+                    // USO DE UPSERT CORRETO
+                    const { error } = await supabase
                         .from('user_data')
-                        .select('id')
-                        .eq('access_key', currentUserKey)
-                        .maybeSingle();
-
-                    let error;
-                    if (existing) {
-                        const res = await supabase
-                            .from('user_data')
-                            .update({ 
-                                raw_json: state, 
-                                updated_at: new Date().toISOString() 
-                            })
-                            .eq('access_key', currentUserKey);
-                        error = res.error;
-                    } else {
-                        const res = await supabase
-                            .from('user_data')
-                            .insert({ 
-                                access_key: currentUserKey, 
-                                raw_json: state, 
-                                updated_at: new Date().toISOString() 
-                            });
-                        error = res.error;
-                    }
+                        .upsert({ 
+                            access_key: currentUserKey, 
+                            raw_json: state, 
+                            updated_at: new Date().toISOString() 
+                        }, { onConflict: 'access_key' });
                     
                     if(error) throw error;
                     

@@ -106,45 +106,24 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       if (!key) { notify('Erro: Chave de acesso não encontrada.', 'error'); return; }
       
       setIsBackingUp(true);
-      notify('Iniciando teste de conexão e backup...', 'info');
+      notify('Iniciando envio seguro para a nuvem...', 'info');
       
-      // CRÍTICO: Pega o estado mais recente diretamente da memória, ignorando props ou renderizações antigas
+      // Pega estado fresco
       const currentFreshState = useStore.getState();
 
       try {
-          // 1. Verifica se já existe registro para esta chave
-          const { data: existing } = await supabase
+          // CORREÇÃO: Usar UPSERT com onConflict explícito na coluna access_key (que é PK ou Unique)
+          const { error } = await supabase
               .from('user_data')
-              .select('id')
-              .eq('access_key', key)
-              .maybeSingle(); // maybeSingle evita erro 406 se não existir
-
-          let error;
-
-          if (existing) {
-              // 2. Se existe, ATUALIZA (UPDATE)
-              const res = await supabase
-                  .from('user_data')
-                  .update({ 
-                      raw_json: currentFreshState, 
-                      updated_at: new Date().toISOString() 
-                  })
-                  .eq('access_key', key);
-              error = res.error;
-          } else {
-              // 3. Se não existe, CRIA (INSERT)
-              const res = await supabase
-                  .from('user_data')
-                  .insert({
-                      access_key: key, 
-                      raw_json: currentFreshState, 
-                      updated_at: new Date().toISOString()
-                  });
-              error = res.error;
-          }
+              .upsert({
+                  access_key: key, 
+                  raw_json: currentFreshState, 
+                  updated_at: new Date().toISOString()
+              }, { onConflict: 'access_key' });
 
           if (error) throw error;
-          notify('✅ Conexão Verificada: Dados salvos na nuvem com sucesso!', 'success');
+          
+          notify('✅ Backup Confirmado: Nuvem atualizada com sucesso!', 'success');
       } catch (e: any) {
           console.error(e);
           notify(`❌ Falha no Backup: ${e.message || 'Erro de conexão'}`, 'error');
