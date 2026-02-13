@@ -40,24 +40,15 @@ import LoginScreen from './components/LoginScreen';
 import IdentityModal from './components/IdentityModal';
 import Sidebar from './components/Sidebar';
 
-// Função auxiliar ROBUSTA para comparação profunda (Ignora diferenças entre null/undefined)
+// Deep Equal Simplificado (Mantido para evitar re-renders desnecessários, mas sem lógica complexa de ordem)
 const deepEqual = (obj1: any, obj2: any): boolean => {
     if (obj1 === obj2) return true;
-    if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
-    if (Array.isArray(obj1) && Array.isArray(obj2)) {
-        if (obj1.length !== obj2.length) return false;
-        for (let i = 0; i < obj1.length; i++) {
-            if (!deepEqual(obj1[i], obj2[i])) return false;
-        }
-        return true;
-    }
     const keys1 = Object.keys(obj1);
     const keys2 = Object.keys(obj2);
-    const allKeys = new Set([...keys1, ...keys2]);
-    for (let key of allKeys) {
-        if (typeof obj1[key] === 'function' || typeof obj2[key] === 'function') continue;
-        if (!deepEqual(obj1[key], obj2[key])) return false;
+    if (keys1.length !== keys2.length) return false;
+    for (let key of keys1) {
+        if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) return false;
     }
     return true;
 };
@@ -97,10 +88,6 @@ function App() {
 
   // --- SYNC CONFLICT STATE ---
   const [pendingCloudData, setPendingCloudData] = useState<{data: AppState, time: string} | null>(null);
-  
-  // TRAVA DE SEGURANÇA: Impede auto-save durante a carga inicial
-  const isRestoringRef = useRef(true); 
-  const ignoreRemoteUpdate = useRef(false);
 
   const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -128,9 +115,6 @@ function App() {
   useEffect(() => {
       const restoreSession = async () => {
           setIsCheckingAuth(true);
-          // TRAVA ATIVA: Nenhuma gravação permitida
-          isRestoringRef.current = true; 
-          
           const savedKey = localStorage.getItem(AUTH_STORAGE_KEY);
           
           if (savedKey) {
@@ -152,18 +136,18 @@ function App() {
                           try { localData = JSON.parse(localString); } catch(e) {}
                       }
 
-                      // Busca Nuvem ANTES de liberar o app
+                      // Busca Nuvem
                       const cloudResult = await loadCloudData(savedKey);
                       let finalData = { ...initialState }; 
 
-                      // Lógica de Prioridade de Carregamento
+                      // Lógica de Merge: Local + Cloud
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
                           
                           if (cloudResult && cloudResult.data) {
-                              // Se tem dados na nuvem e locais, compara
+                              // Se houver diferença, mostra modal de conflito
+                              // removemos a lógica complexa de null/undefined aqui para ser mais direto
                               if (!deepEqual(localData, cloudResult.data)) {
-                                  console.log("Conflito detectado na inicialização");
                                   setPendingCloudData({
                                       data: cloudResult.data,
                                       time: new Date(cloudResult.updatedAt).toLocaleString()
@@ -171,7 +155,6 @@ function App() {
                               }
                           }
                       } else if (cloudResult) {
-                          // Se não tem local, mas tem nuvem, usa nuvem
                           finalData = mergeDeep(finalData, cloudResult.data);
                       }
 
@@ -184,7 +167,6 @@ function App() {
                           finalData.config.userName = data.owner_name;
                       }
                       
-                      // Aplica os dados na memória
                       setAll(finalData);
                       setIsLoaded(true);
 
@@ -195,12 +177,7 @@ function App() {
                   console.error("Erro ao restaurar sessão:", e);
               }
           }
-          
-          // Libera a trava após 1.5s para garantir que o estado estabilizou
-          setTimeout(() => {
-              isRestoringRef.current = false;
-              setIsCheckingAuth(false);
-          }, 1500);
+          setIsCheckingAuth(false);
       };
 
       restoreSession();
@@ -220,13 +197,12 @@ function App() {
                   filter: `access_key=eq.${currentUserKey}`
               },
               (payload) => {
-                  if (ignoreRemoteUpdate.current) return;
-
                   const newCloudData = payload.new.raw_json as AppState;
                   const newUpdatedAt = payload.new.updated_at;
                   
                   const currentData = useStore.getState();
 
+                  // Verifica se os dados são diferentes do estado atual
                   if (!deepEqual(currentData, newCloudData)) {
                       setPendingCloudData({
                           data: newCloudData,
@@ -266,8 +242,7 @@ function App() {
 
       } else {
           // UPLOAD (LOCAL -> CLOUD)
-          ignoreRemoteUpdate.current = true;
-          
+          // Revertido: Removida a trava ignoreRemoteUpdate
           const currentState = useStore.getState();
           try {
               const { error } = await supabase.from('user_data').upsert({
@@ -284,8 +259,6 @@ function App() {
 
           } catch (e: any) {
               notify(`Erro ao enviar para nuvem: ${e.message}`, "error");
-          } finally {
-              setTimeout(() => { ignoreRemoteUpdate.current = false; }, 3000);
           }
       }
   };
@@ -320,16 +293,13 @@ function App() {
     setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
   }, []);
 
-  // --- AUTO-SAVE (CORRIGIDO) ---
+  // --- AUTO-SAVE (REVERTIDO: SEM TRAVA DE INICIALIZAÇÃO) ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
-        // CORREÇÃO CRÍTICA: Se estiver restaurando ou com conflito, NÃO SALVA NADA.
-        if (isRestoringRef.current || pendingCloudData) {
-            console.log("Auto-save bloqueado: Restaurando ou Conflito Pendente");
-            return;
-        }
+        // Se houver conflito pendente, não salva para não sobrescrever a decisão do usuário
+        if (pendingCloudData) return;
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
@@ -358,7 +328,7 @@ function App() {
                     console.error("Backup Cloud Error:", err);
                     setSaveStatus('error');
                 }
-            }, 3000);
+            }, 3000); // 3 segundos de debounce
         } else {
             setSaveStatus('saved');
         }
@@ -501,7 +471,7 @@ function App() {
             let restoredState = null;
             if (localString) { try { restoredState = JSON.parse(localString); localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key); } catch(e) {} }
             
-            // CARREGAR NUVEM AQUI TAMBÉM
+            // CARREGAR NUVEM
             let cloudData = null;
             try {
                 const cloudResult = await loadCloudData(key);
@@ -510,7 +480,6 @@ function App() {
 
             let finalState = { ...initialState };
             
-            // MERGE INTELIGENTE NO LOGIN
             if (restoredState) finalState = mergeDeep(finalState, restoredState);
             if (cloudData) finalState = mergeDeep(finalState, cloudData);
 

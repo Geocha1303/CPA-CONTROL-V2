@@ -52,17 +52,8 @@ export const useStore = create<Store>((set) => ({
     // Atualização parcial com merge profundo
     updateState: (updates) => set((prev) => mergeDeep(prev, updates)),
     
-    // Substituição TOTAL do estado (Usado em backups/restauração)
-    // CRÍTICO: Não faz mergeDeep aqui. Substitui o estado completamente para evitar dados "fantasmas".
-    setAll: (newState) => set(() => ({
-        // Reinicia com initialState para garantir estrutura, depois aplica newState
-        ...initialState,
-        ...newState,
-        // Garante sub-objetos críticos caso venham parciais (defesa extra)
-        config: { ...initialState.config, ...(newState.config || {}) },
-        generator: { ...initialState.generator, ...(newState.generator || {}) },
-        onboarding: newState.onboarding || initialState.onboarding
-    })),
+    // Substituição TOTAL do estado (Simplificado para Merge Seguro)
+    setAll: (newState) => set((state) => ({ ...state, ...newState })),
     
     // Reset para estado inicial
     reset: () => set(initialState)
