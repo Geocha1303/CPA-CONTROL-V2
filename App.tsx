@@ -231,7 +231,14 @@ function App() {
 
   const handleResolveConflict = async (choice: 'cloud' | 'local') => {
       if (choice === 'cloud' && pendingCloudData) {
+          // CORREÇÃO CRÍTICA:
+          // 1. Atualiza o estado em memória
           setAll(pendingCloudData.data);
+          // 2. FORÇA a gravação no LocalStorage IMEDIATAMENTE.
+          // Isso é necessário porque o subscriber do useEffect abaixo está bloqueado
+          // enquanto 'pendingCloudData' não for null.
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingCloudData.data));
+          
           setLastCloudSyncTime(pendingCloudData.time);
           notify("Dados do PC atualizados com a versão da nuvem.", "success");
       } else {
@@ -285,6 +292,7 @@ function App() {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
+        // Bloqueia salvamento automático se houver conflito pendente
         if (pendingCloudData) return;
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));

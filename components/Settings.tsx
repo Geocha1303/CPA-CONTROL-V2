@@ -163,8 +163,13 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       if (!cloudData) return;
       if (confirm("PERIGO IRREVERSÍVEL:\n\nTem certeza que deseja substituir TUDO que está na sua tela agora pelos dados da nuvem?\n\nQualquer alteração local não salva será perdida para sempre.")) {
           setAll(cloudData.data);
+          // CORREÇÃO: Força o salvamento local IMEDIATO, pois o auto-save pode estar travado
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData.data));
+          
           setShowCloudInspector(false);
           notify("Dados restaurados com sucesso!", "success");
+          
+          // Agendamento de backup de segurança
           const key = localStorage.getItem(AUTH_STORAGE_KEY);
           if (key) {
               notify("Sincronização de segurança agendada para 1 minuto.", "info");

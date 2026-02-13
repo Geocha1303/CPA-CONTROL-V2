@@ -43,6 +43,8 @@ interface Store extends AppState {
 export const useStore = create<Store>((set) => ({
     ...initialState,
     updateState: (updates) => set((prev) => mergeDeep(prev, updates)),
-    setAll: (newState) => set(() => newState),
+    // CORREÇÃO: Spread simples para garantir que os dados da nuvem sobrescrevam o estado atual
+    // Mantém as funções (actions) do store pois elas não existem no newState (JSON puro)
+    setAll: (newState) => set((state) => ({ ...state, ...newState })),
     reset: () => set(initialState)
 }));
