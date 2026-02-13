@@ -53,11 +53,12 @@ export const useStore = create<Store>((set) => ({
     updateState: (updates) => set((prev) => mergeDeep(prev, updates)),
     
     // Substituição TOTAL do estado (Usado em backups/restauração)
-    setAll: (newState) => set((state) => ({
-        // Mantém as funções do store, substitui os dados
-        ...state,
+    // CRÍTICO: Não faz mergeDeep aqui. Substitui o estado completamente para evitar dados "fantasmas".
+    setAll: (newState) => set(() => ({
+        // Reinicia com initialState para garantir estrutura, depois aplica newState
+        ...initialState,
         ...newState,
-        // Garante que se o backup vier sem alguma chave, usa o default para evitar quebras
+        // Garante sub-objetos críticos caso venham parciais (defesa extra)
         config: { ...initialState.config, ...(newState.config || {}) },
         generator: { ...initialState.generator, ...(newState.generator || {}) },
         onboarding: newState.onboarding || initialState.onboarding

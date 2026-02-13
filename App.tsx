@@ -21,7 +21,7 @@ import {
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, calculateDayMetrics, formatarBRL } from './utils';
 import { supabase } from './supabaseClient';
-import { useStore, initialState } from './store'; // Import initialState
+import { useStore, initialState } from './store';
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -42,16 +42,9 @@ import Sidebar from './components/Sidebar';
 
 // Função auxiliar ROBUSTA para comparação profunda (Ignora diferenças entre null/undefined)
 const deepEqual = (obj1: any, obj2: any): boolean => {
-    // 1. Igualdade referencial ou valor primitivo
     if (obj1 === obj2) return true;
-    
-    // 2. Tratar null e undefined como iguais (Crucial para JSON de DB vs Local)
     if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
-
-    // 3. Se um for objeto e o outro não (e não caiu no null/undefined acima), são diferentes
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
-
-    // 4. Comparação de Arrays
     if (Array.isArray(obj1) && Array.isArray(obj2)) {
         if (obj1.length !== obj2.length) return false;
         for (let i = 0; i < obj1.length; i++) {
@@ -59,20 +52,13 @@ const deepEqual = (obj1: any, obj2: any): boolean => {
         }
         return true;
     }
-
-    // 5. Comparação de Objetos
-    // Pega chaves únicas de ambos os objetos
     const keys1 = Object.keys(obj1);
     const keys2 = Object.keys(obj2);
     const allKeys = new Set([...keys1, ...keys2]);
-
     for (let key of allKeys) {
-        // Ignora funções
         if (typeof obj1[key] === 'function' || typeof obj2[key] === 'function') continue;
-        
         if (!deepEqual(obj1[key], obj2[key])) return false;
     }
-
     return true;
 };
 
@@ -85,9 +71,8 @@ function App() {
   // Zustand Store Actions & State
   const setAll = useStore(s => s.setAll);
   const updateState = useStore(s => s.updateState);
-  const fullState = useStore(); // Access full state for watchers
+  const fullState = useStore(); 
   
-  // Selectors for specific checks
   const config = useStore(s => s.config);
   const onboarding = useStore(s => s.onboarding);
 
@@ -112,7 +97,9 @@ function App() {
 
   // --- SYNC CONFLICT STATE ---
   const [pendingCloudData, setPendingCloudData] = useState<{data: AppState, time: string} | null>(null);
-  // REF PARA EVITAR ECO DO REALTIME
+  
+  // TRAVA DE SEGURANÇA: Impede auto-save durante a carga inicial
+  const isRestoringRef = useRef(true); 
   const ignoreRemoteUpdate = useRef(false);
 
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -121,7 +108,6 @@ function App() {
       if (mainContentRef.current) mainContentRef.current.scrollTo(0, 0);
   }, [activeView]);
 
-  // Função para carregar da nuvem
   const loadCloudData = async (key: string): Promise<{ data: AppState, updatedAt: string } | null> => {
       try {
           const { data, error } = await supabase
@@ -142,6 +128,9 @@ function App() {
   useEffect(() => {
       const restoreSession = async () => {
           setIsCheckingAuth(true);
+          // TRAVA ATIVA: Nenhuma gravação permitida
+          isRestoringRef.current = true; 
+          
           const savedKey = localStorage.getItem(AUTH_STORAGE_KEY);
           
           if (savedKey) {
@@ -163,15 +152,18 @@ function App() {
                           try { localData = JSON.parse(localString); } catch(e) {}
                       }
 
+                      // Busca Nuvem ANTES de liberar o app
                       const cloudResult = await loadCloudData(savedKey);
                       let finalData = { ...initialState }; 
 
+                      // Lógica de Prioridade de Carregamento
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
                           
                           if (cloudResult && cloudResult.data) {
-                              // Se houver diferença REAL, avisa
+                              // Se tem dados na nuvem e locais, compara
                               if (!deepEqual(localData, cloudResult.data)) {
+                                  console.log("Conflito detectado na inicialização");
                                   setPendingCloudData({
                                       data: cloudResult.data,
                                       time: new Date(cloudResult.updatedAt).toLocaleString()
@@ -179,6 +171,7 @@ function App() {
                               }
                           }
                       } else if (cloudResult) {
+                          // Se não tem local, mas tem nuvem, usa nuvem
                           finalData = mergeDeep(finalData, cloudResult.data);
                       }
 
@@ -191,6 +184,7 @@ function App() {
                           finalData.config.userName = data.owner_name;
                       }
                       
+                      // Aplica os dados na memória
                       setAll(finalData);
                       setIsLoaded(true);
 
@@ -201,7 +195,12 @@ function App() {
                   console.error("Erro ao restaurar sessão:", e);
               }
           }
-          setIsCheckingAuth(false);
+          
+          // Libera a trava após 1.5s para garantir que o estado estabilizou
+          setTimeout(() => {
+              isRestoringRef.current = false;
+              setIsCheckingAuth(false);
+          }, 1500);
       };
 
       restoreSession();
@@ -221,11 +220,7 @@ function App() {
                   filter: `access_key=eq.${currentUserKey}`
               },
               (payload) => {
-                  // Se acabamos de enviar, ignoramos o "eco" que vem do servidor
-                  if (ignoreRemoteUpdate.current) {
-                      console.log("Ignorando atualização remota (Eco do próprio upload)");
-                      return;
-                  }
+                  if (ignoreRemoteUpdate.current) return;
 
                   const newCloudData = payload.new.raw_json as AppState;
                   const newUpdatedAt = payload.new.updated_at;
@@ -271,8 +266,6 @@ function App() {
 
       } else {
           // UPLOAD (LOCAL -> CLOUD)
-          
-          // 1. Bloqueia o listener de "eco" temporariamente
           ignoreRemoteUpdate.current = true;
           
           const currentState = useStore.getState();
@@ -287,17 +280,12 @@ function App() {
 
               notify("Nuvem atualizada com sucesso!", "success");
               setLastCloudSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-              
-              // 2. Fecha o modal imediatamente para feedback visual
               setPendingCloudData(null); 
 
           } catch (e: any) {
               notify(`Erro ao enviar para nuvem: ${e.message}`, "error");
           } finally {
-              // 3. Libera o listener após 3 segundos (tempo suficiente para o eco passar)
-              setTimeout(() => {
-                  ignoreRemoteUpdate.current = false;
-              }, 3000);
+              setTimeout(() => { ignoreRemoteUpdate.current = false; }, 3000);
           }
       }
   };
@@ -332,12 +320,16 @@ function App() {
     setTimeout(() => { setNotifications(prev => prev.filter(n => n.id !== id)); }, 4000);
   }, []);
 
-  // --- AUTO-SAVE ---
+  // --- AUTO-SAVE (CORRIGIDO) ---
   useEffect(() => {
     if (!isAuthenticated || !isLoaded || isDemoMode || currentUserKey === 'DEMO-USER-KEY') return;
 
     const unsubscribe = useStore.subscribe((state) => {
-        if (pendingCloudData) return;
+        // CORREÇÃO CRÍTICA: Se estiver restaurando ou com conflito, NÃO SALVA NADA.
+        if (isRestoringRef.current || pendingCloudData) {
+            console.log("Auto-save bloqueado: Restaurando ou Conflito Pendente");
+            return;
+        }
 
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, currentUserKey);
@@ -349,10 +341,6 @@ function App() {
             setSaveStatus('saving');
             syncTimeoutRef.current = window.setTimeout(async () => {
                 try {
-                    // Aqui também usamos o ignoreRemoteUpdate, mas sem bloquear por tanto tempo
-                    // pois o auto-save é frequente.
-                    // O ideal é que o auto-save NÃO acione o conflito modal a menos que seja outra pessoa.
-                    
                     const { error } = await supabase
                         .from('user_data')
                         .upsert({ 
@@ -512,10 +500,22 @@ function App() {
             const localString = localStorage.getItem(LOCAL_STORAGE_KEY);
             let restoredState = null;
             if (localString) { try { restoredState = JSON.parse(localString); localStorage.setItem(LAST_ACTIVE_KEY_STORAGE, key); } catch(e) {} }
-            if (!restoredState) { const cloudResult = await loadCloudData(key); if (cloudResult) restoredState = cloudResult.data; }
+            
+            // CARREGAR NUVEM AQUI TAMBÉM
+            let cloudData = null;
+            try {
+                const cloudResult = await loadCloudData(key);
+                if (cloudResult) cloudData = cloudResult.data;
+            } catch(e) {}
+
             let finalState = { ...initialState };
+            
+            // MERGE INTELIGENTE NO LOGIN
             if (restoredState) finalState = mergeDeep(finalState, restoredState);
+            if (cloudData) finalState = mergeDeep(finalState, cloudData);
+
             if (!finalState.config.userName || invalidNames.includes(finalState.config.userName.toUpperCase())) { finalState.config.userName = (ownerName && !invalidNames.includes(ownerName.toUpperCase())) ? ownerName : 'OPERADOR'; }
+            
             setAll(finalState);
             setIsLoaded(true);
         }} 
@@ -553,8 +553,8 @@ function App() {
                           <ArrowRightLeft size={32} />
                       </div>
                       <div>
-                          <h3 className="text-2xl font-black text-white tracking-tight">Decisão de Sincronização</h3>
-                          <p className="text-sm text-gray-400">Existem dados diferentes entre seu PC e a Nuvem.</p>
+                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito Detectado</h3>
+                          <p className="text-sm text-gray-400">Existem dados mais recentes ou diferentes na nuvem.</p>
                       </div>
                   </div>
 
@@ -576,17 +576,13 @@ function App() {
                                               <span className="text-white font-mono font-bold text-sm">{formatarBRL(cloudStats.totalProfit)}</span>
                                           </div>
                                           <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Vendas</span>
-                                              <span className="text-white font-mono font-bold text-sm">{formatarBRL(cloudStats.totalRevenue)}</span>
-                                          </div>
-                                          <div className="flex justify-between items-end">
                                               <span className="text-[10px] text-gray-400 uppercase font-bold">Registros</span>
                                               <span className="text-white font-bold text-sm">{cloudStats.daysCount} dias</span>
                                           </div>
                                       </div>
                                   </div>
                                   <div className="mt-4 pt-2 border-t border-indigo-500/20 text-right">
-                                      <p className="text-[10px] text-indigo-400 font-bold uppercase">Salvo em</p>
+                                      <p className="text-[10px] text-indigo-400 font-bold uppercase">Data do Backup</p>
                                       <p className="text-[10px] text-white">{pendingCloudData.time}</p>
                                   </div>
                               </div>
@@ -595,16 +591,12 @@ function App() {
                               <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl flex flex-col justify-between">
                                   <div>
                                       <h4 className="text-emerald-300 font-bold text-xs uppercase mb-3 flex items-center gap-2 pb-2 border-b border-emerald-500/20">
-                                          <Monitor size={14}/> Local (Atual)
+                                          <Monitor size={14}/> Este Dispositivo
                                       </h4>
                                       <div className="space-y-2">
                                           <div className="flex justify-between items-end">
                                               <span className="text-[10px] text-gray-400 uppercase font-bold">Lucro</span>
                                               <span className="text-white font-mono font-bold text-sm">{formatarBRL(localStats.totalProfit)}</span>
-                                          </div>
-                                          <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Vendas</span>
-                                              <span className="text-white font-mono font-bold text-sm">{formatarBRL(localStats.totalRevenue)}</span>
                                           </div>
                                           <div className="flex justify-between items-end">
                                               <span className="text-[10px] text-gray-400 uppercase font-bold">Registros</span>
@@ -614,7 +606,7 @@ function App() {
                                   </div>
                                   <div className="mt-4 pt-2 border-t border-emerald-500/20 text-right">
                                       <p className="text-[10px] text-emerald-400 font-bold uppercase">Status</p>
-                                      <p className="text-[10px] text-white animate-pulse">Editado Agora</p>
+                                      <p className="text-[10px] text-white animate-pulse">Atual</p>
                                   </div>
                               </div>
                           </div>
@@ -627,14 +619,14 @@ function App() {
                           className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm group"
                       >
                           <Download size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                          <span>BAIXAR DA NUVEM</span>
+                          <span>USAR NUVEM (RESTAURAR)</span>
                       </button>
                       <button 
                           onClick={() => handleResolveConflict('local')}
                           className="flex-1 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 text-emerald-400 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-xs sm:text-sm group"
                       >
                           <Upload size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                          <span>USAR LOCAL (ENVIAR)</span>
+                          <span>MANTER LOCAL (ENVIAR)</span>
                       </button>
                   </div>
               </div>
