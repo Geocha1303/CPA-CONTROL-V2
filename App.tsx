@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Menu, 
@@ -40,7 +41,6 @@ import IdentityModal from './components/IdentityModal';
 import Sidebar from './components/Sidebar';
 
 // Função auxiliar simples para comparação profunda (Deep Equal)
-// Adicionada aqui localmente ou garantida no utils para evitar erro de importação se não existir no utils atual
 const deepEqual = (obj1: any, obj2: any): boolean => {
     if (obj1 === obj2) return true;
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
@@ -141,15 +141,11 @@ function App() {
                       const cloudResult = await loadCloudData(savedKey);
                       let finalData = useStore.getState();
 
-                      // LÓGICA DE INTEGRIDADE (Startup Conflict Check)
                       if (localData) {
                           finalData = mergeDeep(finalData, localData);
                           
-                          // Se temos dados locais E dados na nuvem, comparamos com DEEP EQUAL
                           if (cloudResult && cloudResult.data) {
-                              // Se os objetos forem estruturalmente diferentes
                               if (!deepEqual(localData, cloudResult.data)) {
-                                  console.log("Diferença estrutural detectada entre Local e Nuvem na inicialização.");
                                   setPendingCloudData({
                                       data: cloudResult.data,
                                       time: new Date(cloudResult.updatedAt).toLocaleString()
@@ -157,7 +153,6 @@ function App() {
                               }
                           }
                       } else if (cloudResult) {
-                          // Se não tem local (limpou cache ou pc novo), pega direto da nuvem
                           finalData = mergeDeep(finalData, cloudResult.data);
                       }
 
@@ -203,7 +198,6 @@ function App() {
                   const newCloudData = payload.new.raw_json as AppState;
                   const newUpdatedAt = payload.new.updated_at;
                   
-                  // Verifica se os dados são realmente diferentes do atual usando Deep Equal
                   const currentData = useStore.getState();
 
                   if (!deepEqual(currentData, newCloudData)) {
@@ -219,7 +213,6 @@ function App() {
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey, isDemoMode]);
 
-  // Helper para comparar estatísticas no modal
   const getSnapshotStats = (data: AppState) => {
       let totalProfit = 0;
       let totalRevenue = 0;
@@ -238,12 +231,10 @@ function App() {
 
   const handleResolveConflict = async (choice: 'cloud' | 'local') => {
       if (choice === 'cloud' && pendingCloudData) {
-          // Opção A: Aceitar Nuvem (Atualizar PC)
           setAll(pendingCloudData.data);
           setLastCloudSyncTime(pendingCloudData.time);
           notify("Dados do PC atualizados com a versão da nuvem.", "success");
       } else {
-          // Opção B: Manter Local (Sobrescrever Nuvem)
           const currentState = useStore.getState();
           try {
               await supabase.from('user_data').upsert({
@@ -399,9 +390,14 @@ function App() {
   const finishTour = () => {
       setTourOpen(false);
       const currentState = useStore.getState();
-      const newState = {
+      const defaultSteps = { configName: true, generatedPlan: true, sentLot: true, addedExpense: true };
+      
+      const newState: AppState = {
           ...currentState,
-          onboarding: { ...(currentState.onboarding || {}), dismissed: true },
+          onboarding: { 
+              steps: currentState.onboarding?.steps || defaultSteps,
+              dismissed: true 
+          },
           dailyRecords: {}, 
           generator: { ...currentState.generator, plan: [], history: [], lotWithdrawals: {}, customLotSizes: {} }
       };
@@ -412,7 +408,8 @@ function App() {
 
   const handleTourDismiss = () => {
       setTourOpen(false);
-      const currentOnboarding = useStore.getState().onboarding || { steps: {}, dismissed: false };
+      const defaultSteps = { configName: false, generatedPlan: false, sentLot: false, addedExpense: false };
+      const currentOnboarding = useStore.getState().onboarding || { steps: defaultSteps, dismissed: false };
       updateState({ onboarding: { ...currentOnboarding, dismissed: true } });
   };
 
@@ -491,7 +488,7 @@ function App() {
           />
       )}
 
-      {/* --- SYNC CONFLICT MODAL (VERSÃO DETALHADA) --- */}
+      {/* --- SYNC CONFLICT MODAL --- */}
       {pendingCloudData && (
           <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
               <div className="bg-[#0f0a1e] border border-amber-500/50 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">

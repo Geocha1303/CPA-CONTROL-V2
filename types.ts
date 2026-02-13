@@ -1,3 +1,4 @@
+
 export interface Account {
   id: number;
   deposito: number;
@@ -103,7 +104,7 @@ export interface AppState {
   dreamGoals: DreamGoal[];
   config: Config;
   generator: GeneratorState;
-  onboarding?: OnboardingState; // Novo campo opcional
+  onboarding?: OnboardingState;
 }
 
 export interface Notification {
@@ -120,5 +121,4 @@ export interface SquadMember {
   is_online?: boolean;
 }
 
-// Adicionado 'sms' ao tipo ViewType
 export type ViewType = 'dashboard' | 'planejamento' | 'controle' | 'despesas' | 'metas' | 'configuracoes' | 'admin' | 'squad' | 'slots' | 'store' | 'sms';

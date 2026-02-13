@@ -1,17 +1,16 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, DayRecord } from '../types';
 import { calculateDayMetrics, formatarBRL, getHojeISO } from '../utils';
 import { 
   ComposedChart, Bar, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell
 } from 'recharts';
 import { 
   TrendingUp, Activity, ArrowDownRight,
-  PieChart as PieIcon, ArrowUpRight,
-  Wallet, BarChart3,
+  BarChart3,
   Flame, Globe, RefreshCw, Lock, Clock,
-  Target, ChevronDown, CheckCircle2, AlertTriangle,
-  HardDrive, Wifi, Cpu, X, Plus, ArrowRight, Percent, History
+  Target, ChevronDown, AlertTriangle,
+  HardDrive, Wifi, Cpu, X, Plus, ArrowRight, History
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useStore } from '../store';
@@ -138,14 +137,9 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
 
     const lucroLiquido = totalLucro - totalDespGeral;
     const totalInvestimentoReal = totalInv + totalDespGeral;
-    const pieData = [
-        { name: 'Depósitos', value: totalDepositos, color: '#6366f1' },
-        { name: 'Redepósitos', value: totalRedepositos, color: '#a855f7' },
-        { name: 'Custos', value: (totalDespGeral + (totalInv - totalDepositos - totalRedepositos)), color: '#f43f5e' }
-    ].filter(d => d.value > 0);
-
+    
     const margin = totalRet > 0 ? (lucroLiquido / totalRet) * 100 : 0;
-    // ROI removido da visualização, mantido cálculo interno se necessário
+    
     const roi = totalInvestimentoReal > 0 ? ((lucroLiquido / totalInvestimentoReal) * 100) : 0;
     const [selYear, selMonth] = selectedMonth.split('-').map(Number);
     const daysInMonth = new Date(selYear, selMonth, 0).getDate();
@@ -156,7 +150,7 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
     let healthScore = 0;
     if (margin > 30) healthScore = 95; else if (margin > 15) healthScore = 75; else if (margin > 0) healthScore = 50; else healthScore = 20;
 
-    return { totalInv: totalInvestimentoReal, totalRet, lucroLiquido, chartData: cleanChartData, pieData: pieData.length ? pieData : [{name:'N/A',value:1,color:'#333'}], margin, roi, projectedProfit, dailyAvg, healthScore };
+    return { totalInv: totalInvestimentoReal, totalRet, lucroLiquido, chartData: cleanChartData, margin, roi, projectedProfit, dailyAvg, healthScore };
   }, [state.dailyRecords, state.generalExpenses, state.config, selectedMonth, currentMonthKey]);
 
   const recentTransactions = useMemo(() => {
@@ -200,6 +194,31 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
     }
     return null;
   };
+
+  // Componente estatístico isolado para performance
+  const StatBlock = ({ title, value, icon: Icon, color, sub, size = 'sm' }: any) => (
+    <div className={`relative overflow-hidden rounded-3xl border border-white/5 bg-[#0c0818]/80 backdrop-blur-md p-6 flex flex-col justify-between group hover:border-${color}-500/30 transition-all duration-500`}>
+        <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${color === 'emerald' ? 'text-emerald-500' : color === 'indigo' ? 'text-indigo-500' : 'text-rose-500'}`}>
+            <Icon size={size === 'lg' ? 120 : 80} />
+        </div>
+        <div className="relative z-10">
+            <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-2xl border bg-${color}-500/10 border-${color}-500/20 text-${color}-400`}>
+                    <Icon size={24} />
+                </div>
+                {sub && <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wider bg-${color}-500/10 border-${color}-500/20 text-${color}-400`}>{sub}</span>}
+            </div>
+            <div>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+                <h3 className={`font-black text-white font-mono tracking-tighter ${size === 'lg' ? 'text-4xl md:text-5xl' : 'text-3xl'}`}>
+                    {value}
+                </h3>
+            </div>
+        </div>
+        {/* Glass Reflection */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in pb-10 max-w-[1600px] mx-auto">
@@ -271,59 +290,63 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
         </div>
 
         {/* --- MAIN CARDS GRID (3 COLUNAS) --- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {/* NET PROFIT CARD */}
-            <div className="bg-gradient-to-br from-[#0c0818] to-[#05030a] rounded-2xl p-6 border border-emerald-500/20 shadow-lg relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
-                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Wallet size={80} /></div>
-                <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20"><Wallet size={20} /></div>
-                    <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20 uppercase tracking-wider">Líquido</span>
+            <div className="md:col-span-2 relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-[#0c0818] to-[#05030a] p-8 flex flex-col justify-between group shadow-2xl shadow-emerald-900/10 hover:shadow-emerald-900/20 transition-all">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-700">
+                    <HardDrive size={180} className="text-emerald-500" />
                 </div>
+                
+                <div className="relative z-10 flex justify-between items-start">
+                    <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 mb-4">
+                        <Activity size={28} />
+                    </div>
+                    <div className="text-right">
+                        <div className="inline-flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 backdrop-blur-md">
+                            <Activity size={14} className="text-emerald-400" />
+                            <span className="text-xs font-bold text-emerald-300">Score: {metrics.healthScore}</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="relative z-10">
-                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Resultado Real</p>
-                    <h2 className="text-3xl font-black text-white font-mono tracking-tight">{formatVal(metrics.lucroLiquido)}</h2>
-                    <div className="flex items-center gap-2 mt-2 text-xs font-medium text-emerald-400/80">
-                        <TrendingUp size={12}/> <span>Margem Líquida: {metrics.margin.toFixed(1)}%</span>
+                    <p className="text-emerald-400/60 text-sm font-bold uppercase tracking-widest mb-1">Lucro Líquido (Realizado)</p>
+                    <h2 className="text-5xl md:text-6xl font-black text-white font-mono tracking-tighter drop-shadow-lg">
+                        {formatVal(metrics.lucroLiquido)}
+                    </h2>
+                    <div className="flex items-center gap-3 mt-4">
+                        <div className="h-1.5 w-32 bg-gray-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500" style={{width: `${Math.min(metrics.healthScore, 100)}%`}}></div>
+                        </div>
+                        <span className="text-xs text-gray-400 font-medium">Margem: {metrics.margin.toFixed(1)}%</span>
                     </div>
                 </div>
             </div>
 
-            {/* REVENUE CARD */}
-            <div className="bg-[#0c0818] rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 hover:border-indigo-500/30">
-                <div className="flex flex-col h-full justify-between relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 border border-indigo-500/20"><Activity size={20} /></div>
-                        <span className="text-[10px] font-bold text-gray-500 px-2 py-1 rounded border border-white/5 uppercase tracking-wider">Bruto</span>
-                    </div>
-                    <div>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Faturamento Total</p>
-                        <h2 className="text-3xl font-black text-white font-mono">{formatVal(metrics.totalRet)}</h2>
-                        <p className="text-[10px] text-gray-500 mt-1">Saques + Bônus Gerados</p>
-                    </div>
-                </div>
-            </div>
+            {/* REVENUE */}
+            <StatBlock 
+                title="Faturamento Total" 
+                value={formatVal(metrics.totalRet)} 
+                icon={TrendingUp} 
+                color="indigo" 
+                sub="Bruto" 
+            />
 
-            {/* INVESTMENT CARD */}
-            <div className="bg-[#0c0818] rounded-2xl p-6 border border-white/5 shadow-lg relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 hover:border-rose-500/30">
-                <div className="flex flex-col h-full justify-between relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20"><ArrowDownRight size={20} /></div>
-                        <span className="text-[10px] font-bold text-gray-500 px-2 py-1 rounded border border-white/5 uppercase tracking-wider">Saída</span>
-                    </div>
-                    <div>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Custo Operacional</p>
-                        <h2 className="text-3xl font-black text-white font-mono">{formatVal(metrics.totalInv)}</h2>
-                        <p className="text-[10px] text-gray-500 mt-1">Depósitos + Despesas Fixas</p>
-                    </div>
-                </div>
-            </div>
+            {/* EXPENSES */}
+            <StatBlock 
+                title="Custos Totais" 
+                value={formatVal(metrics.totalInv)} 
+                icon={ArrowDownRight} 
+                color="rose" 
+                sub="Investido" 
+            />
         </div>
 
         {/* --- CHARTS & ACTIONS SECTION --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* MAIN CHART AREA */}
-            <div className="lg:col-span-2 bg-[#0c0818] rounded-2xl p-6 border border-white/5 flex flex-col shadow-lg">
+            <div className="lg:col-span-2 bg-[#0c0818] rounded-2xl p-6 border border-white/5 flex flex-col shadow-lg group hover:border-indigo-500/20 transition-all">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-white font-bold flex items-center gap-2"><BarChart3 size={18} className="text-indigo-400"/> Fluxo Financeiro</h3>
                     <div className="flex gap-4">
@@ -379,7 +402,7 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
                     </div>
                 </div>
 
-                {/* RECENT ACTIVITY LIST (NEW) */}
+                {/* RECENT ACTIVITY LIST */}
                 <div className="flex-1 bg-[#0c0818] rounded-2xl p-5 border border-white/5 relative shadow-lg min-h-[200px]">
                     <h3 className="text-white font-bold text-xs mb-4 flex items-center justify-between">
                         <span className="flex items-center gap-2"><History size={14} className="text-purple-400"/> Últimas Movimentações</span>
@@ -389,7 +412,7 @@ const Dashboard: React.FC<Props> = ({ privacyMode, forcedState }) => {
                             <div className="text-center text-gray-600 text-xs py-8">Sem registros recentes.</div>
                         ) : (
                             recentTransactions.map((tx, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs group">
+                                <div key={i} className="flex justify-between items-center text-xs group hover:bg-white/5 p-2 rounded-lg transition-colors cursor-default">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-1.5 h-1.5 rounded-full ${tx.lucro >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
                                         <div>
