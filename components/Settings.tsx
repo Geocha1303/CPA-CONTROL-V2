@@ -1,8 +1,8 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { AppState, DayRecord } from '../types';
 import { mergeDeep, LOCAL_STORAGE_KEY, AUTH_STORAGE_KEY, calculateDayMetrics, formatarBRL } from '../utils';
-import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, Hash, PlayCircle, MessageCircle, CloudLightning, Eye, X, RefreshCw, Clock, CalendarDays, TrendingUp, ChevronDown, ChevronRight, Code } from 'lucide-react';
+import { AlertTriangle, Settings as SettingsIcon, Download, Upload, FileJson, ShieldCheck, Trash2, User, ToggleLeft, ToggleRight, HelpCircle, PlayCircle, MessageCircle, CloudLightning, Eye, X, RefreshCw, Clock, CalendarDays, ArrowUpRight, ArrowDownRight, Wallet, Code, ChevronDown, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import { supabase } from '../supabaseClient';
 
@@ -26,8 +26,13 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   // --- CLOUD INSPECTOR STATE ---
   const [showCloudInspector, setShowCloudInspector] = useState(false);
   const [cloudData, setCloudData] = useState<{timestamp: string, data: AppState} | null>(null);
+  const [localTimestamp, setLocalTimestamp] = useState<string | null>(null);
   const [isLoadingCloudData, setIsLoadingCloudData] = useState(false);
-  const [showRawJson, setShowRawJson] = useState(false); // Toggle para JSON bruto
+  const [showRawJson, setShowRawJson] = useState(false);
+
+  useEffect(() => {
+      setLocalTimestamp(new Date().toISOString());
+  }, [showCloudInspector]);
 
   const handleConfigChange = (key: 'valorBonus' | 'taxaImposto', value: number) => {
     updateState({ config: { ...state.config, [key]: value } });
@@ -108,20 +113,16 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       setIsBackingUp(true);
       notify('Forçando sincronização com a nuvem...', 'info');
       
-      // CRÍTICO: Pega o estado mais recente diretamente da memória (Zustand)
-      // Isso evita salvar dados "velhos" que o componente React possa ter em cache
       const currentFreshState = useStore.getState();
 
       try {
-          // USO DE UPSERT ATÔMICO COM CONFLITO EXPLÍCITO
-          // Isso diz ao banco: "Se a chave já existir, cale a boca e atualize o JSON. Se não, crie."
           const { error } = await supabase
               .from('user_data')
               .upsert({
                   access_key: key, 
                   raw_json: currentFreshState, 
                   updated_at: new Date().toISOString()
-              }, { onConflict: 'access_key' }); // Importante: deve corresponder à coluna UNIQUE no banco
+              }, { onConflict: 'access_key' });
 
           if (error) throw error;
           
@@ -172,15 +173,9 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
   const handleOverwriteLocal = () => {
       if (!cloudData) return;
       if (confirm("PERIGO IRREVERSÍVEL:\n\nTem certeza que deseja substituir TUDO que está na sua tela agora pelos dados da nuvem?\n\nQualquer alteração local não salva será perdida para sempre.")) {
-          // 1. Grava DIRETAMENTE no LocalStorage, garantindo persistência física
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData.data));
-          
-          // 2. Atualiza memória visualmente
           setAll(cloudData.data);
-          
-          // 3. Reload forçado para reidratação limpa
           notify("Restauração completa. Reiniciando...", "success");
-          
           setTimeout(() => {
               window.location.reload();
           }, 800);
@@ -194,64 +189,152 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
       </div>
   );
 
-  // Helper para renderizar resumo do backup
+  // --- RENDERIZADOR DO INSPETOR DE NUVEM (ATUALIZADO) ---
   const renderCloudSummary = () => {
       if (!cloudData) return null;
-      const { data } = cloudData;
-      const dates = Object.keys(data.dailyRecords || {}).sort().reverse().slice(0, 3);
+      const { data, timestamp } = cloudData;
       
-      let totalProfit = 0;
-      Object.values(data.dailyRecords || {}).forEach((day) => {
-          const m = calculateDayMetrics(day as DayRecord, data.config?.valorBonus);
-          totalProfit += m.lucro;
+      // Datas para cálculo do Mês Atual
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+      // Cálculo de Métricas Focadas no Mês
+      let totalLifetimeProfit = 0;
+      let monthProfit = 0;
+      let monthRevenue = 0;
+      let monthInvest = 0;
+      let totalDays = 0;
+
+      const dailyKeys = Object.keys(data.dailyRecords || {}).sort().reverse();
+      totalDays = dailyKeys.length;
+
+      // Itera dias
+      dailyKeys.forEach(date => {
+          const record = data.dailyRecords[date];
+          const m = calculateDayMetrics(record as DayRecord, data.config?.valorBonus);
+          
+          totalLifetimeProfit += m.lucro; // Acumulado Geral (apenas para contexto)
+
+          if (date.startsWith(currentMonthKey)) {
+              monthProfit += m.lucro;
+              monthRevenue += m.ret;
+              monthInvest += m.invest; // Inclui despesas diárias
+          }
       });
 
+      // Abate despesas gerais do mês atual
+      const monthGeneralExpenses = (data.generalExpenses || [])
+          .filter(e => e.date.startsWith(currentMonthKey))
+          .reduce((acc, curr) => acc + curr.valor, 0);
+
+      const netMonthProfit = monthProfit - monthGeneralExpenses;
+      const netMonthInvest = monthInvest + monthGeneralExpenses;
+
+      // Comparativo de Tempo
+      const backupDate = new Date(timestamp);
+      const isVeryRecent = (new Date().getTime() - backupDate.getTime()) < (1000 * 60 * 60); // Menos de 1h
+
       return (
-          <div className="space-y-4">
-              <div className="flex items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
-                  <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400"><User size={24} /></div>
-                  <div>
-                      <p className="text-[10px] text-gray-500 uppercase font-bold">Operador no Backup</p>
-                      <h4 className="text-white font-bold text-lg flex items-center gap-2">
-                          {data.config?.userName || 'Desconhecido'} 
-                          <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-mono">#{data.config?.userTag}</span>
-                      </h4>
+          <div className="space-y-5 animate-fade-in">
+              
+              {/* Header: Operador & Status */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/10">
+                  <div className="flex items-center gap-4">
+                      <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400 border border-indigo-500/30">
+                          <User size={24} />
+                      </div>
+                      <div>
+                          <p className="text-[10px] text-gray-500 uppercase font-bold">Dono do Backup</p>
+                          <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                              {data.config?.userName || 'Desconhecido'} 
+                              <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-mono">#{data.config?.userTag}</span>
+                          </h4>
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border mb-1 ${isVeryRecent ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-700/50 text-gray-400 border-gray-600/50'}`}>
+                          <Clock size={12} /> {isVeryRecent ? 'Backup Recente' : 'Backup Antigo'}
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-mono">{backupDate.toLocaleString()}</p>
                   </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
-                      <p className="text-[10px] text-emerald-400/70 font-bold uppercase mb-1">Lucro Total Acumulado</p>
-                      <p className="text-2xl font-bold text-emerald-400">{formatarBRL(totalProfit)}</p>
+              {/* HERO: Mês Atual (O que importa para o usuário) */}
+              <div className="bg-gradient-to-br from-black to-[#0c0818] p-6 rounded-2xl border border-white/10 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                      <CalendarDays size={80} className="text-white" />
                   </div>
-                  <div className="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
-                      <p className="text-[10px] text-blue-400/70 font-bold uppercase mb-1 flex items-center gap-1"><CalendarDays size={10} /> Dias Registrados</p>
-                      <p className="text-2xl font-bold text-blue-400">{Object.keys(data.dailyRecords || {}).length}</p>
+                  
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Mês Atual: <span className="text-white">{monthName}</span>
+                  </p>
+                  
+                  <div className="flex items-end gap-3 mb-6">
+                      <h2 className={`text-4xl font-black font-mono tracking-tighter ${netMonthProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatarBRL(netMonthProfit)}
+                      </h2>
+                      <span className="text-xs font-bold text-gray-500 mb-1.5 uppercase">Lucro Líquido</span>
+                  </div>
+
+                  {/* Breakdown do Mês */}
+                  <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/5 rounded-lg p-3 border border-white/5 flex items-center justify-between">
+                          <div>
+                              <p className="text-[10px] text-indigo-300 font-bold uppercase mb-0.5">Faturamento</p>
+                              <p className="text-sm font-bold text-white font-mono">{formatarBRL(monthRevenue)}</p>
+                          </div>
+                          <ArrowUpRight size={16} className="text-indigo-500 opacity-50" />
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-3 border border-white/5 flex items-center justify-between">
+                          <div>
+                              <p className="text-[10px] text-rose-300 font-bold uppercase mb-0.5">Investido + Desp.</p>
+                              <p className="text-sm font-bold text-white font-mono">{formatarBRL(netMonthInvest)}</p>
+                          </div>
+                          <ArrowDownRight size={16} className="text-rose-500 opacity-50" />
+                      </div>
                   </div>
               </div>
 
+              {/* Contexto Geral (Lifetime) */}
+              <div className="bg-[#050505] p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/5 rounded-lg text-gray-400"><Wallet size={18} /></div>
+                      <div>
+                          <p className="text-[10px] text-gray-500 uppercase font-bold">Acumulado na História</p>
+                          <p className="text-sm font-bold text-gray-300 font-mono">{formatarBRL(totalLifetimeProfit)}</p>
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <p className="text-[10px] text-gray-500 uppercase font-bold">{totalDays} dias registrados</p>
+                  </div>
+              </div>
+
+              {/* Últimos Registros (Preview Lista) */}
               <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2 ml-1">Últimos Registros (Preview)</p>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-3 ml-1 flex items-center gap-2">
+                      <RefreshCw size={12} /> Últimos 3 dias sincronizados
+                  </p>
                   <div className="space-y-2">
-                      {dates.map(date => {
+                      {dailyKeys.slice(0, 3).map(date => {
                           const record = data.dailyRecords[date];
-                          const metrics = calculateDayMetrics(record, data.config?.valorBonus);
+                          const m = calculateDayMetrics(record as DayRecord, data.config?.valorBonus);
                           return (
-                              <div key={date} className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-sm">
+                              <div key={date} className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-sm hover:bg-white/5 transition-colors">
                                   <div className="flex items-center gap-3">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-white/20"></div>
-                                      <span className="text-gray-300 font-medium">{new Date(date).toLocaleDateString('pt-BR')}</span>
+                                      <div className={`w-1.5 h-1.5 rounded-full ${m.lucro >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                      <span className="text-gray-300 font-medium font-mono text-xs">{new Date(date).toLocaleDateString('pt-BR')}</span>
                                   </div>
                                   <div className="flex gap-4 text-xs font-mono">
-                                      <span className="text-gray-500">Fat: {formatarBRL(metrics.ret)}</span>
-                                      <span className={metrics.lucro >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                                          {formatarBRL(metrics.lucro)}
+                                      <span className="text-gray-500">Fat: {formatarBRL(m.ret)}</span>
+                                      <span className={m.lucro >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                                          {formatarBRL(m.lucro)}
                                       </span>
                                   </div>
                               </div>
                           );
                       })}
-                      {dates.length === 0 && <p className="text-center text-gray-600 text-xs py-2">Sem registros diários no backup.</p>}
+                      {dailyKeys.length === 0 && <p className="text-center text-gray-600 text-xs py-2">Sem registros diários no backup.</p>}
                   </div>
               </div>
           </div>
@@ -339,7 +422,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
             </div>
         </div>
 
-        {/* --- MODAL DE INSPEÇÃO DE NUVEM --- */}
+        {/* --- MODAL DE INSPEÇÃO DE NUVEM (ATUALIZADO) --- */}
         {showCloudInspector && (
             <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-[#0f0a1e] border border-blue-500/30 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
@@ -348,12 +431,9 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                     <div className="flex justify-between items-start mb-4 shrink-0">
                         <div>
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <CloudLightning size={24} className="text-blue-400" /> Inspetor de Nuvem
+                                <CloudLightning size={24} className="text-blue-400" /> Inspetor de Backup
                             </h3>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                                <Clock size={12} />
-                                {cloudData ? `Salvo em: ${new Date(cloudData.timestamp).toLocaleString()}` : 'Carregando...'}
-                            </div>
+                            <p className="text-xs text-gray-400 mt-1">Verifique os dados antes de restaurar.</p>
                         </div>
                         <button onClick={() => setShowCloudInspector(false)} className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-white/5"><X size={20}/></button>
                     </div>
@@ -393,7 +473,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                     <div className="mt-4 pt-4 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0 bg-[#0f0a1e]">
                         <div className="flex items-center gap-2 text-[10px] text-rose-400 bg-rose-500/10 px-3 py-2 rounded-lg border border-rose-500/20 w-full md:w-auto">
                             <AlertTriangle size={14} className="shrink-0" />
-                            <span>Atenção: Restaurar substituirá os dados atuais.</span>
+                            <span>Atenção: A restauração substituirá seus dados locais atuais.</span>
                         </div>
                         <div className="flex gap-3 w-full md:w-auto">
                             <button 
@@ -407,7 +487,7 @@ const Settings: React.FC<Props> = ({ notify, forcedState }) => {
                                 disabled={!cloudData}
                                 className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg text-xs font-bold shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <Download size={16} /> RESTAURAR ESTE BACKUP
+                                <Download size={16} /> RESTAURAR AGORA
                             </button>
                         </div>
                     </div>
