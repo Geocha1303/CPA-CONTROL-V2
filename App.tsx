@@ -16,7 +16,13 @@ import {
   Download,
   Upload,
   Monitor,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Calendar,
+  User,
+  DollarSign,
+  Smartphone,
+  Clock,
+  ShieldAlert
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, calculateDayMetrics, formatarBRL } from './utils';
@@ -241,22 +247,6 @@ function App() {
 
       return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated, currentUserKey, isDemoMode]);
-
-  const getSnapshotStats = (data: AppState) => {
-      let totalProfit = 0;
-      let totalRevenue = 0;
-      const dates = Object.keys(data.dailyRecords || {}).sort();
-      const lastDate = dates.length > 0 ? new Date(dates[dates.length - 1]).toLocaleDateString('pt-BR') : '-';
-      const daysCount = dates.length;
-
-      Object.values(data.dailyRecords || {}).forEach(day => {
-          const m = calculateDayMetrics(day, data.config?.valorBonus || 20);
-          totalProfit += m.lucro;
-          totalRevenue += m.ret;
-      });
-
-      return { totalProfit, totalRevenue, lastDate, daysCount };
-  };
 
   const handleResolveConflict = async (choice: 'cloud' | 'local') => {
       if (choice === 'cloud' && pendingCloudData) {
@@ -540,90 +530,155 @@ function App() {
           />
       )}
 
-      {/* --- SYNC CONFLICT MODAL --- */}
+      {/* --- SYNC CONFLICT MODAL (REDESENHADO) --- */}
       {pendingCloudData && (
-          <div className="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-[#0f0a1e] border border-amber-500/50 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center gap-4 mb-6">
-                      <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 animate-pulse">
-                          <ArrowRightLeft size={32} />
+          <div className="fixed inset-0 z-[1000] bg-[#02000f]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-amber-500/30 rounded-3xl w-full max-w-4xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                  
+                  {/* Header */}
+                  <div className="p-6 border-b border-white/5 bg-gradient-to-r from-amber-900/20 to-transparent flex items-center gap-4">
+                      <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse">
+                          <ArrowRightLeft size={24} />
                       </div>
                       <div>
-                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito Detectado</h3>
-                          <p className="text-sm text-gray-400">Existem dados mais recentes ou diferentes na nuvem.</p>
+                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito de Versões</h3>
+                          <p className="text-gray-400 text-sm">Detectamos uma diferença entre os dados locais e o backup na nuvem.</p>
                       </div>
                   </div>
 
-                  {(() => {
-                      const localStats = getSnapshotStats(useStore.getState());
-                      const cloudStats = getSnapshotStats(pendingCloudData.data);
-                      
-                      return (
-                          <div className="grid grid-cols-2 gap-4 mb-6">
-                              {/* Cloud Card */}
-                              <div className="bg-indigo-500/10 border border-indigo-500/30 p-4 rounded-xl flex flex-col justify-between">
-                                  <div>
-                                      <h4 className="text-indigo-300 font-bold text-xs uppercase mb-3 flex items-center gap-2 pb-2 border-b border-indigo-500/20">
-                                          <Cloud size={14}/> Nuvem (Backup)
-                                      </h4>
-                                      <div className="space-y-2">
-                                          <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Lucro</span>
-                                              <span className="text-white font-mono font-bold text-sm">{formatarBRL(cloudStats.totalProfit)}</span>
-                                          </div>
-                                          <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Registros</span>
-                                              <span className="text-white font-bold text-sm">{cloudStats.daysCount} dias</span>
-                                          </div>
+                  {/* Comparison Body */}
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                      {(() => {
+                          const localState = useStore.getState();
+                          const cloudState = pendingCloudData.data;
+                          
+                          // Helper para calcular métricas rápidas
+                          const calcMetrics = (state: AppState) => {
+                              let totalProfit = 0;
+                              let totalRevenue = 0;
+                              const dates = Object.keys(state.dailyRecords || {}).sort();
+                              const lastRecordDate = dates.length > 0 ? dates[dates.length - 1] : null;
+                              
+                              Object.values(state.dailyRecords || {}).forEach(day => {
+                                   const m = calculateDayMetrics(day, state.config?.valorBonus || 20);
+                                   totalProfit += m.lucro;
+                                   totalRevenue += m.ret;
+                              });
+
+                              return {
+                                  userName: state.config?.userName || 'Desconhecido',
+                                  userTag: state.config?.userTag || '----',
+                                  totalProfit,
+                                  totalRevenue,
+                                  daysCount: dates.length,
+                                  lastRecordDate: lastRecordDate ? new Date(lastRecordDate).toLocaleDateString('pt-BR') : 'Sem registros'
+                              };
+                          };
+
+                          const localMetrics = calcMetrics(localState);
+                          const cloudMetrics = calcMetrics(cloudState);
+
+                          const MetricRow = ({ label, icon: Icon, localVal, cloudVal, isCurrency = false }: any) => (
+                              <div className="grid grid-cols-2 gap-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                                  <div className="flex justify-between items-center px-2">
+                                      <div className="flex flex-col">
+                                          <span className="text-[10px] text-indigo-400/70 font-bold uppercase">{label}</span>
+                                          <span className={`font-mono text-sm font-bold ${isCurrency ? 'text-indigo-300' : 'text-white'}`}>
+                                              {isCurrency ? formatarBRL(cloudVal) : cloudVal}
+                                          </span>
                                       </div>
                                   </div>
-                                  <div className="mt-4 pt-2 border-t border-indigo-500/20 text-right">
-                                      <p className="text-[10px] text-indigo-400 font-bold uppercase">Data do Backup</p>
-                                      <p className="text-[10px] text-white">{pendingCloudData.time}</p>
-                                  </div>
-                              </div>
-
-                              {/* Local Card */}
-                              <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl flex flex-col justify-between">
-                                  <div>
-                                      <h4 className="text-emerald-300 font-bold text-xs uppercase mb-3 flex items-center gap-2 pb-2 border-b border-emerald-500/20">
-                                          <Monitor size={14}/> Este Dispositivo
-                                      </h4>
-                                      <div className="space-y-2">
-                                          <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Lucro</span>
-                                              <span className="text-white font-mono font-bold text-sm">{formatarBRL(localStats.totalProfit)}</span>
-                                          </div>
-                                          <div className="flex justify-between items-end">
-                                              <span className="text-[10px] text-gray-400 uppercase font-bold">Registros</span>
-                                              <span className="text-white font-bold text-sm">{localStats.daysCount} dias</span>
-                                          </div>
+                                  <div className="flex justify-between items-center px-2 border-l border-white/5">
+                                      <div className="flex flex-col">
+                                          <span className="text-[10px] text-emerald-400/70 font-bold uppercase">{label}</span>
+                                          <span className={`font-mono text-sm font-bold ${isCurrency ? 'text-emerald-300' : 'text-white'}`}>
+                                              {isCurrency ? formatarBRL(localVal) : localVal}
+                                          </span>
                                       </div>
                                   </div>
-                                  <div className="mt-4 pt-2 border-t border-emerald-500/20 text-right">
-                                      <p className="text-[10px] text-emerald-400 font-bold uppercase">Status</p>
-                                      <p className="text-[10px] text-white animate-pulse">Atual</p>
-                                  </div>
                               </div>
-                          </div>
-                      );
-                  })()}
+                          );
 
-                  <div className="flex flex-col sm:flex-row gap-4">
-                      <button 
-                          onClick={() => handleResolveConflict('cloud')}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm group"
-                      >
-                          <Download size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                          <span>USAR NUVEM (RESTAURAR)</span>
-                      </button>
-                      <button 
-                          onClick={() => handleResolveConflict('local')}
-                          className="flex-1 bg-emerald-600/20 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 text-emerald-400 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-xs sm:text-sm group"
-                      >
-                          <Upload size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                          <span>MANTER LOCAL (ENVIAR)</span>
-                      </button>
+                          return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  
+                                  {/* Cloud Version */}
+                                  <div className="group relative bg-[#0a0516] rounded-2xl border border-indigo-500/30 p-0 hover:border-indigo-500/60 transition-all overflow-hidden flex flex-col">
+                                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none"><Cloud size={100} /></div>
+                                      <div className="p-5 border-b border-white/5 bg-indigo-900/10">
+                                          <div className="flex items-center gap-3 mb-1">
+                                              <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400"><Cloud size={20} /></div>
+                                              <div>
+                                                  <h4 className="font-bold text-white text-lg">Nuvem (Backup)</h4>
+                                                  <p className="text-xs text-indigo-300 font-mono flex items-center gap-1"><Clock size={10}/> {pendingCloudData.time}</p>
+                                              </div>
+                                          </div>
+                                      </div>
+                                      <div className="p-4 flex-1">
+                                          <MetricRow label="Operador" icon={User} cloudVal={cloudMetrics.userName} localVal={localMetrics.userName} />
+                                          <MetricRow label="Lucro Total" icon={DollarSign} cloudVal={cloudMetrics.totalProfit} localVal={localMetrics.totalProfit} isCurrency />
+                                          <MetricRow label="Dias Registrados" icon={Calendar} cloudVal={cloudMetrics.daysCount} localVal={localMetrics.daysCount} />
+                                          <MetricRow label="Último Registro" icon={Calendar} cloudVal={cloudMetrics.lastRecordDate} localVal={localMetrics.lastRecordDate} />
+                                      </div>
+                                  </div>
+
+                                  {/* Local Version */}
+                                  <div className="group relative bg-[#0a0516] rounded-2xl border border-emerald-500/30 p-0 hover:border-emerald-500/60 transition-all overflow-hidden flex flex-col">
+                                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none"><Smartphone size={100} /></div>
+                                      <div className="p-5 border-b border-white/5 bg-emerald-900/10">
+                                          <div className="flex items-center gap-3 mb-1">
+                                              <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400"><Smartphone size={20} /></div>
+                                              <div>
+                                                  <h4 className="font-bold text-white text-lg">Este Dispositivo</h4>
+                                                  <p className="text-xs text-emerald-300 font-mono flex items-center gap-1"><Activity size={10}/> Versão Atual (Não salva)</p>
+                                              </div>
+                                          </div>
+                                      </div>
+                                      <div className="p-4 flex-1">
+                                          {/* Espelho visual para alinhamento */}
+                                          <div className="py-3 border-b border-white/5 opacity-0 pointer-events-none"><span className="text-sm">Placeholder</span></div>
+                                          <div className="py-3 border-b border-white/5 opacity-0 pointer-events-none"><span className="text-sm">Placeholder</span></div>
+                                          <div className="py-3 border-b border-white/5 opacity-0 pointer-events-none"><span className="text-sm">Placeholder</span></div>
+                                          <div className="py-3 border-b border-white/5 opacity-0 pointer-events-none"><span className="text-sm">Placeholder</span></div>
+                                      </div>
+                                      {/* Overlay com conteúdo real alinhado à esquerda */}
+                                      <div className="absolute inset-0 top-[88px] p-4 pointer-events-none">
+                                           <div className="h-full flex flex-col justify-start">
+                                                <div className="py-3 border-b border-transparent flex flex-col"><span className="text-[10px] text-emerald-400/70 font-bold uppercase">Operador</span><span className="font-mono text-sm font-bold text-white">{localMetrics.userName}</span></div>
+                                                <div className="py-3 border-b border-transparent flex flex-col"><span className="text-[10px] text-emerald-400/70 font-bold uppercase">Lucro Total</span><span className="font-mono text-sm font-bold text-emerald-300">{formatarBRL(localMetrics.totalProfit)}</span></div>
+                                                <div className="py-3 border-b border-transparent flex flex-col"><span className="text-[10px] text-emerald-400/70 font-bold uppercase">Dias Registrados</span><span className="font-mono text-sm font-bold text-white">{localMetrics.daysCount}</span></div>
+                                                <div className="py-3 border-b border-transparent flex flex-col"><span className="text-[10px] text-emerald-400/70 font-bold uppercase">Último Registro</span><span className="font-mono text-sm font-bold text-white">{localMetrics.lastRecordDate}</span></div>
+                                           </div>
+                                      </div>
+                                  </div>
+
+                              </div>
+                          );
+                      })()}
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="p-6 border-t border-white/5 bg-[#0a0516] flex flex-col md:flex-row gap-4 justify-between items-center">
+                       <div className="flex items-center gap-2 text-amber-500/70 text-xs font-bold bg-amber-500/5 px-3 py-2 rounded-lg border border-amber-500/10 w-full md:w-auto">
+                           <ShieldAlert size={14} />
+                           <span>Ação Irreversível. Verifique os dados acima.</span>
+                       </div>
+                       <div className="flex gap-4 w-full md:w-auto">
+                          <button 
+                              onClick={() => handleResolveConflict('cloud')}
+                              className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm group"
+                          >
+                              <Download size={18} className="group-hover:-translate-y-1 transition-transform" /> 
+                              <span>RESTAURAR DA NUVEM</span>
+                          </button>
+                          <button 
+                              onClick={() => handleResolveConflict('local')}
+                              className="flex-1 md:flex-none bg-emerald-600/20 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 text-emerald-400 font-bold py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-2 text-xs sm:text-sm group"
+                          >
+                              <Upload size={18} className="group-hover:-translate-y-1 transition-transform" /> 
+                              <span>MANTER LOCAL</span>
+                          </button>
+                       </div>
                   </div>
               </div>
           </div>
