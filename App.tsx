@@ -26,7 +26,9 @@ import {
   ChevronRight,
   TrendingUp,
   TrendingDown,
-  Wallet
+  Wallet,
+  ArrowDown,
+  ArrowUp
 } from 'lucide-react';
 import { AppState, ViewType, Notification } from './types';
 import { getHojeISO, mergeDeep, generateDemoState, generateUserTag, LOCAL_STORAGE_KEY, LAST_ACTIVE_KEY_STORAGE, AUTH_STORAGE_KEY, DEVICE_ID_KEY, calculateDayMetrics, formatarBRL } from './utils';
@@ -534,163 +536,167 @@ function App() {
           />
       )}
 
-      {/* --- SYNC CONFLICT MODAL (DETALHADO) --- */}
+      {/* --- SYNC CONFLICT MODAL (LAYOUT PREMIUM LADO A LADO) --- */}
       {pendingCloudData && (
-          <div className="fixed inset-0 z-[1000] bg-[#02000f]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-[#0f0a1e] border border-amber-500/30 rounded-3xl w-full max-w-5xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 z-[1000] bg-[#02000f]/95 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#0f0a1e] border border-amber-500/20 rounded-3xl w-full max-w-5xl shadow-[0_0_60px_rgba(245,158,11,0.1)] relative overflow-hidden flex flex-col max-h-[90vh]">
                   
                   {/* Header */}
-                  <div className="p-6 border-b border-white/5 bg-gradient-to-r from-amber-900/20 to-transparent flex items-center gap-4">
-                      <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse">
-                          <ArrowRightLeft size={24} />
+                  <div className="p-6 border-b border-white/5 bg-gradient-to-b from-amber-900/10 to-transparent flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 border border-amber-500/20">
+                              <ArrowRightLeft size={24} />
+                          </div>
+                          <div>
+                              <h3 className="text-xl font-black text-white tracking-tight">Sincronização Necessária</h3>
+                              <p className="text-gray-400 text-xs font-medium mt-0.5">Backup remoto mais recente encontrado.</p>
+                          </div>
                       </div>
-                      <div>
-                          <h3 className="text-2xl font-black text-white tracking-tight">Conflito de Versões Detectado</h3>
-                          <p className="text-gray-400 text-sm">Compare detalhadamente os dados antes de decidir. A ação é irreversível.</p>
+                      <div className="text-right">
+                          <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-400 uppercase tracking-widest animate-pulse">
+                              <ShieldAlert size={12} /> Ação Requerida
+                          </div>
                       </div>
                   </div>
 
-                  {/* Detailed Comparison Body */}
-                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                  {/* Body Content */}
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-[#050308]">
                       {(() => {
                           const localState = useStore.getState();
                           const cloudState = pendingCloudData.data;
                           
-                          // Helper para calcular métricas DETALHADAS
-                          const getDetailedMetrics = (state: AppState) => {
-                              let totalDeposits = 0;
-                              let totalRedeposits = 0;
-                              let totalWithdrawals = 0;
-                              let totalBonusVal = 0;
-                              let totalDailyExpenses = 0;
-                              let totalGeneralExpenses = 0;
+                          // Helper para extração de dados
+                          const getData = (state: AppState) => {
+                              let totalDeposits = 0, totalRedeposits = 0, totalWithdrawals = 0, totalBonus = 0, expenses = 0;
+                              const dates = Object.keys(state.dailyRecords || {}).sort();
                               
-                              const days = Object.keys(state.dailyRecords || {});
-                              const lastDay = days.sort().reverse()[0]; 
-
-                              days.forEach(date => {
-                                  const day = state.dailyRecords[date];
-                                  
-                                  // Despesas Diárias (Proxy + SMS)
-                                  totalDailyExpenses += (day.expenses?.proxy || 0) + (day.expenses?.numeros || 0);
-                                  
+                              dates.forEach(d => {
+                                  const day = state.dailyRecords[d];
+                                  expenses += (day.expenses?.proxy || 0) + (day.expenses?.numeros || 0);
                                   if(day.accounts){
                                       day.accounts.forEach(acc => {
                                           totalDeposits += (acc.deposito || 0);
                                           totalRedeposits += (acc.redeposito || 0);
                                           totalWithdrawals += (acc.saque || 0);
-                                          
                                           const bonusVal = state.config.manualBonusMode ? (acc.ciclos || 0) : ((acc.ciclos || 0) * (state.config.valorBonus || 20));
-                                          totalBonusVal += bonusVal;
+                                          totalBonus += bonusVal;
                                       });
                                   }
                               });
-
-                              // Despesas Gerais
-                              if (state.generalExpenses) {
-                                  totalGeneralExpenses = state.generalExpenses.reduce((acc, curr) => acc + (curr.valor || 0), 0);
+                              if(state.generalExpenses) {
+                                  expenses += state.generalExpenses.reduce((a,b) => a + (b.valor||0), 0);
                               }
-
-                              const totalRevenue = totalWithdrawals + totalBonusVal;
-                              const totalInvested = totalDeposits + totalRedeposits; // Apenas Depósitos para visualização
-                              const totalExpensesAll = totalDailyExpenses + totalGeneralExpenses;
-                              
-                              // Lucro Líquido = (Saques + Bonus) - (Depositos + Redepositos + Despesas Diarias + Despesas Gerais)
-                              const netProfit = totalRevenue - (totalInvested + totalExpensesAll);
-
                               return {
-                                  userName: state.config?.userName || 'Desconhecido',
-                                  userTag: state.config?.userTag || '----',
-                                  lastDate: lastDay ? new Date(lastDay).toLocaleDateString('pt-BR') : '---',
-                                  
-                                  // Financeiro Discriminado
+                                  name: state.config?.userName || '???',
+                                  profit: (totalWithdrawals + totalBonus) - (totalDeposits + totalRedeposits + expenses),
+                                  revenue: totalWithdrawals + totalBonus,
                                   withdrawals: totalWithdrawals,
-                                  bonus: totalBonusVal,
+                                  bonus: totalBonus,
+                                  cost: totalDeposits + totalRedeposits + expenses,
                                   deposits: totalDeposits + totalRedeposits,
-                                  expenses: totalExpensesAll,
-                                  netProfit: netProfit,
-                                  totalRecords: days.length
+                                  expenses: expenses,
+                                  days: dates.length,
+                                  lastDate: dates[dates.length-1] || '-'
                               };
                           };
 
-                          const localMetrics = getDetailedMetrics(localState);
-                          const cloudMetrics = getDetailedMetrics(cloudState);
+                          const local = getData(localState);
+                          const cloud = getData(cloudState);
 
-                          // Componente de Linha de Comparação
-                          const DiffRow = ({ label, icon: Icon, cloudVal, localVal, isCurrency = false, highlightDiff = false }: any) => {
-                              const isDiff = cloudVal !== localVal;
-                              const textColor = isDiff && highlightDiff ? 'text-amber-400' : 'text-gray-400';
+                          // Card Component
+                          const VersionCard = ({ title, type, data, date }: any) => {
+                              const isCloud = type === 'cloud';
+                              const color = isCloud ? 'indigo' : 'emerald';
                               
                               return (
-                                  <div className="grid grid-cols-12 gap-4 py-3 border-b border-white/5 hover:bg-white/[0.02] items-center">
-                                      <div className="col-span-4 flex items-center gap-3 pl-2">
-                                          <div className={`p-1.5 rounded-lg ${isDiff ? 'bg-amber-500/10 text-amber-400' : 'bg-white/5 text-gray-500'}`}>
-                                              <Icon size={14} />
-                                          </div>
-                                          <span className="text-sm font-bold text-gray-300 uppercase tracking-wide text-[10px]">{label}</span>
-                                      </div>
+                                  <div className={`flex flex-col h-full rounded-2xl border ${isCloud ? 'bg-indigo-950/10 border-indigo-500/20' : 'bg-emerald-950/10 border-emerald-500/20'} overflow-hidden relative group`}>
                                       
-                                      {/* Cloud Column */}
-                                      <div className="col-span-4 text-right pr-4 border-r border-white/5">
-                                          <span className={`font-mono font-bold text-sm ${isCurrency ? 'text-indigo-300' : 'text-indigo-200'}`}>
-                                              {isCurrency ? formatarBRL(cloudVal) : cloudVal}
-                                          </span>
+                                      {/* Header Card */}
+                                      <div className={`p-4 border-b ${isCloud ? 'border-indigo-500/10 bg-indigo-900/10' : 'border-emerald-500/10 bg-emerald-900/10'} flex justify-between items-center`}>
+                                          <div className="flex items-center gap-3">
+                                              <div className={`p-2 rounded-lg ${isCloud ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                                                  {isCloud ? <Cloud size={18}/> : <Smartphone size={18}/>}
+                                              </div>
+                                              <div>
+                                                  <h4 className={`text-sm font-black uppercase tracking-wider ${isCloud ? 'text-indigo-200' : 'text-emerald-200'}`}>{title}</h4>
+                                                  <p className={`text-[10px] font-mono opacity-70 ${isCloud ? 'text-indigo-300' : 'text-emerald-300'}`}>{date}</p>
+                                              </div>
+                                          </div>
+                                          <div className={`text-[10px] font-bold px-2 py-1 rounded border ${isCloud ? 'border-indigo-500/30 text-indigo-400' : 'border-emerald-500/30 text-emerald-400'}`}>
+                                              {data.name}
+                                          </div>
                                       </div>
 
-                                      {/* Local Column */}
-                                      <div className="col-span-4 text-right pr-2">
-                                          <span className={`font-mono font-bold text-sm ${isCurrency ? 'text-emerald-300' : 'text-emerald-200'} ${isDiff ? 'animate-pulse' : ''}`}>
-                                              {isCurrency ? formatarBRL(localVal) : localVal}
-                                          </span>
+                                      {/* Main Metric */}
+                                      <div className="p-6 text-center border-b border-white/5 relative">
+                                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Lucro Líquido Total</p>
+                                          <div className={`text-3xl font-black font-mono tracking-tight ${data.profit >= 0 ? (isCloud ? 'text-indigo-400' : 'text-emerald-400') : 'text-rose-400'}`}>
+                                              {formatarBRL(data.profit)}
+                                          </div>
+                                      </div>
+
+                                      {/* Breakdown Details */}
+                                      <div className="p-4 space-y-4 text-sm flex-1">
+                                          
+                                          {/* ENTRADAS */}
+                                          <div>
+                                              <p className={`text-[10px] font-bold uppercase mb-2 flex items-center gap-1 ${isCloud ? 'text-indigo-300/50' : 'text-emerald-300/50'}`}>
+                                                  <ArrowUp size={10} /> Entradas (Receita)
+                                              </p>
+                                              <div className="bg-black/20 rounded-lg p-2 space-y-1">
+                                                  <div className="flex justify-between">
+                                                      <span className="text-gray-500 text-xs">Saques</span>
+                                                      <span className="font-mono font-bold text-gray-300">{formatarBRL(data.withdrawals)}</span>
+                                                  </div>
+                                                  <div className="flex justify-between">
+                                                      <span className="text-gray-500 text-xs">Bônus</span>
+                                                      <span className="font-mono font-bold text-gray-300">{formatarBRL(data.bonus)}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          {/* SAÍDAS */}
+                                          <div>
+                                              <p className="text-[10px] text-rose-400/50 font-bold uppercase mb-2 flex items-center gap-1">
+                                                  <ArrowDown size={10} /> Saídas (Custos)
+                                              </p>
+                                              <div className="bg-black/20 rounded-lg p-2 space-y-1">
+                                                  <div className="flex justify-between">
+                                                      <span className="text-gray-500 text-xs">Depósitos</span>
+                                                      <span className="font-mono font-bold text-gray-300">{formatarBRL(data.deposits)}</span>
+                                                  </div>
+                                                  <div className="flex justify-between">
+                                                      <span className="text-gray-500 text-xs">Despesas</span>
+                                                      <span className="font-mono font-bold text-gray-300">{formatarBRL(data.expenses)}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+
+                                          {/* META INFO */}
+                                          <div className="pt-2 border-t border-white/5 flex justify-between text-[10px] text-gray-500 font-mono">
+                                               <span>Reg: {data.days} dias</span>
+                                               <span>Últ: {data.lastDate}</span>
+                                          </div>
+
                                       </div>
                                   </div>
                               );
                           };
 
                           return (
-                              <div className="space-y-6">
-                                  
-                                  {/* Headers das Colunas */}
-                                  <div className="grid grid-cols-12 gap-4 pb-2 border-b border-white/10 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                                      <div className="col-span-4 pl-2">Indicador</div>
-                                      <div className="col-span-4 text-right pr-4 text-indigo-400 flex items-center justify-end gap-2"><Cloud size={12}/> Versão Nuvem</div>
-                                      <div className="col-span-4 text-right pr-2 text-emerald-400 flex items-center justify-end gap-2"><Smartphone size={12}/> Versão Local</div>
-                                  </div>
-
-                                  {/* RESULTADO LÍQUIDO (DESTACADO) */}
-                                  <div className="bg-white/5 rounded-xl border border-white/10 p-4 mb-4">
-                                      <div className="grid grid-cols-12 gap-4 items-center">
-                                          <div className="col-span-4">
-                                              <span className="text-white font-black text-sm uppercase flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500"/> Lucro Líquido</span>
-                                          </div>
-                                          <div className="col-span-4 text-right pr-4 border-r border-white/10">
-                                              <span className={`text-lg font-black font-mono ${cloudMetrics.netProfit >= 0 ? 'text-indigo-400' : 'text-rose-400'}`}>
-                                                  {formatarBRL(cloudMetrics.netProfit)}
-                                              </span>
-                                          </div>
-                                          <div className="col-span-4 text-right">
-                                              <span className={`text-lg font-black font-mono ${localMetrics.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                  {formatarBRL(localMetrics.netProfit)}
-                                              </span>
-                                          </div>
-                                      </div>
-                                  </div>
-
-                                  {/* Detalhamento Financeiro */}
-                                  <div className="space-y-0">
-                                      <DiffRow label="Total Saques" icon={ArrowRightLeft} cloudVal={cloudMetrics.withdrawals} localVal={localMetrics.withdrawals} isCurrency highlightDiff />
-                                      <DiffRow label="Ganhos Bônus" icon={DollarSign} cloudVal={cloudMetrics.bonus} localVal={localMetrics.bonus} isCurrency highlightDiff />
-                                      <DiffRow label="Total Depósitos" icon={Wallet} cloudVal={cloudMetrics.deposits} localVal={localMetrics.deposits} isCurrency highlightDiff />
-                                      <DiffRow label="Despesas (Geral+Dia)" icon={TrendingDown} cloudVal={cloudMetrics.expenses} localVal={localMetrics.expenses} isCurrency highlightDiff />
-                                  </div>
-
-                                  {/* Detalhes Operacionais */}
-                                  <div className="mt-4 pt-4 border-t border-white/10 space-y-0">
-                                      <DiffRow label="Operador" icon={User} cloudVal={cloudMetrics.userName} localVal={localMetrics.userName} />
-                                      <DiffRow label="Dias Registrados" icon={Calendar} cloudVal={cloudMetrics.totalRecords} localVal={localMetrics.totalRecords} />
-                                      <DiffRow label="Última Data" icon={Clock} cloudVal={cloudMetrics.lastDate} localVal={localMetrics.lastDate} />
-                                  </div>
-
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                                  <VersionCard 
+                                      title="Versão Nuvem (Backup)" 
+                                      type="cloud" 
+                                      data={cloud} 
+                                      date={pendingCloudData.time} 
+                                  />
+                                  <VersionCard 
+                                      title="Versão Local (Atual)" 
+                                      type="local" 
+                                      data={local} 
+                                      date="Agora mesmo" 
+                                  />
                               </div>
                           );
                       })()}
@@ -698,24 +704,24 @@ function App() {
 
                   {/* Footer Actions */}
                   <div className="p-6 border-t border-white/5 bg-[#0a0516] flex flex-col md:flex-row gap-4 justify-between items-center">
-                       <div className="flex items-center gap-2 text-amber-500/70 text-xs font-bold bg-amber-500/5 px-3 py-2 rounded-lg border border-amber-500/10 w-full md:w-auto">
-                           <ShieldAlert size={14} />
-                           <span>Escolha com atenção. A versão não selecionada será perdida.</span>
+                       <div className="flex items-center gap-3 text-amber-500/60 text-xs font-medium max-w-md leading-tight">
+                           <Info size={16} className="shrink-0" />
+                           <span>Escolha com sabedoria. A versão que você descartar será perdida permanentemente.</span>
                        </div>
-                       <div className="flex gap-4 w-full md:w-auto">
+                       <div className="flex gap-3 w-full md:w-auto">
                           <button 
                               onClick={() => handleResolveConflict('cloud')}
-                              className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm group"
+                              className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs uppercase tracking-wider group"
                           >
-                              <Download size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                              <span>FICAR COM A NUVEM</span>
+                              <Download size={16} className="group-hover:-translate-y-0.5 transition-transform" /> 
+                              <span>Usar Nuvem</span>
                           </button>
                           <button 
                               onClick={() => handleResolveConflict('local')}
-                              className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs sm:text-sm group border border-emerald-500/50"
+                              className="flex-1 md:flex-none bg-emerald-600/10 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-emerald-400 font-bold py-3 px-8 rounded-xl transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider group"
                           >
-                              <Upload size={18} className="group-hover:-translate-y-1 transition-transform" /> 
-                              <span>MANTER VERSÃO LOCAL</span>
+                              <Upload size={16} className="group-hover:-translate-y-0.5 transition-transform" /> 
+                              <span>Manter Local</span>
                           </button>
                        </div>
                   </div>
