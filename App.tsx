@@ -51,7 +51,12 @@ const deepEqual = (obj1: any, obj2: any): boolean => {
     // 3. Se um for objeto/array e o outro não, são diferentes
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
 
-    // 4. Comparação de Arrays
+    // 4. Comparação de Datas (Correção Importante)
+    if (obj1 instanceof Date && obj2 instanceof Date) {
+        return obj1.getTime() === obj2.getTime();
+    }
+
+    // 5. Comparação de Arrays
     if (Array.isArray(obj1) && Array.isArray(obj2)) {
         if (obj1.length !== obj2.length) return false;
         for (let i = 0; i < obj1.length; i++) {
@@ -60,7 +65,7 @@ const deepEqual = (obj1: any, obj2: any): boolean => {
         return true;
     }
 
-    // 5. Comparação de Objetos (Union das chaves)
+    // 6. Comparação de Objetos (Union das chaves)
     const keys1 = Object.keys(obj1);
     const keys2 = Object.keys(obj2);
     const allKeys = new Set([...keys1, ...keys2]);
