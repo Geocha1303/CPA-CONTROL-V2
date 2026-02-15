@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { SquadMember, AppState } from '../types';
-import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown, Database, MessageSquare, Bell, Send, CheckCircle2, TrendingUp, Trophy, Target, DollarSign, Trash2, Clock } from 'lucide-react';
+import { Users, Eye, Activity, RefreshCw, AlertTriangle, Search, ShieldCheck, Link, Copy, UserCheck, Shield, Lock, ChevronRight, UserPlus, Info, Hash, Crown, Database, MessageSquare, Bell, Send, CheckCircle2, TrendingUp, Trophy, Target, DollarSign, Trash2, Clock, UserMinus } from 'lucide-react';
 import { formatarBRL, getHojeISO, calculateDayMetrics } from '../utils';
 
 interface Props {
@@ -233,6 +234,28 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify, privacyMod
           notify(err.message, "error");
       } finally {
           setLoadingAction(false);
+      }
+  };
+
+  const handleKickMember = async (memberKey: string, memberName: string) => {
+      if (!confirm(`CONFIRMAÇÃO:\n\nDeseja remover ${memberName} do seu Squad?\nEle deixará de enviar dados e sairá do ranking.`)) return;
+
+      setLoadingDataId(memberKey); // Usa o estado de loading visual para feedback
+      try {
+          const { error } = await supabase
+              .from('access_keys')
+              .update({ leader_key: null })
+              .eq('key', memberKey);
+
+          if (error) throw error;
+
+          notify(`${memberName} foi removido do Squad.`, 'success');
+          // Atualização Otimista
+          setMembers(prev => prev.filter(m => m.key !== memberKey));
+      } catch (err: any) {
+          notify(`Erro ao remover: ${err.message}`, 'error');
+      } finally {
+          setLoadingDataId(null);
       }
   };
 
@@ -551,7 +574,7 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify, privacyMod
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-3 md:gap-6">
                                             <div className="text-right hidden sm:block">
                                                 <p className="text-[9px] text-gray-500 uppercase font-bold">Lucro Hoje</p>
                                                 <p className={`font-mono font-bold ${member.metrics && member.metrics.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -559,18 +582,28 @@ const Squad: React.FC<Props> = ({ currentUserKey, onSpectate, notify, privacyMod
                                                 </p>
                                             </div>
                                             
-                                            <button 
-                                                onClick={() => handleSpectate(member)}
-                                                disabled={loadingDataId === member.key || !member.last_update}
-                                                className={`p-2 rounded-lg transition-all border
-                                                    ${!member.last_update 
-                                                        ? 'bg-gray-800 text-gray-600 border-transparent cursor-not-allowed' 
-                                                        : 'bg-white/5 hover:bg-indigo-600 hover:text-white border-white/5 text-gray-400'}
-                                                `}
-                                                title="Espionar Painel"
-                                            >
-                                                {loadingDataId === member.key ? <RefreshCw className="animate-spin" size={16}/> : <Eye size={16} />}
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <button 
+                                                    onClick={() => handleSpectate(member)}
+                                                    disabled={loadingDataId === member.key || !member.last_update}
+                                                    className={`p-2 rounded-lg transition-all border
+                                                        ${!member.last_update 
+                                                            ? 'bg-gray-800 text-gray-600 border-transparent cursor-not-allowed' 
+                                                            : 'bg-white/5 hover:bg-indigo-600 hover:text-white border-white/5 text-gray-400'}
+                                                    `}
+                                                    title="Espionar Painel"
+                                                >
+                                                    {loadingDataId === member.key ? <RefreshCw className="animate-spin" size={16}/> : <Eye size={16} />}
+                                                </button>
+
+                                                <button 
+                                                    onClick={() => handleKickMember(member.key, member.owner_name)}
+                                                    className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:bg-rose-950/30 hover:border-rose-900/30 hover:text-rose-500 transition-all"
+                                                    title="Expulsar Membro"
+                                                >
+                                                    <UserMinus size={16} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
